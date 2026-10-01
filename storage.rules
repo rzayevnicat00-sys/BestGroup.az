@@ -1,0 +1,40 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAllowedFileType() {
+      return request.resource.contentType in [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'image/jpeg',
+        'image/png'
+      ];
+    }
+
+    function isUnderSizeLimit() {
+      return request.resource.size <= 20 * 1024 * 1024;
+    }
+
+    // Orders files path: users/{userId}/orders/{orderId}/files/{fileName}
+    match /users/{userId}/orders/{orderId}/files/{fileName} {
+      // Owner can read their own files. Staff can read for service fulfillment.
+      allow read: if isOwner(userId) || (isAuthenticated() && request.auth.token.role in ['admin', 'manager', 'operator']);
+
+      // Only the authenticated owner can write with strict file size and type validations
+      allow write: if isOwner(userId)
+                   && isAllowedFileType()
+                   && isUnderSizeLimit();
+    }
+  }
+}

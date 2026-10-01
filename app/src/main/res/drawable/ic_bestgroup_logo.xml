@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <!-- Outer Shield / Emblem -->
+    <path
+        android:fillColor="#0A192F"
+        android:pathData="M60,6 L104,22 L104,64 C104,90 60,114 60,114 C60,114 16,90 16,64 L16,22 Z" />
+    <!-- Golden Border -->
+    <path
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="3"
+        android:pathData="M60,10 L100,25 L100,63 C100,86 60,109 60,109 C60,109 20,86 20,63 L20,25 Z" />
+    <!-- Mortarboard Cap -->
+    <path
+        android:fillColor="#D4AF37"
+        android:pathData="M60,34 L88,45 L60,56 L32,45 Z" />
+    <path
+        android:fillColor="#C5A059"
+        android:pathData="M44,50 L44,60 C44,67 76,67 76,60 L76,50 L60,56 Z" />
+    <!-- Open Book -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36,68 C44,65 55,66 60,70 C65,66 76,65 84,68 L84,85 C76,82 65,83 60,86 C55,83 44,82 36,85 Z" />
+    <path
+        android:fillColor="#D4AF37"
+        android:pathData="M59,70 L61,70 L61,86 L59,86 Z" />
+</vector>

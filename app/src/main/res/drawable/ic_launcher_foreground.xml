@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.65"
+        android:scaleY="0.65"
+        android:pivotX="54"
+        android:pivotY="54">
+        <!-- Academic Cap (Mortarboard) -->
+        <path
+            android:fillColor="#D4AF37"
+            android:pathData="M54,26 L88,39 L54,52 L20,39 Z" />
+        <!-- Cap Underneath Base -->
+        <path
+            android:fillColor="#C5A059"
+            android:pathData="M34,44.5 L34,58 C34,66 74,66 74,58 L74,44.5 L54,52 Z" />
+        <!-- Tassel -->
+        <path
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="2"
+            android:pathData="M78,43 L84,54 L84,66" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M82,66 L86,66 L85,74 L83,74 Z" />
+        <!-- Open Academic Book -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M24,68 C34,64 48,65 54,69 C60,65 74,64 84,68 L84,86 C74,82 60,83 54,87 C48,83 34,82 24,86 Z" />
+        <!-- Book Spine & Pages Divider -->
+        <path
+            android:fillColor="#D4AF37"
+            android:pathData="M53,69 L55,69 L55,87 L53,87 Z" />
+        <!-- Star of Excellence -->
+        <path
+            android:fillColor="#D4AF37"
+            android:pathData="M54,16 L56,21 L61,21 L57,24 L59,29 L54,26 L49,29 L51,24 L47,21 L52,21 Z" />
+    </group>
+</vector>

@@ -1,0 +1,6 @@
+{
+  "name": "BestGroup.az",
+  "description": "Akademik və Peşəkar Dəstəyin Etibarlı Ünvanı. Tələbələr və tədqiqatçılar üçün yüksək səviyyəli akademik konsaltinq və sifariş idarəetmə platforması.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

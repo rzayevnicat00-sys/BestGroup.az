@@ -1,0 +1,52 @@
+{
+  "entities": {
+    "User": {
+      "path": "users/{userId}",
+      "description": "User profile with academic credentials and role-based permissions",
+      "fields": {
+        "uid": { "type": "string", "description": "Firebase Auth user ID" },
+        "fullName": { "type": "string", "description": "Full legal name" },
+        "email": { "type": "string", "description": "Email address" },
+        "phone": { "type": "string", "description": "Phone number" },
+        "university": { "type": "string", "description": "Enrolled University" },
+        "faculty": { "type": "string", "description": "Faculty/Department" },
+        "educationLevel": { "type": "string", "description": "Degree level: Bakalavr, Magistr, etc." },
+        "profilePhoto": { "type": "string", "description": "Avatar storage URL" },
+        "role": { "type": "string", "description": "Access role: customer, operator, manager, admin" },
+        "preferredLanguage": { "type": "string", "description": "az, en, ru" },
+        "theme": { "type": "string", "description": "system, light, dark" },
+        "createdAt": { "type": "string", "description": "ISO timestamp or server time" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last update" }
+      }
+    },
+    "Order": {
+      "path": "orders/{orderId}",
+      "description": "Academic orders and status tracking",
+      "fields": {
+        "orderId": { "type": "string", "description": "Firestore document ID" },
+        "orderNumber": { "type": "string", "description": "Human-friendly code e.g. BG-2026-8492" },
+        "userId": { "type": "string", "description": "ID of the customer who placed the order" },
+        "serviceId": { "type": "string", "description": "Service type identifier" },
+        "serviceName": { "type": "string", "description": "Title of the service" },
+        "subject": { "type": "string", "description": "Topic or title of the academic paper" },
+        "scopeDescription": { "type": "string", "description": "Specific chapters and research goals" },
+        "university": { "type": "string", "description": "Target university" },
+        "faculty": { "type": "string", "description": "Target faculty" },
+        "educationLevel": { "type": "string", "description": "Academic level" },
+        "language": { "type": "string", "description": "Working language of the project" },
+        "pageCount": { "type": "number", "description": "Estimated pages" },
+        "deadline": { "type": "string", "description": "Delivery deadline" },
+        "priority": { "type": "string", "description": "normal, high, urgent" },
+        "formattingStandard": { "type": "string", "description": "APA, Harvard, AAK, etc." },
+        "notes": { "type": "string", "description": "Special guidance" },
+        "status": { "type": "string", "description": "waiting, accepted, in_progress, ready, cancelled" },
+        "progressPercent": { "type": "number", "description": "Completion percent" },
+        "estimatedPriceAzn": { "type": "number", "description": "Calculated cost in AZN" },
+        "files": { "type": "array", "description": "Metadata for attached files" },
+        "statusHistory": { "type": "array", "description": "Timeline of status transitions" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "description": "Last update timestamp" }
+      }
+    }
+  }
+}

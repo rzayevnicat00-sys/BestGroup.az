@@ -1,0 +1,151 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'admin';
+    }
+
+    function isStaff() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (getUserData().role in ['admin', 'manager', 'operator']);
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isStaff();
+      // On registration, role must default to customer
+      allow create: if isOwner(userId) && request.resource.data.role == 'customer';
+      // User cannot elevate their own role
+      allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Orders Collection
+    match /orders/{orderId} {
+      allow read: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid && request.resource.data.status in ['waiting', 'pending'];
+      allow update: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.status == resource.data.status);
+      allow delete: if isAdmin();
+    }
+
+    // Conversations Collection
+    match /conversations/{conversationId} {
+      function orderBelongsToCaller(orderId) {
+        return orderId == null || (
+          exists(/databases/$(database)/documents/orders/$(orderId)) &&
+          get(/databases/$(database)/documents/orders/$(orderId)).data.userId == request.auth.uid
+        );
+      }
+
+      // Read conversation: only staff or the conversation customer
+      allow read: if isAuthenticated() && (
+        isStaff() ||
+        resource.data.customerId == request.auth.uid
+      );
+
+      // Create conversation: customer creates for themselves and must own the order if specified
+      allow create: if isAuthenticated() && (
+        isStaff() ||
+        (
+          request.resource.data.customerId == request.auth.uid &&
+          orderBelongsToCaller(request.resource.data.orderId)
+        )
+      );
+
+      // Update conversation:
+      // Customer cannot change customerId, assignedStaffId, orderId, or unreadForStaff
+      allow update: if isAuthenticated() && (
+        isStaff() ||
+        (
+          resource.data.customerId == request.auth.uid &&
+          request.resource.data.customerId == resource.data.customerId &&
+          request.resource.data.assignedStaffId == resource.data.assignedStaffId &&
+          request.resource.data.orderId == resource.data.orderId &&
+          request.resource.data.unreadForStaff == resource.data.unreadForStaff
+        )
+      );
+
+      allow delete: if isAdmin();
+
+      // Messages Subcollection
+      match /messages/{messageId} {
+        function getParentConversation() {
+          return get(/databases/$(database)/documents/conversations/$(conversationId)).data;
+        }
+
+        // Read messages: customer of this conversation or staff
+        allow read: if isAuthenticated() && (
+          isStaff() ||
+          getParentConversation().customerId == request.auth.uid
+        );
+
+        // Create message:
+        // - Authenticated
+        // - Staff or conversation owner
+        // - Customer senderId must be request.auth.uid
+        // - Customer cannot impersonate staff (senderRole == 'customer')
+        // - Text size: 1..4000 characters
+        allow create: if isAuthenticated() && (
+          isStaff() ||
+          (
+            getParentConversation().customerId == request.auth.uid &&
+            request.resource.data.senderId == request.auth.uid &&
+            request.resource.data.senderRole == 'customer' &&
+            request.resource.data.text.size() > 0 &&
+            request.resource.data.text.size() <= 4000
+          )
+        );
+
+        // Update message: customer can only update read status of staff messages, cannot alter text or sender
+        allow update: if isAuthenticated() && (
+          isStaff() ||
+          (
+            getParentConversation().customerId == request.auth.uid &&
+            request.resource.data.senderId == resource.data.senderId &&
+            request.resource.data.senderRole == resource.data.senderRole &&
+            request.resource.data.text == resource.data.text
+          )
+        );
+
+        allow delete: if isAdmin();
+      }
+    }
+
+    // Notifications Collection
+    match /notifications/{notificationId} {
+      allow read, update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create, delete: if isStaff();
+    }
+
+    // Services Catalog (Publicly readable, staff-writable)
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    // Reviews Collection
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+
+    // Announcements Collection
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+  }
+}
