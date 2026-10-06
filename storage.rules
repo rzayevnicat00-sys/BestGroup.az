@@ -10,6 +10,17 @@ service firebase.storage {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // Staff access requires secure Firebase Authentication Custom Claims
+    function hasStaffClaim() {
+      return isAuthenticated() && (
+        (request.auth.token.keys().hasAny(['role']) && request.auth.token.role in ['admin', 'manager', 'operator']) ||
+        (request.auth.token.keys().hasAny(['admin']) && request.auth.token.admin == true) ||
+        (request.auth.token.keys().hasAny(['manager']) && request.auth.token.manager == true) ||
+        (request.auth.token.keys().hasAny(['operator']) && request.auth.token.operator == true)
+      );
+    }
+
+    // Supported MIME types: PDF, DOC, DOCX, PPT, PPTX, JPG, JPEG, PNG
     function isAllowedFileType() {
       return request.resource.contentType in [
         'application/pdf',
@@ -22,19 +33,31 @@ service firebase.storage {
       ];
     }
 
+    // Restrict file extensions to authorized academic and document types
+    function hasAllowedExtension(fileName) {
+      return fileName.matches('.*\\.(pdf|doc|docx|ppt|pptx|jpg|jpeg|png)$') ||
+             fileName.matches('.*\\.(PDF|DOC|DOCX|PPT|PPTX|JPG|JPEG|PNG)$');
+    }
+
+    // Maximum file size: 20 MB
     function isUnderSizeLimit() {
-      return request.resource.size <= 20 * 1024 * 1024;
+      return request.resource.size > 0 && request.resource.size <= 20 * 1024 * 1024;
     }
 
     // Orders files path: users/{userId}/orders/{orderId}/files/{fileName}
     match /users/{userId}/orders/{orderId}/files/{fileName} {
-      // Owner can read their own files. Staff can read for service fulfillment.
-      allow read: if isOwner(userId) || (isAuthenticated() && request.auth.token.role in ['admin', 'manager', 'operator']);
+      // Owner can read their own files. Staff can read for fulfillment using secure Custom Claims.
+      allow read: if isOwner(userId) || hasStaffClaim();
 
-      // Only the authenticated owner can write with strict file size and type validations
-      allow write: if isOwner(userId)
-                   && isAllowedFileType()
-                   && isUnderSizeLimit();
+      // Only the authenticated customer owner can upload to their own path
+      // Strictly validates MIME type, extension, and file size (max 20MB)
+      allow create, update: if isOwner(userId)
+                            && isAllowedFileType()
+                            && hasAllowedExtension(fileName)
+                            && isUnderSizeLimit();
+
+      // Only owner or staff can delete
+      allow delete: if isOwner(userId) || hasStaffClaim();
     }
   }
 }

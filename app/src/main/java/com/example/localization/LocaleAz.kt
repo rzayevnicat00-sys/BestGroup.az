@@ -275,5 +275,17 @@ val LocaleAz: Map<StringKey, String> = mapOf(
     StringKey.FILE_ACTION_DOWNLOAD to "Yüklə",
     StringKey.FILE_EMPTY_TITLE to "Bu sifariş üçün hələ fayl əlavə edilməyib.",
     StringKey.FILE_NOT_FOUND to "Fayl artıq mövcud deyil və ya ona giriş mümkün deyil.",
-    StringKey.FILE_MAX_COUNT_REACHED to "Maksimum 10 fayl əlavə edilə bilər."
+    StringKey.FILE_MAX_COUNT_REACHED to "Maksimum 10 fayl əlavə edilə bilər.",
+
+    // Real-Time Chat & Messaging
+    StringKey.CHAT_SEND to "Göndər",
+    StringKey.CHAT_EMPTY_MESSAGES to "Hələ heç bir mesaj yoxdur. Sual və ya qeydlərinizi buradan yaza bilərsiniz.",
+    StringKey.CHAT_LOADING to "Söhbət yüklənir...",
+    StringKey.CHAT_SEND_FAILED to "Mesaj göndərilmədi. İnternet bağlantınızı yoxlayın və yenidən cəhd edin.",
+    StringKey.CHAT_RETRY to "Yenidən cəhd et",
+    StringKey.CHAT_NETWORK_ERROR to "İnternet bağlantısını yoxlayın",
+    StringKey.ORDER_CHAT_SECTION_TITLE to "Sifariş üzrə söhbət",
+    StringKey.ORDER_CHAT_OPEN_BUTTON to "Kuratorla yazışın",
+    StringKey.CHAT_MESSAGE_TOO_LONG to "Mesaj mətni 4000 simvoldan çox ola bilməz.",
+    StringKey.CHAT_MESSAGE_EMPTY to "Boş mesaj göndərilə bilməz."
 )

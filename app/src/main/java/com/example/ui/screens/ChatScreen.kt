@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,15 +22,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.localization.StringKey
 import com.example.localization.localizedString
 import com.example.model.ChatConversation
 import com.example.model.ChatMessage
+import com.example.model.ChatMessageType
+import com.example.model.MessageDeliveryStatus
+import com.example.ui.theme.Gold400
 import com.example.ui.theme.Gold500
 import com.example.ui.theme.Navy800
 import com.example.ui.theme.Navy900
+import com.example.viewmodel.BottomTab
 import com.example.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
 
@@ -44,11 +51,22 @@ fun ChatScreen(
 
     var showConversationsList by remember { mutableStateOf(false) }
     var inputMessageText by remember { mutableStateOf("") }
+    val isSending = viewModel.isSendingChatMessage.value
+    val isChatLoading = viewModel.isChatLoading.value
+    val chatError = viewModel.chatErrorMessage.value
+
     val currentMessages = allMessages[activeConvId] ?: emptyList()
     val activeConversation = conversations.find { it.id == activeConvId } ?: conversations.firstOrNull()
 
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(activeConversation?.id) {
+        if (activeConversation != null && activeConvId != activeConversation.id) {
+            viewModel.setActiveConversation(activeConversation.id)
+        }
+    }
 
     LaunchedEffect(currentMessages.size) {
         if (currentMessages.isNotEmpty()) {
@@ -58,6 +76,7 @@ fun ChatScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -67,7 +86,7 @@ fun ChatScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
+                                .size(42.dp)
                                 .clip(CircleShape)
                                 .background(Navy800),
                             contentAlignment = Alignment.Center
@@ -76,7 +95,7 @@ fun ChatScreen(
                         }
                         Column {
                             Text(
-                                text = activeConversation?.curatorName ?: localizedString(StringKey.CHAT_TITLE),
+                                text = activeConversation?.title ?: localizedString(StringKey.CHAT_TITLE),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1
@@ -87,14 +106,14 @@ fun ChatScreen(
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(6.dp)
+                                        .size(7.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF10B981))
+                                        .background(if (activeConversation != null) Color(0xFF10B981) else Color.Gray)
                                 )
                                 Text(
-                                    text = localizedString(StringKey.CHAT_ONLINE),
+                                    text = activeConversation?.curatorName ?: if (isChatLoading) localizedString(StringKey.CHAT_LOADING) else "Fəal söhbət yoxdur",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Color(0xFF10B981)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -105,7 +124,18 @@ fun ChatScreen(
                         onClick = { showConversationsList = !showConversationsList },
                         modifier = Modifier.testTag("chat_switch_conversation_btn")
                     ) {
-                        Icon(Icons.Default.Forum, contentDescription = "Söhbətlər", tint = Gold500)
+                        BadgedBox(
+                            badge = {
+                                val totalUnread = conversations.sumOf { it.unreadCount }
+                                if (totalUnread > 0) {
+                                    Badge(containerColor = Gold500, contentColor = Navy900) {
+                                        Text("$totalUnread")
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.Forum, contentDescription = "Söhbətlər", tint = Gold500)
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
@@ -117,52 +147,118 @@ fun ChatScreen(
                 tonalElevation = 8.dp,
                 modifier = Modifier.navigationBarsPadding()
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Attachment button
-                    IconButton(
-                        onClick = {
-                            viewModel.sendChatMessage("Sənəd faylı qoşuldu", "Metodiki_Göndəriş_2026.docx")
-                        },
-                        modifier = Modifier.testTag("chat_attachment_btn")
+                Column {
+                    // Chat error feedback banner
+                    AnimatedVisibility(
+                        visible = chatError != null,
+                        enter = fadeIn(),
+                        exit = fadeOut()
                     ) {
-                        Icon(Icons.Default.AttachFile, contentDescription = "Fayl qoş", tint = Gold500)
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = chatError ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TextButton(
+                                    onClick = { viewModel.clearChatError() }
+                                ) {
+                                    Text(localizedString(StringKey.FILE_ACTION_CANCEL), color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
                     }
 
-                    // Message input field
-                    OutlinedTextField(
-                        value = inputMessageText,
-                        onValueChange = { inputMessageText = it },
-                        placeholder = { Text(localizedString(StringKey.CHAT_INPUT_HINT)) },
-                        singleLine = false,
-                        maxLines = 3,
-                        shape = RoundedCornerShape(24.dp),
+                    Row(
                         modifier = Modifier
-                            .weight(1f)
-                            .testTag("chat_input_text_field")
-                    )
-
-                    // Send Button
-                    IconButton(
-                        onClick = {
-                            if (inputMessageText.isNotBlank()) {
-                                viewModel.sendChatMessage(inputMessageText.trim())
-                                inputMessageText = ""
-                            }
-                        },
-                        enabled = inputMessageText.isNotBlank(),
-                        colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = if (inputMessageText.isNotBlank()) Navy800 else MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = Gold500
-                        ),
-                        modifier = Modifier.testTag("chat_send_button")
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.Send, contentDescription = "Göndər")
+                        // Attachment button
+                        IconButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Fayl əlavəsi üçün Sifariş Detalları bölməsindən istifadə edə bilərsiniz.")
+                                }
+                            },
+                            enabled = activeConversation != null,
+                            modifier = Modifier.testTag("chat_attachment_btn")
+                        ) {
+                            Icon(
+                                Icons.Default.AttachFile,
+                                contentDescription = "Fayl qoş",
+                                tint = if (activeConversation != null) Gold500 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            )
+                        }
+
+                        // Message input field
+                        val hasActiveConv = activeConversation != null
+                        OutlinedTextField(
+                            value = inputMessageText,
+                            onValueChange = {
+                                if (it.length <= 4000) inputMessageText = it
+                            },
+                            enabled = hasActiveConv && !isChatLoading,
+                            placeholder = {
+                                Text(
+                                    if (hasActiveConv) localizedString(StringKey.CHAT_INPUT_HINT)
+                                    else "Fəal söhbət yoxdur"
+                                )
+                            },
+                            singleLine = false,
+                            maxLines = 4,
+                            shape = RoundedCornerShape(24.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("chat_input_text_field")
+                        )
+
+                        // Send Button
+                        val canSend = hasActiveConv && inputMessageText.isNotBlank() && !isSending && !isChatLoading
+                        IconButton(
+                            onClick = {
+                                if (canSend) {
+                                    val textToSend = inputMessageText.trim()
+                                    inputMessageText = ""
+                                    viewModel.sendChatMessage(textToSend) { success, _ ->
+                                        if (!success) {
+                                            inputMessageText = textToSend
+                                        }
+                                    }
+                                }
+                            },
+                            enabled = canSend,
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = if (canSend) Navy800 else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = Gold500,
+                                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            ),
+                            modifier = Modifier.testTag("chat_send_button")
+                        ) {
+                            if (isSending) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Gold500
+                                )
+                            } else {
+                                Icon(Icons.Default.Send, contentDescription = localizedString(StringKey.CHAT_SEND))
+                            }
+                        }
                     }
                 }
             }
@@ -174,16 +270,125 @@ fun ChatScreen(
                 .padding(innerPadding)
         ) {
             // Main Messages Feed
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(currentMessages, key = { it.id }) { msg ->
-                    ChatBubble(message = msg)
+            if (isChatLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(color = Gold500)
+                        Text(
+                            text = localizedString(StringKey.CHAT_LOADING),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else if (activeConversation == null) {
+                // Clear empty state when accessed directly without an active conversation
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(CircleShape)
+                                .background(Gold500.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ChatBubbleOutline,
+                                contentDescription = null,
+                                tint = Gold500,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                        Text(
+                            text = "Fəal söhbət yoxdur",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "Sifarişləriniz bölməsindən kuratorla əlaqəli söhbəti aça bilərsiniz.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Button(
+                            onClick = { viewModel.selectBottomTab(BottomTab.ORDERS) },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Navy800,
+                                contentColor = Gold500
+                            )
+                        ) {
+                            Icon(Icons.Default.Assignment, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(localizedString(StringKey.NAV_ORDERS), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            } else if (currentMessages.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(Gold500.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ChatBubbleOutline,
+                                contentDescription = null,
+                                tint = Gold500,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                        Text(
+                            text = localizedString(StringKey.CHAT_EMPTY_MESSAGES),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    contentPadding = PaddingValues(vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(currentMessages, key = { it.id }) { msg ->
+                        ChatBubble(message = msg)
+                    }
                 }
             }
 
@@ -193,7 +398,7 @@ fun ChatScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
-                        .border(1.dp, Gold500, RoundedCornerShape(16.dp)),
+                        .border(1.5.dp, Gold500, RoundedCornerShape(16.dp)),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                 ) {
@@ -203,36 +408,44 @@ fun ChatScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Söhbətlər", fontWeight = FontWeight.Bold)
+                            Text("Söhbətlər", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                             IconButton(onClick = { showConversationsList = false }) {
                                 Icon(Icons.Default.Close, contentDescription = "Bağla")
                             }
                         }
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        conversations.forEach { conv ->
-                            val isSel = conv.id == activeConvId
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSel) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
-                                    .clickable {
-                                        viewModel.setActiveConversation(conv.id)
-                                        showConversationsList = false
+                        if (conversations.isEmpty()) {
+                            Text(
+                                text = "Aktiv söhbət tapılmadı.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            conversations.forEach { conv ->
+                                val isSel = conv.id == activeConvId
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (isSel) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+                                        .clickable {
+                                            viewModel.setActiveConversation(conv.id)
+                                            showConversationsList = false
+                                        }
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, tint = Gold500)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(conv.title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                        Text(conv.curatorName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
-                                    .padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, tint = Gold500)
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(conv.title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                    Text(conv.curatorName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                if (conv.unreadCount > 0) {
-                                    Badge(containerColor = Gold500, contentColor = Navy900) {
-                                        Text("${conv.unreadCount}")
+                                    if (conv.unreadCount > 0) {
+                                        Badge(containerColor = Gold500, contentColor = Navy900) {
+                                            Text("${conv.unreadCount}")
+                                        }
                                     }
                                 }
                             }
@@ -246,6 +459,28 @@ fun ChatScreen(
 
 @Composable
 private fun ChatBubble(message: ChatMessage) {
+    if (message.messageType == ChatMessageType.SYSTEM) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = message.text,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
+        return
+    }
+
     val isMe = message.isFromUser
     val alignment = if (isMe) Alignment.End else Alignment.Start
     val bgColor = if (isMe) Navy800 else MaterialTheme.colorScheme.surfaceVariant
@@ -257,7 +492,7 @@ private fun ChatBubble(message: ChatMessage) {
     ) {
         if (!isMe) {
             Text(
-                text = message.senderName,
+                text = message.senderName.ifBlank { "Akademik Kurator" },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
@@ -266,7 +501,7 @@ private fun ChatBubble(message: ChatMessage) {
 
         Box(
             modifier = Modifier
-                .widthIn(max = 280.dp)
+                .widthIn(max = 290.dp)
                 .clip(
                     RoundedCornerShape(
                         topStart = 16.dp,
@@ -320,10 +555,21 @@ private fun ChatBubble(message: ChatMessage) {
                         color = if (isMe) Color(0xFFCBD5E1) else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     if (isMe) {
+                        val icon = when (message.status) {
+                            MessageDeliveryStatus.PENDING -> Icons.Default.Schedule
+                            MessageDeliveryStatus.READ -> Icons.Default.DoneAll
+                            MessageDeliveryStatus.FAILED -> Icons.Default.ErrorOutline
+                            else -> Icons.Default.Done
+                        }
+                        val tint = when (message.status) {
+                            MessageDeliveryStatus.READ -> Gold500
+                            MessageDeliveryStatus.FAILED -> MaterialTheme.colorScheme.error
+                            else -> Color(0xFFCBD5E1)
+                        }
                         Icon(
-                            imageVector = Icons.Default.DoneAll,
-                            contentDescription = "Oxundu",
-                            tint = Gold500,
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = tint,
                             modifier = Modifier.size(14.dp)
                         )
                     }

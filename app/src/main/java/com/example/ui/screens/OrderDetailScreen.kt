@@ -46,6 +46,8 @@ fun OrderDetailScreen(
     modifier: Modifier = Modifier
 ) {
     val currentUser by viewModel.currentUser.collectAsState()
+    val conversations by viewModel.conversations.collectAsState()
+    val orderConv = conversations.find { it.orderId == order.id || it.id == "order_${order.id}" }
     var showReviewDialog by remember { mutableStateOf(false) }
     var ratingStars by remember { mutableStateOf(5) }
     var reviewComment by remember { mutableStateOf("") }
@@ -102,7 +104,7 @@ fun OrderDetailScreen(
                     // Chat with Curator action
                     Button(
                         onClick = {
-                            viewModel.setActiveConversation("conv_1")
+                            viewModel.openOrderChat(order)
                         },
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
@@ -198,7 +200,103 @@ fun OrderDetailScreen(
                 }
             }
 
-            // 2. Interactive Status Timeline
+            // 2. Order Consultation & Curator Chat Section
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable { viewModel.openOrderChat(order) }
+                        .border(1.dp, Gold500.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                        .testTag("order_chat_section_card"),
+                    colors = CardDefaults.cardColors(containerColor = Navy800)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape)
+                                        .background(Gold500.copy(alpha = 0.2f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ChatBubbleOutline,
+                                        contentDescription = null,
+                                        tint = Gold500,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = localizedString(StringKey.ORDER_CHAT_SECTION_TITLE),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "${order.orderNumber} • ${orderConv?.curatorName ?: "Akademik Kurator"}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Gold500
+                                    )
+                                }
+                            }
+
+                            if ((orderConv?.unreadCount ?: 0) > 0) {
+                                Badge(
+                                    containerColor = Gold500,
+                                    contentColor = Navy900
+                                ) {
+                                    Text("${orderConv?.unreadCount}", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = orderConv?.lastMessage?.takeIf { it.isNotBlank() }
+                                ?: "Sifariş üzrə suallarınızı, metodik tələblərinizi və ya əlavələrinizi birbaşa kuratorunuza yaza bilərsiniz.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFCBD5E1),
+                            maxLines = 2
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Button(
+                            onClick = { viewModel.openOrderChat(order) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .testTag("order_detail_open_chat_button"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Gold500,
+                                contentColor = Navy900
+                            )
+                        ) {
+                            Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = localizedString(StringKey.ORDER_CHAT_OPEN_BUTTON),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 3. Interactive Status Timeline
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),

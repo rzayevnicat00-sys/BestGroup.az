@@ -16,16 +16,16 @@ enum class MessageDeliveryStatus {
 data class ChatMessage(
     val id: String,
     val conversationId: String,
-    val senderId: String = "",
-    val senderRole: String = "customer", // customer, staff, system
     val senderName: String = "",
-    val text: String,
-    val messageType: ChatMessageType = ChatMessageType.TEXT,
-    val attachedFileName: String? = null,
-    val fileStoragePath: String? = null,
-    val isFromUser: Boolean = (senderRole == "customer"),
+    val isFromUser: Boolean = true,
+    val text: String = "",
     val timestamp: String = "",
     val isRead: Boolean = false,
+    val attachedFileName: String? = null,
+    val fileStoragePath: String? = null,
+    val senderId: String = "",
+    val senderRole: String = if (isFromUser) "customer" else "staff",
+    val messageType: ChatMessageType = ChatMessageType.TEXT,
     val status: MessageDeliveryStatus = MessageDeliveryStatus.SENT,
     val createdAt: String = "",
     val updatedAt: String = "",
@@ -38,10 +38,10 @@ data class ChatMessage(
 
 data class ChatConversation(
     val id: String,
+    val title: String,
+    val orderId: String? = null,
     val customerId: String = "",
     val assignedStaffId: String? = null,
-    val orderId: String? = null,
-    val title: String,
     val lastMessage: String = "",
     val lastMessageAt: String = "",
     val lastMessageSenderId: String = "",
@@ -54,10 +54,10 @@ data class ChatConversation(
     val createdAt: String = "",
     val updatedAt: String = "",
     val createdAtMillis: Long = System.currentTimeMillis(),
-    val updatedAtMillis: Long = System.currentTimeMillis()
+    val updatedAtMillis: Long = System.currentTimeMillis(),
+    val lastMessageText: String = lastMessage,
+    val lastMessageTime: String = if (lastMessageAt.isNotBlank()) lastMessageAt else "İndicə",
+    val unreadCount: Int = unreadForCustomer
 ) {
     val conversationId: String get() = id
-    val lastMessageText: String get() = lastMessage
-    val lastMessageTime: String get() = lastMessageAt.ifBlank { "İndicə" }
-    val unreadCount: Int get() = unreadForCustomer
 }

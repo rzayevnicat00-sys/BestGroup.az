@@ -109,7 +109,18 @@ class FirebaseAuthService(
             val firebaseUser = authResult.user ?: throw Exception("Giriş uğursuz oldu.")
 
             val userDoc = firestore.collection("users").document(firebaseUser.uid).get().await()
-            val roleStr = userDoc.getString("role") ?: "customer"
+            val claimsRole = try {
+                val tokenResult = firebaseUser.getIdToken(false).await()
+                (tokenResult.claims["role"] as? String)
+                    ?: if (tokenResult.claims["admin"] == true) "admin"
+                    else if (tokenResult.claims["manager"] == true) "manager"
+                    else if (tokenResult.claims["operator"] == true) "operator"
+                    else null
+            } catch (_: Exception) {
+                null
+            }
+
+            val roleStr = claimsRole ?: userDoc.getString("role") ?: "customer"
             val role = when (roleStr.lowercase()) {
                 "admin" -> UserRole.ADMIN
                 "manager" -> UserRole.MANAGER
@@ -138,7 +149,22 @@ class FirebaseAuthService(
         return try {
             val doc = firestore.collection("users").document(userId).get().await()
             if (doc.exists()) {
-                val roleStr = doc.getString("role") ?: "customer"
+                val claimsRole = try {
+                    auth.currentUser?.let { curUser ->
+                        if (curUser.uid == userId) {
+                            val tokenResult = curUser.getIdToken(false).await()
+                            (tokenResult.claims["role"] as? String)
+                                ?: if (tokenResult.claims["admin"] == true) "admin"
+                                else if (tokenResult.claims["manager"] == true) "manager"
+                                else if (tokenResult.claims["operator"] == true) "operator"
+                                else null
+                        } else null
+                    }
+                } catch (_: Exception) {
+                    null
+                }
+
+                val roleStr = claimsRole ?: doc.getString("role") ?: "customer"
                 val role = when (roleStr.lowercase()) {
                     "admin" -> UserRole.ADMIN
                     "manager" -> UserRole.MANAGER

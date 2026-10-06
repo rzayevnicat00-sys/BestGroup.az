@@ -275,5 +275,17 @@ val LocaleEn: Map<StringKey, String> = mapOf(
     StringKey.FILE_ACTION_DOWNLOAD to "Download",
     StringKey.FILE_EMPTY_TITLE to "No files attached for this order yet.",
     StringKey.FILE_NOT_FOUND to "File is no longer available or access is denied.",
-    StringKey.FILE_MAX_COUNT_REACHED to "Maximum 10 files can be attached."
+    StringKey.FILE_MAX_COUNT_REACHED to "Maximum 10 files can be attached.",
+
+    // Real-Time Chat & Messaging
+    StringKey.CHAT_SEND to "Send",
+    StringKey.CHAT_EMPTY_MESSAGES to "No messages yet. You can write your questions or instructions here.",
+    StringKey.CHAT_LOADING to "Loading conversation...",
+    StringKey.CHAT_SEND_FAILED to "Message could not be sent. Please check your internet connection.",
+    StringKey.CHAT_RETRY to "Retry",
+    StringKey.CHAT_NETWORK_ERROR to "Check internet connection",
+    StringKey.ORDER_CHAT_SECTION_TITLE to "Order Consultation & Chat",
+    StringKey.ORDER_CHAT_OPEN_BUTTON to "Chat with Curator",
+    StringKey.CHAT_MESSAGE_TOO_LONG to "Message text cannot exceed 4000 characters.",
+    StringKey.CHAT_MESSAGE_EMPTY to "Message cannot be empty."
 )

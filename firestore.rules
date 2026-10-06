@@ -10,70 +10,124 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    // Secure Custom Claims validation
+    function hasStaffClaim() {
+      return isAuthenticated() && (
+        (request.auth.token.keys().hasAny(['role']) && request.auth.token.role in ['admin', 'manager', 'operator']) ||
+        (request.auth.token.keys().hasAny(['admin']) && request.auth.token.admin == true) ||
+        (request.auth.token.keys().hasAny(['manager']) && request.auth.token.manager == true) ||
+        (request.auth.token.keys().hasAny(['operator']) && request.auth.token.operator == true)
+      );
     }
 
+    function hasAdminClaim() {
+      return isAuthenticated() && (
+        (request.auth.token.keys().hasAny(['role']) && request.auth.token.role == 'admin') ||
+        (request.auth.token.keys().hasAny(['admin']) && request.auth.token.admin == true)
+      );
+    }
+
+    // Role check strictly requires secure Firebase Authentication Custom Claims
     function isAdmin() {
-      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'admin';
+      return hasAdminClaim();
     }
 
     function isStaff() {
-      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (getUserData().role in ['admin', 'manager', 'operator']);
+      return hasStaffClaim();
     }
 
     // Users Collection
     match /users/{userId} {
       allow read: if isOwner(userId) || isStaff();
-      // On registration, role must default to customer
+      // On registration, role must strictly default to customer
       allow create: if isOwner(userId) && request.resource.data.role == 'customer';
-      // User cannot elevate their own role
-      allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin();
+      // User cannot elevate their own role or tamper with identity
+      allow update: if (
+        isOwner(userId) &&
+        request.resource.data.role == resource.data.role &&
+        resource.data.role == 'customer'
+      ) || isAdmin();
       allow delete: if isAdmin();
     }
 
     // Orders Collection
     match /orders/{orderId} {
-      allow read: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid && request.resource.data.status in ['waiting', 'pending'];
-      allow update: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.status == resource.data.status);
+      allow get: if isStaff() || (isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid));
+      allow list: if isStaff() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+
+      // Customer can create only their own orders with waiting/pending status
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.status in ['waiting', 'pending'] &&
+        (!request.resource.data.keys().hasAny(['assignedStaffId', 'assignedOperatorId']) || request.resource.data.assignedStaffId == null);
+
+      // Updates: Staff can update any order. Customers can only update non-restricted fields on their own orders.
+      // Customers CANNOT alter: userId, orderId, orderNumber, status, or staff assignments.
+      allow update: if isStaff() || (
+        isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.orderId == resource.data.orderId &&
+        request.resource.data.orderNumber == resource.data.orderNumber &&
+        request.resource.data.status == resource.data.status &&
+        (!request.resource.data.keys().hasAny(['assignedStaffId']) || request.resource.data.assignedStaffId == resource.data.assignedStaffId)
+      );
+
       allow delete: if isAdmin();
     }
 
     // Conversations Collection
     match /conversations/{conversationId} {
+      // Cross-document ownership validation:
+      // For general conversations (orderId null or empty), order linkage is not required.
+      // For order-linked conversations (orderId provided), the referenced order MUST exist AND belong to request.auth.uid.
       function orderBelongsToCaller(orderId) {
-        return orderId == null || (
+        return (orderId == null || orderId == '') || (
           exists(/databases/$(database)/documents/orders/$(orderId)) &&
           get(/databases/$(database)/documents/orders/$(orderId)).data.userId == request.auth.uid
         );
       }
 
-      // Read conversation: only staff or the conversation customer
-      allow read: if isAuthenticated() && (
+      // Read single conversation: staff, non-existent document check, or verified conversation customer
+      allow get: if isAuthenticated() && (
+        isStaff() ||
+        resource == null ||
+        resource.data.customerId == request.auth.uid
+      );
+
+      // List conversations: only staff or the verified conversation customer
+      allow list: if isAuthenticated() && (
         isStaff() ||
         resource.data.customerId == request.auth.uid
       );
 
-      // Create conversation: customer creates for themselves and must own the order if specified
+      // Create conversation: customer creates strictly for themselves and MUST own the order if specified
       allow create: if isAuthenticated() && (
         isStaff() ||
         (
           request.resource.data.customerId == request.auth.uid &&
-          orderBelongsToCaller(request.resource.data.orderId)
+          orderBelongsToCaller(request.resource.data.orderId) &&
+          request.resource.data.conversationId == conversationId &&
+          request.resource.data.status == 'active' &&
+          (!request.resource.data.keys().hasAny(['assignedStaffId']) || request.resource.data.assignedStaffId == null) &&
+          (!request.resource.data.keys().hasAny(['unreadForStaff']) || request.resource.data.unreadForStaff == 0)
         )
       );
 
       // Update conversation:
-      // Customer cannot change customerId, assignedStaffId, orderId, or unreadForStaff
+      // Customer cannot modify security-sensitive fields:
+      // customerId, orderId, conversationId, assignedStaffId, status, unreadForStaff, createdAt
       allow update: if isAuthenticated() && (
         isStaff() ||
         (
           resource.data.customerId == request.auth.uid &&
           request.resource.data.customerId == resource.data.customerId &&
-          request.resource.data.assignedStaffId == resource.data.assignedStaffId &&
-          request.resource.data.orderId == resource.data.orderId &&
-          request.resource.data.unreadForStaff == resource.data.unreadForStaff
+          request.resource.data.conversationId == resource.data.conversationId &&
+          (!resource.data.keys().hasAny(['orderId']) || request.resource.data.orderId == resource.data.orderId) &&
+          (!resource.data.keys().hasAny(['assignedStaffId']) || request.resource.data.assignedStaffId == resource.data.assignedStaffId) &&
+          (!resource.data.keys().hasAny(['status']) || request.resource.data.status == resource.data.status) &&
+          (!resource.data.keys().hasAny(['unreadForStaff']) || request.resource.data.unreadForStaff == resource.data.unreadForStaff) &&
+          (!resource.data.keys().hasAny(['createdAt']) || request.resource.data.createdAt == resource.data.createdAt)
         )
       );
 
@@ -81,6 +135,10 @@ service cloud.firestore {
 
       // Messages Subcollection
       match /messages/{messageId} {
+        function parentConversationExists() {
+          return exists(/databases/$(database)/documents/conversations/$(conversationId));
+        }
+
         function getParentConversation() {
           return get(/databases/$(database)/documents/conversations/$(conversationId)).data;
         }
@@ -88,33 +146,39 @@ service cloud.firestore {
         // Read messages: customer of this conversation or staff
         allow read: if isAuthenticated() && (
           isStaff() ||
-          getParentConversation().customerId == request.auth.uid
+          (parentConversationExists() && getParentConversation().customerId == request.auth.uid)
         );
 
         // Create message:
         // - Authenticated
-        // - Staff or conversation owner
-        // - Customer senderId must be request.auth.uid
-        // - Customer cannot impersonate staff (senderRole == 'customer')
-        // - Text size: 1..4000 characters
+        // - Staff or verified conversation owner
+        // - Customer senderId MUST strictly match request.auth.uid
+        // - Customer senderRole MUST be 'customer' (cannot impersonate staff)
+        // - text size between 1 and 4000 characters
         allow create: if isAuthenticated() && (
           isStaff() ||
           (
+            parentConversationExists() &&
             getParentConversation().customerId == request.auth.uid &&
             request.resource.data.senderId == request.auth.uid &&
             request.resource.data.senderRole == 'customer' &&
+            request.resource.data.conversationId == conversationId &&
+            request.resource.data.text is string &&
             request.resource.data.text.size() > 0 &&
             request.resource.data.text.size() <= 4000
           )
         );
 
-        // Update message: customer can only update read status of staff messages, cannot alter text or sender
+        // Update message: customer can only update read status of incoming staff messages
+        // Customer CANNOT alter senderId, senderRole, conversationId, messageId, text, messageType or createdAt
         allow update: if isAuthenticated() && (
           isStaff() ||
           (
+            parentConversationExists() &&
             getParentConversation().customerId == request.auth.uid &&
             request.resource.data.senderId == resource.data.senderId &&
             request.resource.data.senderRole == resource.data.senderRole &&
+            request.resource.data.conversationId == resource.data.conversationId &&
             request.resource.data.text == resource.data.text
           )
         );

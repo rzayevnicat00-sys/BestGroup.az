@@ -109,11 +109,11 @@ class FirestoreChatService(
             "assignedStaffId" to null,
             "orderId" to orderId,
             "title" to title,
-            "lastMessage" to greetingText,
-            "lastMessageText" to greetingText,
+            "lastMessage" to "",
+            "lastMessageText" to "",
             "lastMessageAt" to nowFormatted,
-            "lastMessageSenderId" to "staff_curator",
-            "unreadForCustomer" to 1,
+            "lastMessageSenderId" to null,
+            "unreadForCustomer" to 0,
             "unreadForStaff" to 0,
             "status" to "active",
             "curatorName" to "Akademik Şura Kuratoru",
@@ -125,25 +125,6 @@ class FirestoreChatService(
         )
 
         docRef.set(convData, SetOptions.merge()).await()
-
-        // Create initial greeting system/staff message
-        val initialMsgId = "msg_init_${UUID.randomUUID()}"
-        val initialMsg = hashMapOf(
-            "messageId" to initialMsgId,
-            "conversationId" to convId,
-            "senderId" to "staff_curator",
-            "senderRole" to "staff",
-            "senderName" to "Akademik Şura Kuratoru",
-            "text" to greetingText,
-            "messageType" to ChatMessageType.TEXT.name,
-            "status" to "sent",
-            "isRead" to false,
-            "readAt" to null,
-            "createdAt" to FieldValue.serverTimestamp(),
-            "updatedAt" to FieldValue.serverTimestamp(),
-            "timeFormatted" to nowFormatted
-        )
-        docRef.collection("messages").document(initialMsgId).set(initialMsg).await()
 
         return mapDocumentToConversation(convId, convData)
     }
@@ -177,13 +158,44 @@ class FirestoreChatService(
         val isoNow = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
         val messageId = "msg_${UUID.randomUUID()}"
 
+        val actualSenderId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: senderId
+
+        // Ensure parent conversation exists in Firestore before creating a subcollection message
+        val convRef = convCollection.document(conversationId)
+        val convSnap = convRef.get().await()
+        if (!convSnap.exists()) {
+            val dateFmtInit = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date())
+            val derivedOrderId = if (conversationId.startsWith("order_")) conversationId.removePrefix("order_") else null
+            val newConvData = hashMapOf<String, Any?>(
+                "conversationId" to conversationId,
+                "customerId" to actualSenderId,
+                "assignedStaffId" to null,
+                "orderId" to derivedOrderId,
+                "title" to "Akademik Dəstək",
+                "lastMessage" to trimmed,
+                "lastMessageText" to trimmed,
+                "lastMessageAt" to dateFmtInit,
+                "lastMessageSenderId" to actualSenderId,
+                "unreadForCustomer" to 0,
+                "unreadForStaff" to 1,
+                "status" to "active",
+                "curatorName" to "Akademik Şura Kuratoru",
+                "curatorRole" to "Elmi Məsləhətçi",
+                "isOnline" to true,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp(),
+                "createdIso" to isoNow
+            )
+            convRef.set(newConvData).await()
+        }
+
         val isFromCustomer = senderRole.equals("customer", ignoreCase = true)
         val targetRole = if (isFromCustomer) "customer" else "staff"
 
         val msgDoc = hashMapOf(
             "messageId" to messageId,
             "conversationId" to conversationId,
-            "senderId" to senderId,
+            "senderId" to actualSenderId,
             "senderRole" to targetRole,
             "senderName" to senderName,
             "text" to trimmed,
@@ -206,12 +218,10 @@ class FirestoreChatService(
             "lastMessage" to trimmed,
             "lastMessageText" to trimmed,
             "lastMessageAt" to nowFormatted,
-            "lastMessageSenderId" to senderId,
+            "lastMessageSenderId" to actualSenderId,
             "updatedAt" to FieldValue.serverTimestamp()
         )
-        if (isFromCustomer) {
-            convUpdate["unreadForStaff"] = FieldValue.increment(1)
-        } else {
+        if (!isFromCustomer) {
             convUpdate["unreadForCustomer"] = FieldValue.increment(1)
         }
 
@@ -271,7 +281,7 @@ class FirestoreChatService(
         } catch (_: Exception) {}
     }
 
-    private fun mapDocumentToConversation(id: String, data: Map<String, Any>): ChatConversation {
+    private fun mapDocumentToConversation(id: String, data: Map<String, Any?>): ChatConversation {
         val title = data["title"] as? String ?: "Söhbət"
         val orderId = data["orderId"] as? String
         val customerId = data["customerId"] as? String ?: (data["userId"] as? String ?: "")
@@ -305,7 +315,7 @@ class FirestoreChatService(
         )
     }
 
-    private fun mapDocumentToMessage(id: String, conversationId: String, data: Map<String, Any>): ChatMessage {
+    private fun mapDocumentToMessage(id: String, conversationId: String, data: Map<String, Any?>): ChatMessage {
         val senderId = data["senderId"] as? String ?: ""
         val senderRole = data["senderRole"] as? String ?: (if (data["isFromUser"] == true) "customer" else "staff")
         val senderName = data["senderName"] as? String ?: ""

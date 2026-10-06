@@ -509,7 +509,6 @@ class BestGroupRepository(
         }
 
         _orders.value = listOf(createdOrder) + _orders.value.filter { it.id != createdOrder.id }
-        createChatConversationForOrder(createdOrder)
 
         addNotification(
             NotificationItem(
@@ -701,10 +700,15 @@ class BestGroupRepository(
     private var activeChatJob: kotlinx.coroutines.Job? = null
 
     suspend fun getOrCreateConversationForOrder(order: Order): ChatConversation {
-        val currentUid = _currentUser.value?.id ?: authService?.currentUserId ?: ""
+        val currentUid = authService?.currentUserId ?: _currentUser.value?.id ?: ""
         if (currentUid.isBlank()) {
             throw IllegalStateException("Söhbətə daxil olmaq üçün zəhmət olmasa sistemə daxil olun.")
         }
+        if (order.userId.isNotBlank() && currentUid.isNotBlank() && order.userId != currentUid) {
+            throw IllegalStateException("Bu sifarişə və onun söhbətinə giriş icazəniz yoxdur.")
+        }
+
+        val convId = FirestoreChatService.deterministicOrderConversationId(order.id)
 
         if (chatService != null) {
             try {
@@ -718,6 +722,8 @@ class BestGroupRepository(
                 val existing = _conversations.value.find { it.id == conv.id }
                 if (existing == null) {
                     _conversations.value = listOf(conv) + _conversations.value
+                } else {
+                    _conversations.value = _conversations.value.map { if (it.id == conv.id) conv else it }
                 }
                 return conv
             } catch (_: Exception) {
@@ -725,7 +731,6 @@ class BestGroupRepository(
             }
         }
 
-        val convId = FirestoreChatService.deterministicOrderConversationId(order.id)
         val existing = _conversations.value.find { it.id == convId }
         if (existing != null) return existing
 
@@ -734,30 +739,15 @@ class BestGroupRepository(
             customerId = currentUid,
             orderId = order.id,
             title = "${order.orderNumber} Kuratorluğu",
-            lastMessage = "Salam! #${order.orderNumber} nömrəli '${order.topic}' mövzulu sifarişiniz qəbul edildi. Təyin olunmuş akademik kuratorunuz buradan sizinlə əlaqədə olacaq.",
+            lastMessage = "",
             lastMessageAt = "İndicə",
-            unreadForCustomer = 1,
+            unreadForCustomer = 0,
+            unreadForStaff = 0,
             curatorName = "Akademik Şura Kuratoru",
             curatorRole = "Elmi Məsləhətçi",
             isOnline = true
         )
         _conversations.value = listOf(newConv) + _conversations.value
-        val initialMsgs = listOf(
-            ChatMessage(
-                id = "m_${UUID.randomUUID()}",
-                conversationId = convId,
-                senderId = "staff_curator",
-                senderRole = "staff",
-                senderName = "Akademik Şura Kuratoru",
-                text = "Salam! #${order.orderNumber} nömrəli '${order.topic}' mövzulu sifarişiniz üzrə kuratorunuzam. Əlavə suallarınızı və göstərişlərinizi buradan rahatlıqla göndərə bilərsiniz.",
-                timestamp = "İndicə",
-                isRead = false
-            )
-        )
-        val updatedMap = _messages.value.toMutableMap()
-        updatedMap[convId] = initialMsgs
-        _messages.value = updatedMap
-
         return newConv
     }
 
@@ -777,7 +767,7 @@ class BestGroupRepository(
     }
 
     private fun createChatConversationForOrder(order: Order) {
-        val currentUid = _currentUser.value?.id ?: authService?.currentUserId ?: ""
+        val currentUid = authService?.currentUserId ?: _currentUser.value?.id ?: ""
         val convId = FirestoreChatService.deterministicOrderConversationId(order.id)
         val existing = _conversations.value.find { it.id == convId }
         if (existing != null) return
@@ -788,28 +778,14 @@ class BestGroupRepository(
             orderId = order.id,
             title = "${order.orderNumber} Kuratorluğu",
             curatorName = "Akademik Şura Kuratoru",
-            curatorRole = "Təyin olunmuş kurator",
-            lastMessage = "Sifarişiniz qəbul edildi. Suallarınızı birbaşa buradan ünvanlaya bilərsiniz.",
+            curatorRole = "Elmi Məsləhətçi",
+            lastMessage = "",
             lastMessageAt = "İndicə",
-            unreadForCustomer = 1,
+            unreadForCustomer = 0,
+            unreadForStaff = 0,
             isOnline = true
         )
         _conversations.value = listOf(newConv) + _conversations.value
-        val initialMsgs = listOf(
-            ChatMessage(
-                id = "m_${UUID.randomUUID()}",
-                conversationId = convId,
-                senderId = "staff_curator",
-                senderRole = "staff",
-                senderName = "Akademik Şura Kuratoru",
-                text = "Salam! #${order.orderNumber} nömrəli '${order.topic}' mövzulu sifarişiniz üzrə kuratorunuzam. Əlavə suallarınızı və göstərişlərinizi buradan rahatlıqla göndərə bilərsiniz.",
-                timestamp = "İndicə",
-                isRead = false
-            )
-        )
-        val updatedMap = _messages.value.toMutableMap()
-        updatedMap[convId] = initialMsgs
-        _messages.value = updatedMap
     }
 
     suspend fun sendMessage(conversationId: String, text: String, attachedFileName: String? = null): ChatMessage {

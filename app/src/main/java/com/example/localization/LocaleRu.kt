@@ -275,5 +275,17 @@ val LocaleRu: Map<StringKey, String> = mapOf(
     StringKey.FILE_ACTION_DOWNLOAD to "Скачать",
     StringKey.FILE_EMPTY_TITLE to "Для этого заказа файлы еще не прикреплены.",
     StringKey.FILE_NOT_FOUND to "Файл более недоступен или доступ запрещен.",
-    StringKey.FILE_MAX_COUNT_REACHED to "Можно прикрепить не более 10 файлов."
+    StringKey.FILE_MAX_COUNT_REACHED to "Можно прикрепить не более 10 файлов.",
+
+    // Real-Time Chat & Messaging
+    StringKey.CHAT_SEND to "Отправить",
+    StringKey.CHAT_EMPTY_MESSAGES to "Пока нет сообщений. Вы можете задать вопрос куратору здесь.",
+    StringKey.CHAT_LOADING to "Загрузка беседы...",
+    StringKey.CHAT_SEND_FAILED to "Не удалось отправить сообщение. Проверьте интернет-соединение.",
+    StringKey.CHAT_RETRY to "Повторить",
+    StringKey.CHAT_NETWORK_ERROR to "Проверьте интернет-соединение",
+    StringKey.ORDER_CHAT_SECTION_TITLE to "Чат по заказу",
+    StringKey.ORDER_CHAT_OPEN_BUTTON to "Написать куратору",
+    StringKey.CHAT_MESSAGE_TOO_LONG to "Сообщение не может превышать 4000 символов.",
+    StringKey.CHAT_MESSAGE_EMPTY to "Сообщение не может быть пустым."
 )

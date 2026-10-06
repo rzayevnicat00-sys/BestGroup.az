@@ -1,6 +1,7 @@
 package com.example.viewmodel
 
 import android.app.Application
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.localization.Language
@@ -79,7 +80,7 @@ class MainViewModel @JvmOverloads constructor(
     private val _selectedOrder = MutableStateFlow<Order?>(null)
     val selectedOrder: StateFlow<Order?> = _selectedOrder.asStateFlow()
 
-    private val _activeConversationId = MutableStateFlow<String?>("conv_1")
+    private val _activeConversationId = MutableStateFlow<String?>(null)
     val activeConversationId: StateFlow<String?> = _activeConversationId.asStateFlow()
 
     private val _ordersFilter = MutableStateFlow(OrdersFilter.ALL)
@@ -193,6 +194,8 @@ class MainViewModel @JvmOverloads constructor(
 
     var isSendingChatMessage = mutableStateOf(false)
         private set
+    var isChatLoading = mutableStateOf(false)
+        private set
     var chatErrorMessage = mutableStateOf<String?>(null)
         private set
 
@@ -208,20 +211,33 @@ class MainViewModel @JvmOverloads constructor(
     }
 
     fun openOrderChat(order: Order) {
+        val deterministicConvId = com.example.services.firebase.FirestoreChatService.deterministicOrderConversationId(order.id)
+        _activeConversationId.value = deterministicConvId
+        _selectedBottomTab.value = BottomTab.CHAT
+        _currentDestination.value = AppDestination.MAIN
+        isChatLoading.value = true
+        chatErrorMessage.value = null
+
         viewModelScope.launch {
             try {
                 val conv = repository.getOrCreateConversationForOrder(order)
                 setActiveConversation(conv.id)
             } catch (e: Exception) {
                 chatErrorMessage.value = e.localizedMessage ?: "Söhbətə qoşulmaq mümkün olmadı."
-                _selectedBottomTab.value = BottomTab.CHAT
-                _currentDestination.value = AppDestination.MAIN
+            } finally {
+                isChatLoading.value = false
             }
         }
     }
 
     fun sendChatMessage(text: String, file: String? = null, onComplete: ((Boolean, String?) -> Unit)? = null) {
-        val convId = _activeConversationId.value ?: return
+        val convId = _activeConversationId.value
+            ?: run {
+                val err = "Fəal söhbət yoxdur. Sifarişləriniz bölməsindən kuratorla əlaqəli söhbəti aça bilərsiniz."
+                chatErrorMessage.value = err
+                onComplete?.invoke(false, err)
+                return
+            }
         if (isSendingChatMessage.value) return // Duplicate submission protection
 
         val trimmed = text.trim()
