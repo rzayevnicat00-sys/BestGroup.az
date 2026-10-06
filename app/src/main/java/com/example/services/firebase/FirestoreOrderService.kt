@@ -129,13 +129,20 @@ class FirestoreOrderService(
         // Secure server-side pricing logic: client cannot inject custom price
         val calculatedEstimatedPrice = when {
             serviceCatalogItem != null -> {
-                if (serviceCatalogItem.priceType.equals("quote", ignoreCase = true)) {
-                    0
-                } else {
-                    serviceCatalogItem.startingPriceAzn.toInt() + (pageCount * 3)
+                when {
+                    serviceCatalogItem.priceType.equals("quote", ignoreCase = true) -> 0
+                    serviceCatalogItem.unit.equals("page", ignoreCase = true) || serviceCatalogItem.priceUnit.equals("page", ignoreCase = true) -> {
+                        // Sərbəst iş / Referat / Esse: 0.50 AZN per page (minimum 1 AZN if pageCount >= 2)
+                        val total = serviceCatalogItem.startingPriceAzn * (if (pageCount > 0) pageCount else 1)
+                        Math.max(1, Math.round(total).toInt())
+                    }
+                    else -> serviceCatalogItem.startingPriceAzn.toInt()
                 }
             }
-            else -> serviceType.startingPriceAzn + (pageCount * 3)
+            serviceType == ServiceType.INDEPENDENT_WORK || serviceType == ServiceType.REPORT || serviceType == ServiceType.ESSAY -> {
+                Math.max(1, Math.round(0.50 * (if (pageCount > 0) pageCount else 1)).toInt())
+            }
+            else -> serviceType.startingPriceAzn
         }
 
         val resolvedServiceName = serviceCatalogItem?.nameAz?.ifBlank { serviceName } ?: serviceName

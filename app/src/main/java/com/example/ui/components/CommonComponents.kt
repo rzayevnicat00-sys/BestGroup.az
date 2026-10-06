@@ -31,7 +31,8 @@ import com.example.ui.theme.*
 @Composable
 fun BestGroupLogoBadge(
     modifier: Modifier = Modifier,
-    size: Int = 40
+    size: Int = 40,
+    forceWhiteLogo: Boolean = false
 ) {
     Box(
         modifier = modifier
@@ -49,11 +50,12 @@ fun BestGroupLogoBadge(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = Icons.Default.School,
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(
+                id = com.example.R.drawable.ic_bestgroup_logo_white
+            ),
             contentDescription = "BestGroup.az Logo",
-            tint = Gold500,
-            modifier = Modifier.size((size * 0.6).dp)
+            modifier = Modifier.size((size * 0.72).dp)
         )
     }
 }

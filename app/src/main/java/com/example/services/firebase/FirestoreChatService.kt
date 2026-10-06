@@ -28,6 +28,7 @@ class FirestoreChatService(
         const val DEFAULT_MESSAGES_LIMIT = 50L
 
         fun deterministicOrderConversationId(orderId: String): String = "order_$orderId"
+        fun deterministicSupportConversationId(userId: String): String = "support_$userId"
     }
 
     fun getConversationsFlow(userId: String, isStaff: Boolean): Flow<List<ChatConversation>> = callbackFlow {
@@ -129,6 +130,50 @@ class FirestoreChatService(
         return mapDocumentToConversation(convId, convData)
     }
 
+    suspend fun getOrCreateSupportConversation(
+        customerId: String,
+        customerName: String = "Müştəri"
+    ): ChatConversation {
+        require(customerId.isNotBlank()) { "İstifadəçi təsdiqlənməyib." }
+
+        val convId = deterministicSupportConversationId(customerId)
+        val docRef = convCollection.document(convId)
+        val docSnap = docRef.get().await()
+
+        if (docSnap.exists()) {
+            return mapDocumentToConversation(convId, docSnap.data ?: emptyMap())
+        }
+
+        val nowFormatted = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date())
+        val isoNow = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
+        val title = "Müştəri xidmətləri"
+
+        val convData = hashMapOf<String, Any?>(
+            "conversationId" to convId,
+            "customerId" to customerId,
+            "assignedStaffId" to null,
+            "orderId" to null,
+            "title" to title,
+            "lastMessage" to "",
+            "lastMessageText" to "",
+            "lastMessageAt" to nowFormatted,
+            "lastMessageSenderId" to null,
+            "unreadForCustomer" to 0,
+            "unreadForStaff" to 0,
+            "status" to "active",
+            "curatorName" to "Müştəri Xidmətləri Meneceri",
+            "curatorRole" to "Akademik Dəstək",
+            "isOnline" to true,
+            "createdAt" to FieldValue.serverTimestamp(),
+            "updatedAt" to FieldValue.serverTimestamp(),
+            "createdIso" to isoNow
+        )
+
+        docRef.set(convData, SetOptions.merge()).await()
+
+        return mapDocumentToConversation(convId, convData)
+    }
+
     suspend fun sendMessage(
         conversationId: String,
         senderId: String,
@@ -171,16 +216,16 @@ class FirestoreChatService(
                 "customerId" to actualSenderId,
                 "assignedStaffId" to null,
                 "orderId" to derivedOrderId,
-                "title" to "Akademik Dəstək",
+                "title" to if (derivedOrderId != null) "Sifariş Kuratorluğu" else "Müştəri xidmətləri",
                 "lastMessage" to trimmed,
                 "lastMessageText" to trimmed,
                 "lastMessageAt" to dateFmtInit,
                 "lastMessageSenderId" to actualSenderId,
                 "unreadForCustomer" to 0,
-                "unreadForStaff" to 1,
+                "unreadForStaff" to 0,
                 "status" to "active",
-                "curatorName" to "Akademik Şura Kuratoru",
-                "curatorRole" to "Elmi Məsləhətçi",
+                "curatorName" to if (derivedOrderId != null) "Akademik Şura Kuratoru" else "Müştəri Xidmətləri",
+                "curatorRole" to if (derivedOrderId != null) "Elmi Məsləhətçi" else "Dəstək Operatoru",
                 "isOnline" to true,
                 "createdAt" to FieldValue.serverTimestamp(),
                 "updatedAt" to FieldValue.serverTimestamp(),

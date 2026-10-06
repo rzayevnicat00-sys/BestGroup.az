@@ -230,6 +230,31 @@ class MainViewModel @JvmOverloads constructor(
         }
     }
 
+    fun openGeneralSupportChat() {
+        val currentUid = repository.currentUserId
+        if (currentUid.isBlank()) {
+            _currentDestination.value = AppDestination.AUTH
+            return
+        }
+        val deterministicSupportId = com.example.services.firebase.FirestoreChatService.deterministicSupportConversationId(currentUid)
+        _activeConversationId.value = deterministicSupportId
+        _selectedBottomTab.value = BottomTab.CHAT
+        _currentDestination.value = AppDestination.MAIN
+        isChatLoading.value = true
+        chatErrorMessage.value = null
+
+        viewModelScope.launch {
+            try {
+                val conv = repository.getOrCreateGeneralSupportConversation()
+                setActiveConversation(conv.id)
+            } catch (e: Exception) {
+                chatErrorMessage.value = e.localizedMessage ?: "Müştəri xidmətləri ilə əlaqə qurmaq mümkün olmadı."
+            } finally {
+                isChatLoading.value = false
+            }
+        }
+    }
+
     fun sendChatMessage(text: String, file: String? = null, onComplete: ((Boolean, String?) -> Unit)? = null) {
         val convId = _activeConversationId.value
             ?: run {

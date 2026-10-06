@@ -77,14 +77,14 @@ fun SplashScreen(
                 .scale(pulseScale)
                 .padding(32.dp)
         ) {
-            // Emblem
+            // Original BestGroup.az Logo - Centerpiece
             Box(
                 modifier = Modifier
-                    .size(100.dp)
-                    .clip(RoundedCornerShape(28.dp))
+                    .size(160.dp)
+                    .clip(CircleShape)
                     .background(
                         Brush.linearGradient(
-                            listOf(Navy700, Navy900)
+                            listOf(Color.White.copy(alpha = 0.96f), Color.White.copy(alpha = 0.92f))
                         )
                     )
                     .border(
@@ -92,15 +92,18 @@ fun SplashScreen(
                         brush = Brush.linearGradient(
                             listOf(Gold500, Gold600, Color(0xFFDFBE52))
                         ),
-                        shape = RoundedCornerShape(28.dp)
+                        shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.School,
-                    contentDescription = "BestGroup Emblem",
-                    tint = Gold500,
-                    modifier = Modifier.size(56.dp)
+                androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(
+                        id = com.example.R.drawable.ic_bestgroup_logo
+                    ),
+                    contentDescription = "BestGroup.az Orijinal Logo",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp)
                 )
             }
 

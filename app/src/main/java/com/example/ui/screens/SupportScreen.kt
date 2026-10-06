@@ -46,11 +46,17 @@ fun SupportScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = localizedString(StringKey.SUPPORT_TITLE),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        com.example.ui.components.BestGroupLogoBadge(size = 30)
+                        Text(
+                            text = localizedString(StringKey.SUPPORT_TITLE),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                    }
                 },
                 navigationIcon = {
                     IconButton(
@@ -94,7 +100,7 @@ fun SupportScreen(
                         ) {
                             Button(
                                 onClick = {
-                                    viewModel.setActiveConversation("conv_2")
+                                    viewModel.openGeneralSupportChat()
                                 },
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),

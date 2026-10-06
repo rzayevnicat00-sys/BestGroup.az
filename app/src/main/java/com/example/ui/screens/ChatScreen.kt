@@ -84,15 +84,7 @@ fun ChatScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(Navy800),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.SupportAgent, contentDescription = null, tint = Gold500)
-                        }
+                        com.example.ui.components.BestGroupLogoBadge(size = 36)
                         Column {
                             Text(
                                 text = activeConversation?.title ?: localizedString(StringKey.CHAT_TITLE),

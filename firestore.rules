@@ -123,7 +123,10 @@ service cloud.firestore {
           resource.data.customerId == request.auth.uid &&
           request.resource.data.customerId == resource.data.customerId &&
           request.resource.data.conversationId == resource.data.conversationId &&
-          (!resource.data.keys().hasAny(['orderId']) || request.resource.data.orderId == resource.data.orderId) &&
+          (
+            (!resource.data.keys().hasAny(['orderId']) && !request.resource.data.keys().hasAny(['orderId'])) ||
+            request.resource.data.orderId == resource.data.orderId
+          ) &&
           (!resource.data.keys().hasAny(['assignedStaffId']) || request.resource.data.assignedStaffId == resource.data.assignedStaffId) &&
           (!resource.data.keys().hasAny(['status']) || request.resource.data.status == resource.data.status) &&
           (!resource.data.keys().hasAny(['unreadForStaff']) || request.resource.data.unreadForStaff == resource.data.unreadForStaff) &&

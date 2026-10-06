@@ -406,6 +406,9 @@ class BestGroupRepository(
         return authService?.isUserLoggedIn ?: (_currentUser.value != null)
     }
 
+    val currentUserId: String
+        get() = _currentUser.value?.id ?: authService?.currentUserId ?: ""
+
     fun signOut() {
         authService?.signOut()
         _currentUser.value = null
@@ -472,10 +475,21 @@ class BestGroupRepository(
             val dateFmt = SimpleDateFormat("dd MMMM yyyy", Locale("az"))
             val now = dateFmt.format(Date())
             val orderNum = "#BG-${SimpleDateFormat("yyyy", Locale.US).format(Date())}-${(1000..9999).random()}"
-            val calculatedPrice = if (resolvedServiceItem != null) {
-                if (resolvedServiceItem.priceType.equals("quote", ignoreCase = true)) 0 else (resolvedServiceItem.startingPriceAzn.toInt() + (pageCount * 3))
-            } else {
-                serviceType.startingPriceAzn + (pageCount * 3)
+            val calculatedPrice = when {
+                resolvedServiceItem != null -> {
+                    when {
+                        resolvedServiceItem.priceType.equals("quote", ignoreCase = true) -> 0
+                        resolvedServiceItem.unit.equals("page", ignoreCase = true) || resolvedServiceItem.priceUnit.equals("page", ignoreCase = true) -> {
+                            val total = resolvedServiceItem.startingPriceAzn * (if (pageCount > 0) pageCount else 1)
+                            Math.max(1, Math.round(total).toInt())
+                        }
+                        else -> resolvedServiceItem.startingPriceAzn.toInt()
+                    }
+                }
+                serviceType == ServiceType.INDEPENDENT_WORK || serviceType == ServiceType.REPORT || serviceType == ServiceType.ESSAY -> {
+                    Math.max(1, Math.round(0.50 * (if (pageCount > 0) pageCount else 1)).toInt())
+                }
+                else -> serviceType.startingPriceAzn
             }
             Order(
                 id = "ord_${UUID.randomUUID()}",
@@ -751,6 +765,52 @@ class BestGroupRepository(
         return newConv
     }
 
+    suspend fun getOrCreateGeneralSupportConversation(): ChatConversation {
+        val currentUid = authService?.currentUserId ?: _currentUser.value?.id ?: ""
+        if (currentUid.isBlank()) {
+            throw IllegalStateException("Müştəri xidmətləri ilə əlaqə saxlamaq üçün zəhmət olmasa sistemə daxil olun.")
+        }
+
+        val convId = FirestoreChatService.deterministicSupportConversationId(currentUid)
+
+        if (chatService != null) {
+            try {
+                val conv = chatService.getOrCreateSupportConversation(
+                    customerId = currentUid,
+                    customerName = _currentUser.value?.fullName ?: "Müştəri"
+                )
+                val existing = _conversations.value.find { it.id == conv.id }
+                if (existing == null) {
+                    _conversations.value = listOf(conv) + _conversations.value
+                } else {
+                    _conversations.value = _conversations.value.map { if (it.id == conv.id) conv else it }
+                }
+                return conv
+            } catch (_: Exception) {
+                // fall through to local fallback on network issue
+            }
+        }
+
+        val existing = _conversations.value.find { it.id == convId }
+        if (existing != null) return existing
+
+        val newConv = ChatConversation(
+            id = convId,
+            customerId = currentUid,
+            orderId = null,
+            title = "Müştəri xidmətləri",
+            lastMessage = "",
+            lastMessageAt = "İndicə",
+            unreadForCustomer = 0,
+            unreadForStaff = 0,
+            curatorName = "Müştəri Xidmətləri Meneceri",
+            curatorRole = "Akademik Dəstək",
+            isOnline = true
+        )
+        _conversations.value = listOf(newConv) + _conversations.value
+        return newConv
+    }
+
     fun listenToConversationMessages(conversationId: String, scope: CoroutineScope) {
         activeChatJob?.cancel()
         if (conversationId.isBlank()) return
@@ -873,35 +933,43 @@ class BestGroupRepository(
         fun getDefaultCatalogServices(): List<ServiceCatalogItem> {
             return listOf(
                 ServiceCatalogItem(
-                    serviceId = "diploma",
-                    nameAz = "Diplom işi",
-                    nameEn = "Bachelor Diploma Thesis",
-                    nameRu = "Дипломная работа",
-                    descriptionAz = "Bakalavr pilləsi üzrə metodiki göstərişlərə uyğun, 0% plagiatlıq və yüksək elmi əsaslandırma ilə diplom işinin yazılması.",
-                    descriptionEn = "Comprehensive Bachelor's thesis adhering to university standards with guaranteed originality and defense preparation.",
-                    descriptionRu = "Написание дипломной работы для бакалавриата по стандартам вуза с гарантией оригинальности.",
-                    startingPriceAzn = 250.0,
+                    serviceId = "independent_work",
+                    nameAz = "Sərbəst iş / Referat / Esse",
+                    nameEn = "Independent Work / Report / Essay",
+                    nameRu = "Самостоятельная работа / Реферат / Эссе",
+                    descriptionAz = "Tələbə və magistrantlar üçün mövzu üzrə fərdi tapşırıq, referat və esselərin peşəkar standartlara uyğun yazılması.",
+                    descriptionEn = "Individual academic assignments, reports and essays written according to strict university standards.",
+                    descriptionRu = "Подготовка самостоятельных работ, рефератов и эссе по стандартам высших учебных заведений.",
+                    startingPriceAzn = 0.50,
+                    maxPriceAzn = 0.0,
+                    basePrice = 0.50,
                     priceType = "starting_from",
-                    unit = "project",
-                    estimatedDuration = "15-25 gün",
+                    unit = "page",
+                    priceUnit = "page",
+                    currency = "AZN",
+                    estimatedDuration = "1-3 gün",
                     active = true,
-                    icon = "school",
+                    icon = "assignment",
                     sortOrder = 1
                 ),
                 ServiceCatalogItem(
-                    serviceId = "master",
-                    nameAz = "Magistr dissertasiyası",
-                    nameEn = "Master's Dissertation",
-                    nameRu = "Магистерская диссертация",
-                    descriptionAz = "Dərin elmi tədqiqat, beynəlxalq ədəbiyyat icmalı və empirik təhlillərə əsaslanan dissertasiya işi.",
-                    descriptionEn = "Rigorous scientific research, extensive literature review, empirical methodology and analysis.",
-                    descriptionRu = "Глубокое научное исследование, анализ литературы и эмпирические расчеты.",
-                    startingPriceAzn = 450.0,
+                    serviceId = "presentation",
+                    nameAz = "Təqdimat / Slayd",
+                    nameEn = "Presentation / Slides",
+                    nameRu = "Презентация / Слайды",
+                    descriptionAz = "PowerPoint və Canva ilə müasir vizual dizayn, infoqrafika və aydın struktura malik akademik və biznes təqdimatları.",
+                    descriptionEn = "High-impact visual presentations designed with infographics and structured delivery in PowerPoint/Canva.",
+                    descriptionRu = "Профессионально оформленные слайды и презентации в PowerPoint/Canva с инфографикой.",
+                    startingPriceAzn = 20.0,
+                    maxPriceAzn = 0.0,
+                    basePrice = 20.0,
                     priceType = "starting_from",
                     unit = "project",
-                    estimatedDuration = "25-40 gün",
+                    priceUnit = "project",
+                    currency = "AZN",
+                    estimatedDuration = "1-2 gün",
                     active = true,
-                    icon = "psychology",
+                    icon = "slideshow",
                     sortOrder = 2
                 ),
                 ServiceCatalogItem(
@@ -909,13 +977,17 @@ class BestGroupRepository(
                     nameAz = "Kurs işi",
                     nameEn = "Coursework",
                     nameRu = "Курсовая работа",
-                    descriptionAz = "İxtisas fənləri üzrə nəzəri və praktiki hissələrdən ibarət akademik kurs işlərinin hazırlanması.",
-                    descriptionEn = "Theoretical and applied academic coursework fulfilling course curriculum standards.",
-                    descriptionRu = "Подготовка теоретической и практической частей курсового проекта.",
-                    startingPriceAzn = 90.0,
+                    descriptionAz = "İxtisas fənləri üzrə nəzəri, təhlili və praktiki bölmələrdən ibarət yüksək keyfiyyətli akademik kurs işləri.",
+                    descriptionEn = "Comprehensive academic coursework covering theoretical frameworks, applied research and literature review.",
+                    descriptionRu = "Курсовые проекты по специальности с теоретической, практической и расчетной частями.",
+                    startingPriceAzn = 30.0,
+                    maxPriceAzn = 0.0,
+                    basePrice = 30.0,
                     priceType = "starting_from",
                     unit = "project",
-                    estimatedDuration = "7-12 gün",
+                    priceUnit = "project",
+                    currency = "AZN",
+                    estimatedDuration = "5-10 gün",
                     active = true,
                     icon = "menu_book",
                     sortOrder = 3
@@ -925,144 +997,160 @@ class BestGroupRepository(
                     nameAz = "Layihə işi",
                     nameEn = "Project Work",
                     nameRu = "Проектная работа",
-                    descriptionAz = "Biznes, mühəndislik və İT sahələrində tətbiqi layihə və keys analizlərinin işlənməsi.",
-                    descriptionEn = "Practical projects and case studies for engineering, IT, economics and business.",
-                    descriptionRu = "Разработка прикладных проектов и кейс-стади в инженерии и бизнесе.",
-                    startingPriceAzn = 100.0,
+                    descriptionAz = "Mühəndislik, biznes, İT və iqtisadiyyat sahələrində tətbiqi layihələrin və keys araşdırmalarının hazırlanması.",
+                    descriptionEn = "Practical projects, technical reports and case studies for engineering, IT, management and economics.",
+                    descriptionRu = "Прикладные учебные и инженерные проекты, кейс-стади и практические отчеты.",
+                    startingPriceAzn = 30.0,
+                    maxPriceAzn = 0.0,
+                    basePrice = 30.0,
                     priceType = "starting_from",
                     unit = "project",
-                    estimatedDuration = "10-15 gün",
+                    priceUnit = "project",
+                    currency = "AZN",
+                    estimatedDuration = "5-12 gün",
                     active = true,
                     icon = "work",
                     sortOrder = 4
-                ),
-                ServiceCatalogItem(
-                    serviceId = "independent_work",
-                    nameAz = "Sərbəst iş",
-                    nameEn = "Independent Assignment",
-                    nameRu = "Самостоятельная работа",
-                    descriptionAz = "Semestr ərzində tələb olunan fərdi tapşırıq və hesabatların vaxtında hazırlanması.",
-                    descriptionEn = "Timely preparation of semester independent tasks and individual academic reports.",
-                    descriptionRu = "Качественное и своевременное выполнение индивидуальных заданий семестра.",
-                    startingPriceAzn = 40.0,
-                    priceType = "starting_from",
-                    unit = "project",
-                    estimatedDuration = "3-5 gün",
-                    active = true,
-                    icon = "assignment",
-                    sortOrder = 5
-                ),
-                ServiceCatalogItem(
-                    serviceId = "report",
-                    nameAz = "Referat",
-                    nameEn = "Academic Report",
-                    nameRu = "Реферат",
-                    descriptionAz = "Müasir elmi mənbələr və istinadlar əsasında zəngin məzmunlu referatların tərtibi.",
-                    descriptionEn = "Concise and well-cited academic reports based on verified scientific literature.",
-                    descriptionRu = "Составление рефератов на основе современных научных публикаций и первоисточников.",
-                    startingPriceAzn = 35.0,
-                    priceType = "starting_from",
-                    unit = "project",
-                    estimatedDuration = "2-4 gün",
-                    active = true,
-                    icon = "description",
-                    sortOrder = 6
-                ),
-                ServiceCatalogItem(
-                    serviceId = "essay",
-                    nameAz = "Esse",
-                    nameEn = "Essay",
-                    nameRu = "Эссе",
-                    descriptionAz = "Tənqidi təfəkkür, arqumentasiya və akademik yazı üslubunda esselərin qələmə alınması.",
-                    descriptionEn = "Persuasive and critical academic essays written in structured academic prose.",
-                    descriptionRu = "Академические и критические эссе с четкой аргументацией и безупречным стилем.",
-                    startingPriceAzn = 30.0,
-                    priceType = "starting_from",
-                    unit = "project",
-                    estimatedDuration = "2-3 gün",
-                    active = true,
-                    icon = "edit_note",
-                    sortOrder = 7
-                ),
-                ServiceCatalogItem(
-                    serviceId = "presentation",
-                    nameAz = "Təqdimat / Slayd",
-                    nameEn = "Presentation Slides",
-                    nameRu = "Презентация / Слайды",
-                    descriptionAz = "PowerPoint / Canva ilə peşəkar dizayn, infoqrafika və anlaşıqlı strukturda slaydlar.",
-                    descriptionEn = "Professionally structured PowerPoint/Canva presentations with modern visuals.",
-                    descriptionRu = "Профессиональные слайды в PowerPoint/Canva с наглядной инфографикой.",
-                    startingPriceAzn = 45.0,
-                    priceType = "starting_from",
-                    unit = "project",
-                    estimatedDuration = "2-4 gün",
-                    active = true,
-                    icon = "slideshow",
-                    sortOrder = 8
                 ),
                 ServiceCatalogItem(
                     serviceId = "article",
                     nameAz = "Elmi məqalə",
                     nameEn = "Scientific Article",
                     nameRu = "Научная статья",
-                    descriptionAz = "Scopus, Web of Science və AAK indeksli jurnalların tələblərinə uyğun elmi məqalələr.",
-                    descriptionEn = "High-impact scientific articles formatted for peer-reviewed indexed journals.",
-                    descriptionRu = "Научные статьи для публикации в индексируемых и рецензируемых журналах.",
-                    startingPriceAzn = 180.0,
+                    descriptionAz = "Yerli və beynəlxalq indeksli jurnalların (Scopus, Web of Science, AAK) tələblərinə uyğun elmi məqalələrin tərtibi.",
+                    descriptionEn = "Academic articles structured and referenced for indexed peer-reviewed scientific journals.",
+                    descriptionRu = "Научные статьи для публикации в рецензируемых и индексируемых журналах ВАК и Scopus.",
+                    startingPriceAzn = 25.0,
+                    maxPriceAzn = 0.0,
+                    basePrice = 25.0,
                     priceType = "starting_from",
                     unit = "project",
-                    estimatedDuration = "10-20 gün",
+                    priceUnit = "project",
+                    currency = "AZN",
+                    estimatedDuration = "7-15 gün",
                     active = true,
                     icon = "article",
-                    sortOrder = 9
+                    sortOrder = 5
                 ),
                 ServiceCatalogItem(
                     serviceId = "statistical_analysis",
                     nameAz = "Statistik analiz",
                     nameEn = "Statistical Analysis",
                     nameRu = "Статистический анализ",
-                    descriptionAz = "SPSS, R, Python və Excel vasitəsilə korrelyasiya, reqressiya və hipotez testləri.",
-                    descriptionEn = "Empirical data analysis, hypothesis testing and regression using SPSS, R, Python.",
-                    descriptionRu = "Обработка и анализ данных с помощью SPSS, R, Python и интерпретация результатов.",
-                    startingPriceAzn = 120.0,
+                    descriptionAz = "SPSS, R, Python və Excel vasitəsilə empirik məlumatların emalı, hipotez sınaqları və reqressiya analizləri.",
+                    descriptionEn = "Empirical data processing, correlation/regression modeling and hypothesis testing in SPSS, R, Python.",
+                    descriptionRu = "Обработка статистических данных, корреляционный и регрессионный анализ в SPSS, R, Python.",
+                    startingPriceAzn = 15.0,
+                    maxPriceAzn = 0.0,
+                    basePrice = 15.0,
                     priceType = "starting_from",
                     unit = "project",
-                    estimatedDuration = "5-10 gün",
+                    priceUnit = "project",
+                    currency = "AZN",
+                    estimatedDuration = "3-7 gün",
                     active = true,
                     icon = "analytics",
-                    sortOrder = 10
+                    sortOrder = 6
                 ),
                 ServiceCatalogItem(
                     serviceId = "editing",
                     nameAz = "Redaktə / Korrektə",
-                    nameEn = "Proofreading & Editing",
-                    nameRu = "Редактура / Корректура",
-                    descriptionAz = "Qrammatik, üslub və orfoqrafik xətaların aradan qaldırılması və axıcılığın təmin edilməsi.",
-                    descriptionEn = "Thorough proofreading for grammar, syntax, clarity, flow and vocabulary precision.",
-                    descriptionRu = "Проверка орфографии, пунктуации, академического стиля и логики изложения.",
-                    startingPriceAzn = 50.0,
+                    nameEn = "Editing / Proofreading",
+                    nameRu = "Редактирование / Корректура",
+                    descriptionAz = "Qrammatik, üslub, leksik və durğu işarələri xətalarının düzəldilməsi və mətnin akademik səliqəyə salınması.",
+                    descriptionEn = "Professional copyediting and proofreading for academic style, grammar, syntax and punctuation.",
+                    descriptionRu = "Вычитка и исправление грамматических, пунктуационных и стилистических ошибок.",
+                    startingPriceAzn = 15.0,
+                    maxPriceAzn = 0.0,
+                    basePrice = 15.0,
                     priceType = "starting_from",
                     unit = "project",
-                    estimatedDuration = "3-5 gün",
+                    priceUnit = "project",
+                    currency = "AZN",
+                    estimatedDuration = "1-3 gün",
                     active = true,
                     icon = "spellcheck",
-                    sortOrder = 11
+                    sortOrder = 7
                 ),
                 ServiceCatalogItem(
                     serviceId = "formatting",
                     nameAz = "Formatlaşdırma",
-                    nameEn = "Formatting & Standards",
+                    nameEn = "Formatting",
                     nameRu = "Форматирование",
-                    descriptionAz = "APA, MLA, Harvard, IEEE və GOST standartlarına uyğun səhifələnmə və ədəbiyyat tərtibatı.",
-                    descriptionEn = "Strict alignment with APA, MLA, Harvard, IEEE and GOST citation and margin rules.",
-                    descriptionRu = "Оформление по стандартам APA, MLA, Harvard, IEEE, ГОСТ и требованиям кафедры.",
-                    startingPriceAzn = 40.0,
+                    descriptionAz = "APA, MLA, Harvard, IEEE və GOST standartlarına əsasən şrift, paraqraf, cədvəl və ədəbiyyat siyahısı tərtibatı.",
+                    descriptionEn = "Standard formatting for citations, bibliography, typography and margins in APA, MLA, Harvard, IEEE.",
+                    descriptionRu = "Оформление списков литературы, таблиц и структуры текста по стандартам APA, MLA, ГОСТ.",
+                    startingPriceAzn = 15.0,
+                    maxPriceAzn = 0.0,
+                    basePrice = 15.0,
                     priceType = "starting_from",
                     unit = "project",
-                    estimatedDuration = "2-4 gün",
+                    priceUnit = "project",
+                    currency = "AZN",
+                    estimatedDuration = "1-2 gün",
                     active = true,
                     icon = "format_shapes",
-                    sortOrder = 12
+                    sortOrder = 8
+                ),
+                ServiceCatalogItem(
+                    serviceId = "diploma",
+                    nameAz = "Diplom işi",
+                    nameEn = "Bachelor's Thesis (Diploma)",
+                    nameRu = "Дипломная работа (Бакалавриат)",
+                    descriptionAz = "Bakalavr pilləsi üzrə metodiki göstərişlərə uyğun, 0% plagiat zəmanəti və elmi əsaslandırma ilə diplom işi.",
+                    descriptionEn = "Bachelor's degree thesis compliant with university guidelines and complete originality guarantee.",
+                    descriptionRu = "Написание бакалаврской дипломной работы по методическим указаниям с защитой от плагиата.",
+                    startingPriceAzn = 400.0,
+                    maxPriceAzn = 500.0,
+                    basePrice = 400.0,
+                    priceType = "range",
+                    unit = "project",
+                    priceUnit = "project",
+                    currency = "AZN",
+                    estimatedDuration = "15-25 gün",
+                    active = true,
+                    icon = "school",
+                    sortOrder = 9
+                ),
+                ServiceCatalogItem(
+                    serviceId = "master",
+                    nameAz = "Magistr dissertasiyası",
+                    nameEn = "Master's Dissertation",
+                    nameRu = "Магистерская диссертация",
+                    descriptionAz = "Dərin elmi tədqiqat, beynəlxalq ədəbiyyat icmalı və empirik metodologiyaya əsaslanan dissertasiya işi.",
+                    descriptionEn = "Rigorous master's dissertation with in-depth literature review, empirical research and defense support.",
+                    descriptionRu = "Магистерская диссертация с фундаментальным анализом литературы и практической базой.",
+                    startingPriceAzn = 700.0,
+                    maxPriceAzn = 800.0,
+                    basePrice = 700.0,
+                    priceType = "range",
+                    unit = "project",
+                    priceUnit = "project",
+                    currency = "AZN",
+                    estimatedDuration = "25-40 gün",
+                    active = true,
+                    icon = "psychology",
+                    sortOrder = 10
+                ),
+                ServiceCatalogItem(
+                    serviceId = "phd_dissertation",
+                    nameAz = "Doktorantura dissertasiyası",
+                    nameEn = "PhD Dissertation",
+                    nameRu = "Докторская диссертация",
+                    descriptionAz = "Doktorantura və dissertantura pillələri üçün fəlsəfə doktoru və elmlər doktoru dissertasiyaları üzrə akademik konsultasiya.",
+                    descriptionEn = "Academic consulting and methodology support for PhD doctoral dissertations and research.",
+                    descriptionRu = "Научно-консультационная поддержка диссертаций на соискание ученой степени доктора философии (PhD).",
+                    startingPriceAzn = 0.0,
+                    maxPriceAzn = 0.0,
+                    basePrice = 0.0,
+                    priceType = "quote",
+                    unit = "quote",
+                    priceUnit = "quote",
+                    currency = "AZN",
+                    estimatedDuration = "Fərdi",
+                    active = true,
+                    icon = "school",
+                    sortOrder = 11
                 ),
                 ServiceCatalogItem(
                     serviceId = "other",
@@ -1073,12 +1161,16 @@ class BestGroupRepository(
                     descriptionEn = "Individual assessment for customized academic and professional service requests.",
                     descriptionRu = "Индивидуальный расчет для нестандартных академических и профессиональных задач.",
                     startingPriceAzn = 0.0,
+                    maxPriceAzn = 0.0,
+                    basePrice = 0.0,
                     priceType = "quote",
                     unit = "quote",
+                    priceUnit = "quote",
+                    currency = "AZN",
                     estimatedDuration = "Fərdi",
                     active = true,
                     icon = "more_horiz",
-                    sortOrder = 13
+                    sortOrder = 12
                 )
             )
         }

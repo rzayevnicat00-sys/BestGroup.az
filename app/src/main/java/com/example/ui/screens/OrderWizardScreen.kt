@@ -28,6 +28,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.localization.Language
 import com.example.localization.StringKey
 import com.example.localization.localizedString
 import com.example.model.FileUploadState
@@ -822,6 +823,9 @@ private fun Step7ReviewOrder(state: com.example.viewmodel.OrderWizardUiState, vi
                     ReviewRow("Prioritet", localizedString(state.priority.labelKey))
                     ReviewRow("Format Standartı", state.formattingStandard)
                     ReviewRow("Qoşulan sənədlər", "${state.attachedFiles.size} ədəd fayl")
+                    val priceDisplay = state.selectedCatalogService?.getFormattedPrice(Language.AZ)
+                        ?: "${state.selectedService?.startingPriceAzn ?: 0} AZN-dən"
+                    ReviewRow("Qiymət məlumatı", priceDisplay)
                 }
             }
         }
