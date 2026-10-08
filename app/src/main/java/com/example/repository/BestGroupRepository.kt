@@ -20,8 +20,24 @@ class BestGroupRepository(
     val orderService: FirestoreOrderService? = null,
     val chatService: FirestoreChatService? = null,
     val storageService: FirebaseStorageService? = null,
-    val serviceCatalogService: FirestoreServiceCatalogService? = null
+    val serviceCatalogService: FirestoreServiceCatalogService? = null,
+    private val context: android.content.Context? = null
 ) {
+
+    // Onboarding local completion state
+    private val sharedPrefs by lazy {
+        context?.getSharedPreferences("bestgroup_prefs", android.content.Context.MODE_PRIVATE)
+    }
+
+    private val _isOnboardingCompleted = MutableStateFlow(
+        sharedPrefs?.getBoolean("onboarding_completed", false) ?: false
+    )
+    val isOnboardingCompleted: StateFlow<Boolean> = _isOnboardingCompleted.asStateFlow()
+
+    fun completeOnboarding() {
+        sharedPrefs?.edit()?.putBoolean("onboarding_completed", true)?.apply()
+        _isOnboardingCompleted.value = true
+    }
 
     // Current User Session
     private val _currentUser = MutableStateFlow<User?>(null)

@@ -60,7 +60,7 @@ fun MainApp(viewModel: MainViewModel) {
 
                 AppDestination.ONBOARDING -> {
                     OnboardingScreen(
-                        onFinish = { viewModel.navigateTo(AppDestination.MAIN) }
+                        onFinish = { viewModel.completeOnboarding() }
                     )
                 }
 

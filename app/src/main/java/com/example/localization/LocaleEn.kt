@@ -37,12 +37,16 @@ val LocaleEn: Map<StringKey, String> = mapOf(
     StringKey.BTN_APPLY to "Apply",
 
     // Onboarding
-    StringKey.ONBOARDING_TITLE_1 to "Academic & Professional Support",
-    StringKey.ONBOARDING_DESC_1 to "Reach top academic excellence in master dissertations, diplomas, and research projects with our vetted experts.",
-    StringKey.ONBOARDING_TITLE_2 to "Seamless & Intuitive Order Process",
-    StringKey.ONBOARDING_DESC_2 to "Submit your instructions, guidelines, and attachments in seconds using our multi-step wizard.",
-    StringKey.ONBOARDING_TITLE_3 to "Track Orders & Connect With Experts",
-    StringKey.ONBOARDING_DESC_3 to "Monitor milestones in real time and communicate directly with dedicated curators via live messaging.",
+    StringKey.ONBOARDING_TITLE_1 to "Meet BestGroup.az",
+    StringKey.ONBOARDING_DESC_1 to "Reliable, high-quality, and confidential support for your academic and professional endeavors.",
+    StringKey.ONBOARDING_TITLE_2 to "Academic & Professional Support",
+    StringKey.ONBOARDING_DESC_2 to "Term papers, essays, theses, master dissertations, research articles, presentations, and other services.",
+    StringKey.ONBOARDING_TITLE_3 to "Why BestGroup.az?",
+    StringKey.ONBOARDING_BENEFIT_1 to "✓ Quality work",
+    StringKey.ONBOARDING_BENEFIT_2 to "✓ Reliable service",
+    StringKey.ONBOARDING_BENEFIT_3 to "✓ Confidentiality",
+    StringKey.ONBOARDING_BENEFIT_4 to "✓ Professional approach",
+    StringKey.ONBOARDING_DESC_3 to "Easily create your order, get in touch with us, and track progress right inside the app.",
 
     // Auth
     StringKey.AUTH_LOGIN_TITLE to "Welcome Back",

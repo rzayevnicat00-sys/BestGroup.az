@@ -37,12 +37,16 @@ val LocaleAz: Map<StringKey, String> = mapOf(
     StringKey.BTN_APPLY to "Tətbiq et",
 
     // Onboarding
-    StringKey.ONBOARDING_TITLE_1 to "Akademik və peşəkar dəstək",
-    StringKey.ONBOARDING_DESC_1 to "Magistr, doktorantura, diplom və kurs işlərində peşəkar ekspertlərimizlə ən yüksək standartlara çatın.",
-    StringKey.ONBOARDING_TITLE_2 to "Asan və rahat sifariş prosesi",
-    StringKey.ONBOARDING_DESC_2 to "Çoxmərhələli sifariş sistemi ilə tələblərinizi və fayllarınızı saniyələr içində təqdim edin.",
-    StringKey.ONBOARDING_TITLE_3 to "Sifarişinizi izləyin və komandamızla əlaqə saxlayın",
-    StringKey.ONBOARDING_DESC_3 to "Status yenilənmələrini real vaxtda izləyin, canlı çat vasitəsilə mütəxəssislərimizlə birbaşa əlaqə qurun.",
+    StringKey.ONBOARDING_TITLE_1 to "BestGroup.az ilə tanış olun",
+    StringKey.ONBOARDING_DESC_1 to "Akademik və peşəkar fəaliyyətiniz üçün etibarlı, keyfiyyətli və məxfi dəstək.",
+    StringKey.ONBOARDING_TITLE_2 to "Akademik və peşəkar dəstək",
+    StringKey.ONBOARDING_DESC_2 to "Referat, sərbəst iş, kurs işi, diplom işi, magistr dissertasiyası, elmi məqalə, təqdimat və digər xidmətlər.",
+    StringKey.ONBOARDING_TITLE_3 to "Niyə BestGroup.az?",
+    StringKey.ONBOARDING_BENEFIT_1 to "✓ Keyfiyyətli iş",
+    StringKey.ONBOARDING_BENEFIT_2 to "✓ Etibarlı xidmət",
+    StringKey.ONBOARDING_BENEFIT_3 to "✓ Məxfilik",
+    StringKey.ONBOARDING_BENEFIT_4 to "✓ Peşəkar yanaşma",
+    StringKey.ONBOARDING_DESC_3 to "Sifarişinizi rahatlıqla yaradın, bizimlə əlaqə saxlayın və prosesin gedişatını tətbiqdən izləyin.",
 
     // Auth
     StringKey.AUTH_LOGIN_TITLE to "Xoş gəlmisiniz",

@@ -37,12 +37,16 @@ val LocaleRu: Map<StringKey, String> = mapOf(
     StringKey.BTN_APPLY to "Применить",
 
     // Onboarding
-    StringKey.ONBOARDING_TITLE_1 to "Академическая и экспертная поддержка",
-    StringKey.ONBOARDING_DESC_1 to "Высшие стандарты качества при написании диссертаций, дипломных и исследовательских работ с нашими экспертами.",
-    StringKey.ONBOARDING_TITLE_2 to "Простой и удобный процесс заказа",
-    StringKey.ONBOARDING_DESC_2 to "Многошаговый мастер оформления позволяет передать все требования и файлы за считанные секунды.",
-    StringKey.ONBOARDING_TITLE_3 to "Отслеживание заказов и прямая связь",
-    StringKey.ONBOARDING_DESC_3 to "Контролируйте этапы выполнения в реальном времени и общайтесь с куратором в живом чате.",
+    StringKey.ONBOARDING_TITLE_1 to "Познакомьтесь с BestGroup.az",
+    StringKey.ONBOARDING_DESC_1 to "Надежная, качественная и конфиденциальная поддержка вашей академической и профессиональной деятельности.",
+    StringKey.ONBOARDING_TITLE_2 to "Академическая и экспертная поддержка",
+    StringKey.ONBOARDING_DESC_2 to "Рефераты, курсовые, дипломные работы, магистерские диссертации, научные статьи, презентации и другие услуги.",
+    StringKey.ONBOARDING_TITLE_3 to "Почему BestGroup.az?",
+    StringKey.ONBOARDING_BENEFIT_1 to "✓ Качественная работа",
+    StringKey.ONBOARDING_BENEFIT_2 to "✓ Надежный сервис",
+    StringKey.ONBOARDING_BENEFIT_3 to "✓ Конфиденциальность",
+    StringKey.ONBOARDING_BENEFIT_4 to "✓ Профессиональный подход",
+    StringKey.ONBOARDING_DESC_3 to "Легко оформляйте заказ, оставайтесь на связи с нами и отслеживайте процесс прямо в приложении.",
 
     // Auth
     StringKey.AUTH_LOGIN_TITLE to "С возвращением",

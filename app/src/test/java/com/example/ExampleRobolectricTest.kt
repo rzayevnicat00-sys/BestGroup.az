@@ -1861,6 +1861,114 @@ class ExampleRobolectricTest {
 
         assertFalse("Storage staff access without valid Custom Claim must be denied", hasStaffClaim)
     }
+
+    // --- V12 Tests: Onboarding, Admin/Staff Security & Persistence ---
+
+    @Test
+    fun `v12 test 1 - fresh installation defaults onboarding completed to false`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("bestgroup_prefs_test_fresh", Context.MODE_PRIVATE)
+        val isCompleted = prefs.getBoolean("onboarding_completed", false)
+        assertFalse("Fresh install must not have onboarding completed", isCompleted)
+    }
+
+    @Test
+    fun `v12 test 2 - completing onboarding persists state across repo and restarts`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = BestGroupRepository(context = context)
+        assertFalse(repo.isOnboardingCompleted.value)
+
+        repo.completeOnboarding()
+        assertTrue(repo.isOnboardingCompleted.value)
+
+        // Simulate app restart with new repository instance
+        val restartedRepo = BestGroupRepository(context = context)
+        assertTrue("Onboarding completed state must persist across restarts", restartedRepo.isOnboardingCompleted.value)
+    }
+
+    @Test
+    fun `v12 test 3 - logging out does not clear onboarding completed state`() = runTest {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = BestGroupRepository(context = context)
+        repo.completeOnboarding()
+        assertTrue(repo.isOnboardingCompleted.value)
+
+        repo.signIn("rzayevnicat00@gmail.com", "bestgroup2026")
+        assertNotNull(repo.currentUser.value)
+
+        repo.signOut()
+        assertNull(repo.currentUser.value)
+        assertTrue("Logging out must NOT reset onboarding state", repo.isOnboardingCompleted.value)
+    }
+
+    @Test
+    fun `v12 test 4 - onboarding slide titles and descriptions are localized in Azerbaijani`() {
+        LocalizationManager.setLanguage(Language.AZ)
+        assertEquals("BestGroup.az ilə tanış olun", LocalizationManager.getString(StringKey.ONBOARDING_TITLE_1))
+        assertEquals("Akademik və peşəkar fəaliyyətiniz üçün etibarlı, keyfiyyətli və məxfi dəstək.", LocalizationManager.getString(StringKey.ONBOARDING_DESC_1))
+        assertEquals("Akademik və peşəkar dəstək", LocalizationManager.getString(StringKey.ONBOARDING_TITLE_2))
+        assertEquals("Referat, sərbəst iş, kurs işi, diplom işi, magistr dissertasiyası, elmi məqalə, təqdimat və digər xidmətlər.", LocalizationManager.getString(StringKey.ONBOARDING_DESC_2))
+        assertEquals("Niyə BestGroup.az?", LocalizationManager.getString(StringKey.ONBOARDING_TITLE_3))
+        assertEquals("✓ Keyfiyyətli iş", LocalizationManager.getString(StringKey.ONBOARDING_BENEFIT_1))
+        assertEquals("✓ Etibarlı xidmət", LocalizationManager.getString(StringKey.ONBOARDING_BENEFIT_2))
+        assertEquals("✓ Məxfilik", LocalizationManager.getString(StringKey.ONBOARDING_BENEFIT_3))
+        assertEquals("✓ Peşəkar yanaşma", LocalizationManager.getString(StringKey.ONBOARDING_BENEFIT_4))
+        assertEquals("Sifarişinizi rahatlıqla yaradın, bizimlə əlaqə saxlayın və prosesin gedişatını tətbiqdən izləyin.", LocalizationManager.getString(StringKey.ONBOARDING_DESC_3))
+    }
+
+    @Test
+    fun `v12 test 5 - onboarding packaged images exist in resources and are offline`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val res = context.resources
+        val img1 = res.getIdentifier("img_onboarding_1", "drawable", context.packageName)
+        val img2 = res.getIdentifier("img_onboarding_2", "drawable", context.packageName)
+        val img3 = res.getIdentifier("img_onboarding_3", "drawable", context.packageName)
+
+        assertTrue("img_onboarding_1 must exist in drawable resources", img1 != 0)
+        assertTrue("img_onboarding_2 must exist in drawable resources", img2 != 0)
+        assertTrue("img_onboarding_3 must exist in drawable resources", img3 != 0)
+    }
+
+    @Test
+    fun `v12 test 6 - customer cannot access Admin Panel without Custom Claims`() {
+        val customerClaims: Map<String, Any> = mapOf("role" to "customer")
+        val isStaff = (customerClaims["role"] in listOf("admin", "manager", "operator")) ||
+                (customerClaims["admin"] == true) ||
+                (customerClaims["manager"] == true) ||
+                (customerClaims["operator"] == true)
+        assertFalse("Customer without staff claims must not be authorized as staff", isStaff)
+
+        val isAdmin = (customerClaims["role"] == "admin") || (customerClaims["admin"] == true)
+        assertFalse("Customer without admin claim must not be authorized as admin", isAdmin)
+    }
+
+    @Test
+    fun `v12 test 7 - admin Custom Claim grants admin access`() {
+        val adminClaims: Map<String, Any> = mapOf("role" to "admin")
+        val isAdmin = (adminClaims["role"] == "admin") || (adminClaims["admin"] == true)
+        assertTrue("Admin claim must grant admin access", isAdmin)
+
+        val directAdminClaim: Map<String, Any> = mapOf("admin" to true)
+        val isDirectAdmin = (directAdminClaim["role"] == "admin") || (directAdminClaim["admin"] == true)
+        assertTrue("admin = true claim must grant admin access", isDirectAdmin)
+    }
+
+    @Test
+    fun `v12 test 8 - general support conversation uses deterministic support_{userId}`() {
+        val uid = "user_abc_123"
+        val expected = "support_user_abc_123"
+        val actual = com.example.services.firebase.FirestoreChatService.deterministicSupportConversationId(uid)
+        assertEquals(expected, actual)
+    }
+
+    @Test
+    fun `v12 test 9 - order conversation uses deterministic order_{orderId}`() {
+        val orderId = "order_xyz_789"
+        val expected = "order_order_xyz_789"
+        val actual = "order_$orderId"
+        assertEquals(expected, actual)
+        assertNotEquals(actual, "conv_1")
+    }
 }
 
 

@@ -145,12 +145,23 @@ class MainViewModel @JvmOverloads constructor(
 
         viewModelScope.launch {
             delay(1200)
-            if (repository.isUserLoggedIn()) {
+            if (!repository.isOnboardingCompleted.value) {
+                _currentDestination.value = AppDestination.ONBOARDING
+            } else if (repository.isUserLoggedIn()) {
                 showEmailVerificationBanner.value = !repository.isEmailVerified()
                 _currentDestination.value = AppDestination.MAIN
             } else {
                 _currentDestination.value = AppDestination.AUTH
             }
+        }
+    }
+
+    fun completeOnboarding() {
+        repository.completeOnboarding()
+        if (repository.isUserLoggedIn()) {
+            _currentDestination.value = AppDestination.MAIN
+        } else {
+            _currentDestination.value = AppDestination.AUTH
         }
     }
 
@@ -708,9 +719,9 @@ class MainViewModel @JvmOverloads constructor(
                 val chatService = FirestoreChatService(fbService.firestore)
                 val storageService = FirebaseStorageService(fbService.storage)
                 val catalogService = FirestoreServiceCatalogService(fbService.firestore)
-                BestGroupRepository(authService, orderService, chatService, storageService, catalogService)
+                BestGroupRepository(authService, orderService, chatService, storageService, catalogService, application.applicationContext)
             } catch (e: Throwable) {
-                BestGroupRepository()
+                BestGroupRepository(context = application.applicationContext)
             }
         }
     }
