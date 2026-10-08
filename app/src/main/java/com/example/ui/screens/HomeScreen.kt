@@ -1,5 +1,12 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.os.Build
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -49,6 +56,27 @@ fun HomeScreen(
     val currentLanguage by viewModel.currentLanguage.collectAsState()
     val activeOrders = remember(orders) {
         orders.filter { it.status == OrderStatus.IN_PROGRESS || it.status == OrderStatus.ACCEPTED || it.status == OrderStatus.PENDING }
+    }
+
+    val context = LocalContext.current
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            } else true
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasNotificationPermission = isGranted
+    }
+
+    LaunchedEffect(Unit) {
+        if (!hasNotificationPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     LazyColumn(
@@ -265,6 +293,54 @@ fun HomeScreen(
                             tint = Gold500,
                             modifier = Modifier.size(16.dp)
                         )
+                    }
+                }
+
+                // If user is Staff (Admin, Manager, Operator), show direct access button to Admin Panel
+                if (user?.role == UserRole.ADMIN || user?.role == UserRole.MANAGER || user?.role == UserRole.OPERATOR) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD) }
+                            .border(1.dp, Gold500, RoundedCornerShape(14.dp))
+                            .testTag("home_admin_panel_shortcut"),
+                        colors = CardDefaults.cardColors(containerColor = Navy800)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.AdminPanelSettings,
+                                    contentDescription = null,
+                                    tint = Gold500,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Admin İdarəetmə Paneli",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Gold500
+                                    )
+                                    Text(
+                                        text = "Sifarişlər, müştərilər, çat və statistikalar",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFFCBD5E1)
+                                    )
+                                }
+                            }
+                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Gold500)
+                        }
                     }
                 }
             }

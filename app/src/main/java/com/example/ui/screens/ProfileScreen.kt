@@ -136,7 +136,7 @@ fun ProfileScreen(
             }
 
             // Navigation into Admin Dashboard for authorized staff only
-            if (user?.role == UserRole.ADMIN || user?.role == UserRole.MANAGER) {
+            if (user?.role == UserRole.ADMIN || user?.role == UserRole.MANAGER || user?.role == UserRole.OPERATOR) {
                 item {
                     Button(
                         onClick = { viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD) },

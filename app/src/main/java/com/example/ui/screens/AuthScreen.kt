@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -38,12 +40,22 @@ fun AuthScreen(
     modifier: Modifier = Modifier
 ) {
     var isLogin by remember { mutableStateOf(true) }
-    var fullName by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("rzayevnicat00@gmail.com") }
-    var phone by remember { mutableStateOf("+994 (50) 412-38-90") }
-    var password by remember { mutableStateOf("bestgroup2026") }
-    var confirmPassword by remember { mutableStateOf("bestgroup2026") }
-    var passwordVisible by remember { mutableStateOf(false) }
+
+    // Login tab state - strictly initialized to empty
+    var loginEmail by remember { mutableStateOf("") }
+    var loginPassword by remember { mutableStateOf("") }
+    var loginPasswordVisible by remember { mutableStateOf(false) }
+    var rememberMe by remember { mutableStateOf(false) }
+
+    // Register tab state - strictly initialized to empty
+    var regFullName by remember { mutableStateOf("") }
+    var regEmail by remember { mutableStateOf("") }
+    var regPhone by remember { mutableStateOf("") }
+    var regUniversity by remember { mutableStateOf("") }
+    var regFaculty by remember { mutableStateOf("") }
+    var regPassword by remember { mutableStateOf("") }
+    var regConfirmPassword by remember { mutableStateOf("") }
+    var regPasswordVisible by remember { mutableStateOf(false) }
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showForgotPasswordDialog by remember { mutableStateOf(false) }
@@ -53,13 +65,13 @@ fun AuthScreen(
 
     fun performRegistration() {
         viewModel.register(
-            email = email,
-            pass = password,
-            fullName = fullName,
-            phone = phone,
-            university = "ADNSU",
-            faculty = "İnformasiya Texnologiyaları",
-            educationLevel = "Magistratura",
+            email = regEmail.trim(),
+            pass = regPassword,
+            fullName = regFullName.trim(),
+            phone = regPhone.trim(),
+            university = regUniversity.trim().ifBlank { "Təyin edilməyib" },
+            faculty = regFaculty.trim().ifBlank { "Təyin edilməyib" },
+            educationLevel = "Bakalavriat",
             onSuccess = onAuthSuccess,
             onError = { err -> errorMessage = err }
         )
@@ -67,36 +79,46 @@ fun AuthScreen(
 
     fun validateAndProceed() {
         errorMessage = null
-        if (!isLogin && fullName.isBlank()) {
-            errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_NAME_REQUIRED)
-            return
-        }
-        if (!email.contains("@") || !email.contains(".")) {
-            errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_EMAIL_INVALID)
-            return
-        }
-        if (!isLogin && phone.isBlank()) {
-            errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_PHONE_REQUIRED)
-            return
-        }
-        if (password.length < 6) {
-            errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_PASSWORD_SHORT)
-            return
-        }
-        if (!isLogin && password != confirmPassword) {
-            errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_PASSWORDS_DONT_MATCH)
-            return
-        }
-
-        if (!isLogin) {
-            performRegistration()
-        } else {
+        if (isLogin) {
+            val emailClean = loginEmail.trim()
+            if (!emailClean.contains("@") || !emailClean.contains(".")) {
+                errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_EMAIL_INVALID)
+                return
+            }
+            if (loginPassword.length < 6) {
+                errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_PASSWORD_SHORT)
+                return
+            }
             viewModel.login(
-                email = email,
-                pass = password,
+                email = emailClean,
+                pass = loginPassword,
+                rememberMe = rememberMe,
                 onSuccess = onAuthSuccess,
                 onError = { err -> errorMessage = err }
             )
+        } else {
+            if (regFullName.isBlank()) {
+                errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_NAME_REQUIRED)
+                return
+            }
+            val emailClean = regEmail.trim()
+            if (!emailClean.contains("@") || !emailClean.contains(".")) {
+                errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_EMAIL_INVALID)
+                return
+            }
+            if (regPhone.isBlank()) {
+                errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_PHONE_REQUIRED)
+                return
+            }
+            if (regPassword.length < 6) {
+                errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_PASSWORD_SHORT)
+                return
+            }
+            if (regPassword != regConfirmPassword) {
+                errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_PASSWORDS_DONT_MATCH)
+                return
+            }
+            performRegistration()
         }
     }
 
@@ -160,7 +182,10 @@ fun AuthScreen(
             ) {
                 Tab(
                     selected = isLogin,
-                    onClick = { isLogin = true; errorMessage = null },
+                    onClick = {
+                        isLogin = true
+                        errorMessage = null
+                    },
                     text = {
                         Text(
                             text = localizedString(StringKey.BTN_LOGIN),
@@ -170,7 +195,10 @@ fun AuthScreen(
                 )
                 Tab(
                     selected = !isLogin,
-                    onClick = { isLogin = false; errorMessage = null },
+                    onClick = {
+                        isLogin = false
+                        errorMessage = null
+                    },
                     text = {
                         Text(
                             text = localizedString(StringKey.BTN_REGISTER),
@@ -210,107 +238,90 @@ fun AuthScreen(
                 }
             }
 
-            // Name (if registering)
-            if (!isLogin) {
+            if (isLogin) {
+                // --- LOGIN FORM ---
+                // Email
                 OutlinedTextField(
-                    value = fullName,
-                    onValueChange = { fullName = it },
-                    label = { Text(localizedString(StringKey.LABEL_FULL_NAME)) },
-                    placeholder = { Text(localizedString(StringKey.HINT_FULL_NAME)) },
-                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                    value = loginEmail,
+                    onValueChange = { loginEmail = it },
+                    label = { Text(localizedString(StringKey.LABEL_EMAIL)) },
+                    placeholder = { Text(localizedString(StringKey.HINT_EMAIL)) },
+                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Next
+                    ),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 14.dp)
-                        .testTag("auth_input_fullname")
+                        .testTag("auth_input_email")
                 )
-            }
 
-            // Email
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
-                label = { Text(localizedString(StringKey.LABEL_EMAIL)) },
-                placeholder = { Text(localizedString(StringKey.HINT_EMAIL)) },
-                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 14.dp)
-                    .testTag("auth_input_email")
-            )
-
-            // Phone (if registering)
-            if (!isLogin) {
+                // Password
                 OutlinedTextField(
-                    value = phone,
-                    onValueChange = { phone = it },
-                    label = { Text(localizedString(StringKey.LABEL_PHONE)) },
-                    placeholder = { Text(localizedString(StringKey.HINT_PHONE)) },
-                    leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
+                    value = loginPassword,
+                    onValueChange = { loginPassword = it },
+                    label = { Text(localizedString(StringKey.LABEL_PASSWORD)) },
+                    placeholder = { Text(localizedString(StringKey.HINT_PASSWORD)) },
+                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                    trailingIcon = {
+                        IconButton(onClick = { loginPasswordVisible = !loginPasswordVisible }) {
+                            Icon(
+                                imageVector = if (loginPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = "Toggle password"
+                            )
+                        }
+                    },
+                    visualTransformation = if (loginPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done
+                    ),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 14.dp)
-                        .testTag("auth_input_phone")
+                        .padding(bottom = 8.dp)
+                        .testTag("auth_input_password")
                 )
-            }
 
-            // Password
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text(localizedString(StringKey.LABEL_PASSWORD)) },
-                placeholder = { Text(localizedString(StringKey.HINT_PASSWORD)) },
-                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                trailingIcon = {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Icon(
-                            imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                            contentDescription = "Toggle password"
+                // "Yadda saxla" checkbox & "Şifrəni unutmusunuz?"
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clickable { rememberMe = !rememberMe }
+                            .testTag("auth_remember_me_row")
+                    ) {
+                        Checkbox(
+                            checked = rememberMe,
+                            onCheckedChange = { rememberMe = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = Gold500,
+                                checkmarkColor = Navy800
+                            ),
+                            modifier = Modifier.testTag("auth_remember_me_checkbox")
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = localizedString(StringKey.AUTH_REMEMBER_ME),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                     }
-                },
-                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = if (!isLogin) 14.dp else 4.dp)
-                    .testTag("auth_input_password")
-            )
 
-            // Confirm Password (if registering)
-            if (!isLogin) {
-                OutlinedTextField(
-                    value = confirmPassword,
-                    onValueChange = { confirmPassword = it },
-                    label = { Text(localizedString(StringKey.LABEL_CONFIRM_PASSWORD)) },
-                    placeholder = { Text(localizedString(StringKey.HINT_CONFIRM_PASSWORD)) },
-                    leadingIcon = { Icon(Icons.Default.LockReset, contentDescription = null) },
-                    visualTransformation = PasswordVisualTransformation(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 14.dp)
-                        .testTag("auth_input_confirm_password")
-                )
-            }
-
-            // Forgot password link (if login)
-            if (isLogin) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = { showForgotPasswordDialog = true }) {
+                    TextButton(
+                        onClick = { showForgotPasswordDialog = true },
+                        modifier = Modifier.testTag("auth_forgot_password_button")
+                    ) {
                         Text(
                             text = localizedString(StringKey.AUTH_FORGOT_PASSWORD_LINK),
                             style = MaterialTheme.typography.bodySmall,
@@ -319,6 +330,141 @@ fun AuthScreen(
                         )
                     }
                 }
+            } else {
+                // --- REGISTRATION FORM ---
+                // Full Name
+                OutlinedTextField(
+                    value = regFullName,
+                    onValueChange = { regFullName = it },
+                    label = { Text(localizedString(StringKey.LABEL_FULL_NAME)) },
+                    placeholder = { Text(localizedString(StringKey.HINT_FULL_NAME)) },
+                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp)
+                        .testTag("auth_input_fullname")
+                )
+
+                // Email
+                OutlinedTextField(
+                    value = regEmail,
+                    onValueChange = { regEmail = it },
+                    label = { Text(localizedString(StringKey.LABEL_EMAIL)) },
+                    placeholder = { Text(localizedString(StringKey.HINT_EMAIL)) },
+                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Next
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp)
+                        .testTag("auth_input_email")
+                )
+
+                // Phone
+                OutlinedTextField(
+                    value = regPhone,
+                    onValueChange = { regPhone = it },
+                    label = { Text(localizedString(StringKey.LABEL_PHONE)) },
+                    placeholder = { Text(localizedString(StringKey.HINT_PHONE)) },
+                    leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Phone,
+                        imeAction = ImeAction.Next
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp)
+                        .testTag("auth_input_phone")
+                )
+
+                // University
+                OutlinedTextField(
+                    value = regUniversity,
+                    onValueChange = { regUniversity = it },
+                    label = { Text(localizedString(StringKey.LABEL_UNIVERSITY)) },
+                    placeholder = { Text(localizedString(StringKey.HINT_UNIVERSITY)) },
+                    leadingIcon = { Icon(Icons.Default.School, contentDescription = null) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp)
+                        .testTag("auth_input_university")
+                )
+
+                // Faculty
+                OutlinedTextField(
+                    value = regFaculty,
+                    onValueChange = { regFaculty = it },
+                    label = { Text(localizedString(StringKey.LABEL_FACULTY)) },
+                    placeholder = { Text(localizedString(StringKey.HINT_FACULTY)) },
+                    leadingIcon = { Icon(Icons.Default.AccountBalance, contentDescription = null) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp)
+                        .testTag("auth_input_faculty")
+                )
+
+                // Password
+                OutlinedTextField(
+                    value = regPassword,
+                    onValueChange = { regPassword = it },
+                    label = { Text(localizedString(StringKey.LABEL_PASSWORD)) },
+                    placeholder = { Text(localizedString(StringKey.HINT_PASSWORD)) },
+                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                    trailingIcon = {
+                        IconButton(onClick = { regPasswordVisible = !regPasswordVisible }) {
+                            Icon(
+                                imageVector = if (regPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = "Toggle password"
+                            )
+                        }
+                    },
+                    visualTransformation = if (regPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Next
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp)
+                        .testTag("auth_input_password")
+                )
+
+                // Confirm Password
+                OutlinedTextField(
+                    value = regConfirmPassword,
+                    onValueChange = { regConfirmPassword = it },
+                    label = { Text(localizedString(StringKey.LABEL_CONFIRM_PASSWORD)) },
+                    placeholder = { Text(localizedString(StringKey.HINT_CONFIRM_PASSWORD)) },
+                    leadingIcon = { Icon(Icons.Default.LockReset, contentDescription = null) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp)
+                        .testTag("auth_input_confirm_password")
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -356,7 +502,7 @@ fun AuthScreen(
 
     // Forgot Password Dialog
     if (showForgotPasswordDialog) {
-        var resetEmail by remember { mutableStateOf(email) }
+        var resetEmail by remember { mutableStateOf(loginEmail) }
         var resetSent by remember { mutableStateOf(false) }
 
         AlertDialog(
@@ -377,6 +523,7 @@ fun AuthScreen(
                             onValueChange = { resetEmail = it },
                             label = { Text("E-mail") },
                             singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -389,7 +536,7 @@ fun AuthScreen(
                         if (!resetSent) {
                             if (resetEmail.isNotBlank()) {
                                 viewModel.sendPasswordReset(
-                                    email = resetEmail,
+                                    email = resetEmail.trim(),
                                     onSuccess = { resetSent = true },
                                     onError = { err -> errorMessage = err; showForgotPasswordDialog = false }
                                 )
@@ -411,5 +558,3 @@ fun AuthScreen(
         )
     }
 }
-
-

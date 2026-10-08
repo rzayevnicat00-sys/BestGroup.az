@@ -100,7 +100,19 @@ fun MainApp(viewModel: MainViewModel) {
                     BackHandler {
                         viewModel.navigateTo(AppDestination.MAIN)
                     }
-                    AdminDashboardScreen(viewModel = viewModel)
+                    val isStaff = currentUser?.role in listOf(
+                        com.example.model.UserRole.ADMIN,
+                        com.example.model.UserRole.MANAGER,
+                        com.example.model.UserRole.OPERATOR
+                    )
+                    if (isStaff) {
+                        AdminDashboardScreen(viewModel = viewModel)
+                    } else {
+                        // Customer cannot view or open Admin Dashboard: redirect to Home
+                        LaunchedEffect(Unit) {
+                            viewModel.navigateTo(AppDestination.MAIN)
+                        }
+                    }
                 }
 
                 AppDestination.MAIN -> {

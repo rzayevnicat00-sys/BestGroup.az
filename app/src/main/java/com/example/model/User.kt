@@ -16,5 +16,7 @@ data class User(
     val faculty: String,
     val degreeLevel: String,
     val role: UserRole = UserRole.CUSTOMER,
-    val avatarUrl: String? = null
+    val avatarUrl: String? = null,
+    val createdAt: String = "",
+    val orderCount: Int = 0
 )

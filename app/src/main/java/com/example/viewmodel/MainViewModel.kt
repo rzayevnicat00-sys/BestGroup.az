@@ -101,9 +101,9 @@ class MainViewModel @JvmOverloads constructor(
     val authPassword = MutableStateFlow("")
     val authFullName = MutableStateFlow("")
     val authPhone = MutableStateFlow("")
-    val authUniversity = MutableStateFlow("ADNSU")
-    val authFaculty = MutableStateFlow("İnformasiya Texnologiyaları")
-    val authEducationLevel = MutableStateFlow("Magistratura")
+    val authUniversity = MutableStateFlow("")
+    val authFaculty = MutableStateFlow("")
+    val authEducationLevel = MutableStateFlow("")
     val authError = MutableStateFlow<String?>(null)
     val isAuthLoading = repository.isAuthLoading
 
@@ -121,6 +121,7 @@ class MainViewModel @JvmOverloads constructor(
     val notifications = repository.notifications
     val faqs = repository.faqs
     val adminStats = repository.adminStats
+    val adminCustomers = repository.adminCustomers
     val currentLanguage = LocalizationManager.currentLanguage
 
     val isServicesLoading = MutableStateFlow(false)
@@ -145,12 +146,17 @@ class MainViewModel @JvmOverloads constructor(
 
         viewModelScope.launch {
             delay(1200)
+            val rememberMe = repository.isRememberMeEnabled()
+            val isLoggedIn = repository.isUserLoggedIn()
             if (!repository.isOnboardingCompleted.value) {
                 _currentDestination.value = AppDestination.ONBOARDING
-            } else if (repository.isUserLoggedIn()) {
+            } else if (rememberMe && isLoggedIn) {
                 showEmailVerificationBanner.value = !repository.isEmailVerified()
                 _currentDestination.value = AppDestination.MAIN
             } else {
+                if (!rememberMe && isLoggedIn) {
+                    repository.signOut()
+                }
                 _currentDestination.value = AppDestination.AUTH
             }
         }
@@ -158,7 +164,8 @@ class MainViewModel @JvmOverloads constructor(
 
     fun completeOnboarding() {
         repository.completeOnboarding()
-        if (repository.isUserLoggedIn()) {
+        val rememberMe = repository.isRememberMeEnabled()
+        if (rememberMe && repository.isUserLoggedIn()) {
             _currentDestination.value = AppDestination.MAIN
         } else {
             _currentDestination.value = AppDestination.AUTH
@@ -322,9 +329,9 @@ class MainViewModel @JvmOverloads constructor(
 
     // --- Authentication Actions ---
 
-    fun login(email: String, pass: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    fun login(email: String, pass: String, rememberMe: Boolean = false, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
-            val result = repository.signIn(email, pass)
+            val result = repository.signIn(email, pass, rememberMe)
             when (result) {
                 is AuthResult.Success -> {
                     authError.value = null
@@ -708,6 +715,47 @@ class MainViewModel @JvmOverloads constructor(
                 timestamp = "İndicə"
             )
         )
+    }
+
+    fun handleNotificationDeepLink(type: String?, orderId: String?, conversationId: String?) {
+        viewModelScope.launch {
+            if (orderId != null) {
+                val matched = repository.orders.value.find { it.id == orderId }
+                if (matched != null) {
+                    viewOrderDetail(matched)
+                } else {
+                    val fetched = repository.orderService?.getOrderById(orderId)
+                    if (fetched != null) {
+                        viewOrderDetail(fetched)
+                    } else {
+                        navigateTo(AppDestination.MAIN)
+                        selectBottomTab(BottomTab.ORDERS)
+                    }
+                }
+            } else if (conversationId != null) {
+                setActiveConversation(conversationId)
+                navigateTo(AppDestination.MAIN)
+                selectBottomTab(BottomTab.CHAT)
+            }
+        }
+    }
+
+    fun openSupportChatForCustomer(customer: User) {
+        viewModelScope.launch {
+            val convId = FirestoreChatService.deterministicSupportConversationId(customer.id)
+            setActiveConversation(convId)
+            navigateTo(AppDestination.MAIN)
+            selectBottomTab(BottomTab.CHAT)
+        }
+    }
+
+    fun openOrderChat(orderId: String) {
+        viewModelScope.launch {
+            val convId = FirestoreChatService.deterministicOrderConversationId(orderId)
+            setActiveConversation(convId)
+            navigateTo(AppDestination.MAIN)
+            selectBottomTab(BottomTab.CHAT)
+        }
     }
 
     companion object {

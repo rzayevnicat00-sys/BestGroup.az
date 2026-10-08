@@ -120,8 +120,10 @@ class FirebaseAuthService(
                 null
             }
 
-            val roleStr = claimsRole ?: userDoc.getString("role") ?: "customer"
-            val role = when (roleStr.lowercase()) {
+            // CRITICAL SECURITY RULE:
+            // Admin, Manager, and Operator privileges are strictly granted via Firebase Auth Custom Claims.
+            // A role field inside the Firestore document cannot elevate a user into staff.
+            val role = when (claimsRole?.lowercase()) {
                 "admin" -> UserRole.ADMIN
                 "manager" -> UserRole.MANAGER
                 "operator" -> UserRole.OPERATOR
@@ -164,8 +166,10 @@ class FirebaseAuthService(
                     null
                 }
 
-                val roleStr = claimsRole ?: doc.getString("role") ?: "customer"
-                val role = when (roleStr.lowercase()) {
+                // CRITICAL SECURITY RULE:
+                // Admin, Manager, and Operator privileges are strictly granted via Firebase Auth Custom Claims.
+                // A role field inside the Firestore document cannot elevate a user into staff.
+                val role = when (claimsRole?.lowercase()) {
                     "admin" -> UserRole.ADMIN
                     "manager" -> UserRole.MANAGER
                     "operator" -> UserRole.OPERATOR

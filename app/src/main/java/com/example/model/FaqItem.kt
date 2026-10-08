@@ -20,12 +20,17 @@ data class FaqItem(
 )
 
 data class AdminDashboardStats(
-    val todayOrdersCount: Int,
-    val activeOrdersCount: Int,
-    val pendingApprovalCount: Int,
-    val readyOrdersCount: Int,
-    val overdueOrdersCount: Int,
-    val monthlyRevenueAzn: Int,
-    val newUsersCount: Int,
-    val completionRate: Int
+    val totalOrdersCount: Int = 0,
+    val pendingOrdersCount: Int = 0,
+    val acceptedOrdersCount: Int = 0,
+    val inProgressOrdersCount: Int = 0,
+    val readyOrdersCount: Int = 0,
+    val cancelledOrdersCount: Int = 0,
+    val totalCustomersCount: Int = 0,
+    val waitingSupportMessagesCount: Int = 0,
+    val waitingOrderMessagesCount: Int = 0,
+    val todayOrdersCount: Int = 0,
+    val activeOrdersCount: Int = 0,
+    val monthlyRevenueAzn: Int = 0,
+    val newUsersCount: Int = 0
 )

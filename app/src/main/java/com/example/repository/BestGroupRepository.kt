@@ -39,6 +39,15 @@ class BestGroupRepository(
         _isOnboardingCompleted.value = true
     }
 
+    // Remember me preference
+    fun isRememberMeEnabled(): Boolean {
+        return sharedPrefs?.getBoolean("remember_me", false) ?: false
+    }
+
+    fun setRememberMe(enabled: Boolean) {
+        sharedPrefs?.edit()?.putBoolean("remember_me", enabled)?.apply()
+    }
+
     // Current User Session
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
@@ -174,18 +183,32 @@ class BestGroupRepository(
     val faqs: StateFlow<List<FaqItem>> = _faqs.asStateFlow()
 
     // Admin Dashboard Statistics
-    val adminStats: StateFlow<AdminDashboardStats> = MutableStateFlow(
+    private val _adminStats = MutableStateFlow(
         AdminDashboardStats(
-            todayOrdersCount = 8,
-            activeOrdersCount = 24,
-            pendingApprovalCount = 5,
-            readyOrdersCount = 142,
-            overdueOrdersCount = 0,
-            monthlyRevenueAzn = 18450,
-            newUsersCount = 67,
-            completionRate = 98
+            todayOrdersCount = 0,
+            activeOrdersCount = 0,
+            totalOrdersCount = 0,
+            pendingOrdersCount = 0,
+            acceptedOrdersCount = 0,
+            inProgressOrdersCount = 0,
+            readyOrdersCount = 0,
+            cancelledOrdersCount = 0,
+            totalCustomersCount = 0,
+            waitingSupportMessagesCount = 0,
+            waitingOrderMessagesCount = 0,
+            monthlyRevenueAzn = 0,
+            newUsersCount = 0
         )
-    ).asStateFlow()
+    )
+    val adminStats: StateFlow<AdminDashboardStats> = _adminStats.asStateFlow()
+
+    // Real Customers for Admin Panel
+    private val _adminCustomers = MutableStateFlow<List<User>>(emptyList())
+    val adminCustomers: StateFlow<List<User>> = _adminCustomers.asStateFlow()
+
+    private val fcmTokenManager by lazy {
+        context?.let { FcmTokenManager(it) }
+    }
 
     // --- Firebase Initialization & Synchronization ---
 
@@ -213,11 +236,14 @@ class BestGroupRepository(
                             role = UserRole.CUSTOMER
                         )
                     }
+                    // Register FCM push token for this user
+                    fcmTokenManager?.registerCurrentToken(fbUser.uid)
                     observeFirestoreData(scope, fbUser.uid)
                 } else {
                     _currentUser.value = null
                     _orders.value = emptyList()
                     _conversations.value = emptyList()
+                    _adminCustomers.value = emptyList()
                 }
             }
         }
@@ -243,6 +269,7 @@ class BestGroupRepository(
             scope.launch {
                 orderService.getOrdersFlow(userId, isStaff).collect { remoteOrders ->
                     _orders.value = remoteOrders
+                    recalculateAdminStats()
                 }
             }
         }
@@ -250,12 +277,85 @@ class BestGroupRepository(
         if (chatService != null) {
             scope.launch {
                 chatService.getConversationsFlow(userId, isStaff).collect { remoteConvs ->
-                    if (remoteConvs.isNotEmpty()) {
-                        _conversations.value = remoteConvs
-                    }
+                    _conversations.value = remoteConvs
+                    recalculateAdminStats()
                 }
             }
         }
+
+        // If authorized staff, load real customers list from Firestore users collection
+        if (isStaff && authService != null) {
+            scope.launch {
+                try {
+                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        .collection("users")
+                        .addSnapshotListener { snapshot, error ->
+                            if (error != null || snapshot == null) return@addSnapshotListener
+                            val customerList = snapshot.documents.mapNotNull { doc ->
+                                val data = doc.data ?: return@mapNotNull null
+                                val roleStr = data["role"] as? String ?: "customer"
+                                val cRole = when (roleStr.lowercase()) {
+                                    "admin" -> UserRole.ADMIN
+                                    "manager" -> UserRole.MANAGER
+                                    "operator" -> UserRole.OPERATOR
+                                    else -> UserRole.CUSTOMER
+                                }
+                                val cOrdersCount = _orders.value.count { it.userId == doc.id }
+                                User(
+                                    id = doc.id,
+                                    fullName = data["fullName"] as? String ?: "Müştəri",
+                                    email = data["email"] as? String ?: "",
+                                    phone = data["phone"] as? String ?: "",
+                                    university = data["university"] as? String ?: "",
+                                    faculty = data["faculty"] as? String ?: "",
+                                    degreeLevel = (data["educationLevel"] as? String) ?: (data["degreeLevel"] as? String) ?: "Bakalavriat",
+                                    role = cRole,
+                                    createdAt = data["createdAt"] as? String ?: "",
+                                    orderCount = cOrdersCount
+                                )
+                            }
+                            _adminCustomers.value = customerList
+                            recalculateAdminStats()
+                        }
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    private fun recalculateAdminStats() {
+        val allOrders = _orders.value
+        val allConvs = _conversations.value
+        val customersCount = _adminCustomers.value.size
+
+        val pending = allOrders.count { it.status == OrderStatus.PENDING }
+        val accepted = allOrders.count { it.status == OrderStatus.ACCEPTED }
+        val inProgress = allOrders.count { it.status == OrderStatus.IN_PROGRESS }
+        val ready = allOrders.count { it.status == OrderStatus.READY }
+        val cancelled = allOrders.count { it.status == OrderStatus.CANCELLED }
+
+        val supportConvs = allConvs.filter { it.orderId == null }
+        val orderConvs = allConvs.filter { it.orderId != null }
+
+        val waitingSupport = supportConvs.count { it.unreadCount > 0 }
+        val waitingOrder = orderConvs.count { it.unreadCount > 0 }
+
+        val revenue = allOrders.filter { it.status != OrderStatus.CANCELLED }.sumOf { it.estimatedPriceAzn }
+
+        _adminStats.value = AdminDashboardStats(
+            totalOrdersCount = allOrders.size,
+            pendingOrdersCount = pending,
+            acceptedOrdersCount = accepted,
+            inProgressOrdersCount = inProgress,
+            readyOrdersCount = ready,
+            cancelledOrdersCount = cancelled,
+            totalCustomersCount = customersCount,
+            waitingSupportMessagesCount = waitingSupport,
+            waitingOrderMessagesCount = waitingOrder,
+            todayOrdersCount = allOrders.count { it.status == OrderStatus.PENDING || it.status == OrderStatus.ACCEPTED },
+            activeOrdersCount = pending + accepted + inProgress,
+            monthlyRevenueAzn = revenue,
+            newUsersCount = customersCount
+        )
     }
 
     private fun initSampleDataIfEmpty() {
@@ -338,24 +438,26 @@ class BestGroupRepository(
 
     // --- Authentication Operations ---
 
-    suspend fun signIn(email: String, pass: String): AuthResult<User> {
+    suspend fun signIn(email: String, pass: String, rememberMe: Boolean = false): AuthResult<User> {
         _isAuthLoading.value = true
         return try {
             if (authService != null) {
                 val res = authService.signIn(email, pass)
                 if (res is AuthResult.Success) {
+                    setRememberMe(rememberMe)
                     _currentUser.value = res.data
                 }
                 res
             } else {
+                setRememberMe(rememberMe)
                 val fallbackUser = User(
                     id = "usr_${UUID.randomUUID()}",
-                    fullName = "Nicat Rzayev",
+                    fullName = email.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
                     email = email,
-                    phone = "+994 (50) 412-38-90",
-                    university = "ADNSU",
-                    faculty = "İTİ",
-                    degreeLevel = "Magistratura",
+                    phone = "",
+                    university = "",
+                    faculty = "",
+                    degreeLevel = "Bakalavriat",
                     role = UserRole.CUSTOMER
                 )
                 _currentUser.value = fallbackUser
@@ -426,10 +528,20 @@ class BestGroupRepository(
         get() = _currentUser.value?.id ?: authService?.currentUserId ?: ""
 
     fun signOut() {
+        val uid = _currentUser.value?.id ?: authService?.currentUserId
+        if (uid != null && authService != null) {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    fcmTokenManager?.deactivateToken(uid)
+                } catch (_: Throwable) {}
+            }
+        }
+        setRememberMe(false)
         authService?.signOut()
         _currentUser.value = null
         _orders.value = emptyList()
         _conversations.value = emptyList()
+        _adminCustomers.value = emptyList()
     }
 
     // --- Order Operations ---
