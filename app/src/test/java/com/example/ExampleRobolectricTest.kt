@@ -1913,7 +1913,7 @@ class ExampleRobolectricTest {
         assertEquals("✓ Etibarlı xidmət", LocalizationManager.getString(StringKey.ONBOARDING_BENEFIT_2))
         assertEquals("✓ Məxfilik", LocalizationManager.getString(StringKey.ONBOARDING_BENEFIT_3))
         assertEquals("✓ Peşəkar yanaşma", LocalizationManager.getString(StringKey.ONBOARDING_BENEFIT_4))
-        assertEquals("Sifarişinizi rahatlıqla yaradın, bizimlə əlaqə saxlayın və prosesin gedişatını tətbiqdən izləyin.", LocalizationManager.getString(StringKey.ONBOARDING_DESC_3))
+        assertEquals("Sifarişinizi rahatlıqla yerləşdirin, gedişatı izləyin və mütəxəssislərimizlə birbaşa əlaqədə olun.", LocalizationManager.getString(StringKey.ONBOARDING_DESC_3))
     }
 
     @Test
@@ -1968,6 +1968,50 @@ class ExampleRobolectricTest {
         val actual = "order_$orderId"
         assertEquals(expected, actual)
         assertNotEquals(actual, "conv_1")
+    }
+
+    @Test
+    fun `part 9 onboarding test 1 - first launch defaults to not completed, then persists completion`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("test_bg_prefs", Context.MODE_PRIVATE)
+        prefs.edit().clear().commit()
+
+        val repo = BestGroupRepository(context = context)
+        assertFalse("First launch must not have completed onboarding", repo.isOnboardingCompleted.value)
+
+        repo.completeOnboarding()
+        assertTrue("After completing onboarding, state must be true", repo.isOnboardingCompleted.value)
+
+        // Verify persistence across new repository instance with same context
+        val repoAfterRestart = BestGroupRepository(context = context)
+        assertTrue("Subsequent app launches must have onboarding completed", repoAfterRestart.isOnboardingCompleted.value)
+    }
+
+    @Test
+    fun `part 9 onboarding test 2 - local images exist and are packaged in drawables`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val img1 = context.resources.getIdentifier("img_onboarding_1", "drawable", context.packageName)
+        val img2 = context.resources.getIdentifier("img_onboarding_2", "drawable", context.packageName)
+        val img3 = context.resources.getIdentifier("img_onboarding_3", "drawable", context.packageName)
+
+        assertTrue("Slide 1 image must be packed in drawables", img1 != 0)
+        assertTrue("Slide 2 image must be packed in drawables", img2 != 0)
+        assertTrue("Slide 3 image must be packed in drawables", img3 != 0)
+    }
+
+    @Test
+    fun `part 9 onboarding test 3 - localized strings for all 3 slides and benefits`() {
+        LocalizationManager.setLanguage(Language.AZ)
+        assertEquals("BestGroup.az ilə tanış olun", LocalizationManager.getString(StringKey.ONBOARDING_TITLE_1))
+        assertEquals("Akademik və peşəkar fəaliyyətiniz üçün etibarlı, keyfiyyətli və məxfi dəstək.", LocalizationManager.getString(StringKey.ONBOARDING_DESC_1))
+        assertEquals("Akademik və peşəkar dəstək", LocalizationManager.getString(StringKey.ONBOARDING_TITLE_2))
+        assertEquals("Referat, sərbəst iş, kurs işi, diplom işi, magistr dissertasiyası, elmi məqalə, təqdimat və digər xidmətlər.", LocalizationManager.getString(StringKey.ONBOARDING_DESC_2))
+        assertEquals("Niyə BestGroup.az?", LocalizationManager.getString(StringKey.ONBOARDING_TITLE_3))
+        assertEquals("✓ Keyfiyyətli iş", LocalizationManager.getString(StringKey.ONBOARDING_BENEFIT_1))
+        assertEquals("✓ Etibarlı xidmət", LocalizationManager.getString(StringKey.ONBOARDING_BENEFIT_2))
+        assertEquals("✓ Məxfilik", LocalizationManager.getString(StringKey.ONBOARDING_BENEFIT_3))
+        assertEquals("✓ Peşəkar yanaşma", LocalizationManager.getString(StringKey.ONBOARDING_BENEFIT_4))
+        assertEquals("Sifarişinizi rahatlıqla yerləşdirin, gedişatı izləyin və mütəxəssislərimizlə birbaşa əlaqədə olun.", LocalizationManager.getString(StringKey.ONBOARDING_DESC_3))
     }
 }
 

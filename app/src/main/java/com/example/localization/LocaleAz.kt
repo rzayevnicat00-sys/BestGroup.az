@@ -46,7 +46,7 @@ val LocaleAz: Map<StringKey, String> = mapOf(
     StringKey.ONBOARDING_BENEFIT_2 to "✓ Etibarlı xidmət",
     StringKey.ONBOARDING_BENEFIT_3 to "✓ Məxfilik",
     StringKey.ONBOARDING_BENEFIT_4 to "✓ Peşəkar yanaşma",
-    StringKey.ONBOARDING_DESC_3 to "Sifarişinizi rahatlıqla yaradın, bizimlə əlaqə saxlayın və prosesin gedişatını tətbiqdən izləyin.",
+    StringKey.ONBOARDING_DESC_3 to "Sifarişinizi rahatlıqla yerləşdirin, gedişatı izləyin və mütəxəssislərimizlə birbaşa əlaqədə olun.",
 
     // Auth
     StringKey.AUTH_LOGIN_TITLE to "Xoş gəlmisiniz",
