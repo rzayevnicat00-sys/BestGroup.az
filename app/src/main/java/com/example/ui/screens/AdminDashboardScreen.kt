@@ -6,12 +6,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.example.ui.theme.ThemeMode
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +64,7 @@ fun AdminDashboardScreen(
     val customers by viewModel.adminCustomers.collectAsState()
     val notifications by viewModel.adminNotifications.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
+    val themeMode by viewModel.themeMode.collectAsState()
 
     var currentTab by remember { mutableStateOf(AdminTab.DASHBOARD) }
     var contactTargetCustomer by remember { mutableStateOf<Triple<String, String, String?>?>(null) }
@@ -165,8 +169,16 @@ fun AdminDashboardScreen(
                 )
             }
             AdminTab.ORDERS -> {
+                val sortedOrders = remember(orders) {
+                    orders.sortedByDescending { it.createdAt }
+                }
+                val filteredOrders = remember(sortedOrders, orderFilterStatus) {
+                    if (orderFilterStatus != null) sortedOrders.filter { it.status == orderFilterStatus }
+                    else sortedOrders
+                }
                 AdminOrdersContent(
-                    orders = if (orderFilterStatus != null) orders.filter { it.status == orderFilterStatus } else orders,
+                    orders = filteredOrders,
+                    allOrders = sortedOrders,
                     customers = customers,
                     currentFilter = orderFilterStatus,
                     onFilterChange = { orderFilterStatus = it },
@@ -211,7 +223,9 @@ fun AdminDashboardScreen(
                     notifications = notifications,
                     modifier = modifier.padding(innerPadding),
                     onBroadcastClick = { showBroadcastDialog = true },
+                    onMarkAllAsRead = { viewModel.markNotificationsAsRead() },
                     onNotificationClick = { notif ->
+                        viewModel.markNotificationAsRead(notif.id)
                         if (notif.targetOrderId != null) {
                             val matched = orders.find { it.id == notif.targetOrderId }
                             if (matched != null) viewModel.viewOrderDetail(matched)
@@ -227,6 +241,8 @@ fun AdminDashboardScreen(
                 AdminProfileContent(
                     user = currentUser,
                     stats = stats,
+                    currentThemeMode = themeMode,
+                    onThemeChange = { viewModel.setThemeMode(it) },
                     modifier = modifier.padding(innerPadding),
                     onLogout = { viewModel.logout() }
                 )
@@ -744,6 +760,7 @@ private fun AdminSupportContent(
 @Composable
 private fun AdminOrdersContent(
     orders: List<Order>,
+    allOrders: List<Order> = orders,
     customers: List<User> = emptyList(),
     currentFilter: OrderStatus?,
     onFilterChange: (OrderStatus?) -> Unit,
@@ -754,25 +771,82 @@ private fun AdminOrdersContent(
     onContactOrder: (Order) -> Unit
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        // Filters Row
+        // Status Filter Chips (Horizontally Scrollable with live counts)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             FilterChip(
                 selected = currentFilter == null,
                 onClick = { onFilterChange(null) },
-                label = { Text("Hamısı", fontSize = 11.sp) }
+                label = {
+                    Text(
+                        text = "Hamısı (${allOrders.size})",
+                        fontSize = 12.sp,
+                        fontWeight = if (currentFilter == null) FontWeight.Bold else FontWeight.Normal
+                    )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = Gold500,
+                    selectedLabelColor = Navy900
+                )
             )
             OrderStatus.values().forEach { st ->
+                val count = allOrders.count { it.status == st }
                 FilterChip(
                     selected = currentFilter == st,
                     onClick = { onFilterChange(if (currentFilter == st) null else st) },
-                    label = { Text(localizedString(st.labelKey), fontSize = 11.sp) }
+                    label = {
+                        Text(
+                            text = "${localizedString(st.labelKey)} ($count)",
+                            fontSize = 12.sp,
+                            fontWeight = if (currentFilter == st) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Gold500,
+                        selectedLabelColor = Navy900
+                    )
                 )
             }
+        }
+
+        // Live Header Indicator
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF10B981))
+                )
+                Text(
+                    text = "Canlı Sifarişlər • ${orders.size} göstərilir",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            Text(
+                text = "Ən yeni sifarişlər üstdə",
+                style = MaterialTheme.typography.labelSmall,
+                color = Gold500,
+                fontSize = 11.sp
+            )
         }
 
         if (orders.isEmpty()) {
@@ -1021,6 +1095,7 @@ private fun AdminNotificationsContent(
     notifications: List<NotificationItem>,
     modifier: Modifier = Modifier,
     onBroadcastClick: () -> Unit,
+    onMarkAllAsRead: () -> Unit,
     onNotificationClick: (NotificationItem) -> Unit
 ) {
     LazyColumn(
@@ -1031,17 +1106,34 @@ private fun AdminNotificationsContent(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Button(
-                onClick = onBroadcastClick,
-                colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(Icons.Default.Campaign, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Qlobal Push Bildiriş Göndər", fontWeight = FontWeight.Bold)
+                Button(
+                    onClick = onBroadcastClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .weight(1.3f)
+                        .height(48.dp)
+                ) {
+                    Icon(Icons.Default.Campaign, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Push Göndər", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                OutlinedButton(
+                    onClick = onMarkAllAsRead,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                ) {
+                    Icon(Icons.Default.DoneAll, contentDescription = null, tint = Gold500, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Hamısı Oxundu", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
         }
 
@@ -1051,8 +1143,15 @@ private fun AdminNotificationsContent(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
                     .clickable { onNotificationClick(item) }
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(14.dp)),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    .border(
+                        1.dp,
+                        if (!item.isRead) Gold500.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                        RoundedCornerShape(14.dp)
+                    ),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (item.isRead) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                    else MaterialTheme.colorScheme.surfaceVariant
+                )
             ) {
                 Row(
                     modifier = Modifier.padding(14.dp),
@@ -1063,16 +1162,21 @@ private fun AdminNotificationsContent(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(Navy800),
+                            .background(if (item.isRead) Navy800.copy(alpha = 0.5f) else Navy800),
                         contentAlignment = Alignment.Center
                     ) {
-                        val icon = when (item.category) {
-                            NotificationCategory.ORDERS -> Icons.Default.Assignment
-                            NotificationCategory.MESSAGES -> Icons.Default.Chat
-                            NotificationCategory.CAMPAIGNS -> Icons.Default.Campaign
-                            else -> Icons.Default.Notifications
+                        val (icon, tint) = when (item.category) {
+                            NotificationCategory.ORDERS -> Icons.Default.Assignment to Gold500
+                            NotificationCategory.MESSAGES -> Icons.Default.Chat to Color(0xFF3B82F6)
+                            NotificationCategory.CAMPAIGNS -> Icons.Default.Campaign to Color(0xFF10B981)
+                            else -> Icons.Default.Notifications to Gold500
                         }
-                        Icon(icon, contentDescription = null, tint = Gold500, modifier = Modifier.size(20.dp))
+                        Icon(
+                            icon,
+                            contentDescription = null,
+                            tint = if (item.isRead) tint.copy(alpha = 0.6f) else tint,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Row(
@@ -1083,19 +1187,32 @@ private fun AdminNotificationsContent(
                             Text(
                                 text = item.title,
                                 style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = if (!item.isRead) FontWeight.Bold else FontWeight.Normal,
+                                color = if (!item.isRead) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f)
                             )
-                            Text(
-                                text = item.timestamp,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            if (!item.isRead) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(Gold500)
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = item.body,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (item.isRead) 0.8f else 1f)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (item.isRead) "${item.timestamp} • Oxunub" else item.timestamp,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (!item.isRead) Gold500 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            fontSize = 11.sp
                         )
                     }
                 }
@@ -1111,6 +1228,8 @@ private fun AdminNotificationsContent(
 private fun AdminProfileContent(
     user: User?,
     stats: AdminDashboardStats,
+    currentThemeMode: ThemeMode,
+    onThemeChange: (ThemeMode) -> Unit,
     modifier: Modifier = Modifier,
     onLogout: () -> Unit
 ) {
@@ -1140,6 +1259,55 @@ private fun AdminProfileContent(
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                     )
+                }
+            }
+        }
+
+        // Appearance / Theme Card (Persisted across app restarts)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Görünüş Teması", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                    Icon(Icons.Default.Palette, contentDescription = null, tint = Gold500)
+                }
+                Text(
+                    text = "Seçdiyiniz tema tətbiqdən çıxıb yenidən daxil olduqda da yaddaşda saxlanılır.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ThemeMode.values().forEach { mode ->
+                        val isSelected = currentThemeMode == mode
+                        val (label, icon) = when (mode) {
+                            ThemeMode.SYSTEM -> "Sistem" to Icons.Default.BrightnessAuto
+                            ThemeMode.LIGHT -> "Açıq" to Icons.Default.LightMode
+                            ThemeMode.DARK -> "Tünd" to Icons.Default.DarkMode
+                        }
+                        Button(
+                            onClick = { onThemeChange(mode) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isSelected) Gold500 else MaterialTheme.colorScheme.surface,
+                                contentColor = if (isSelected) Navy900 else MaterialTheme.colorScheme.onSurface
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(label, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+                        }
+                    }
                 }
             }
         }

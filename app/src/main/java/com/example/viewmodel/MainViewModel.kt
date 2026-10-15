@@ -351,6 +351,10 @@ class MainViewModel @JvmOverloads constructor(
         repository.markAllNotificationsAsRead()
     }
 
+    fun markNotificationAsRead(id: String) {
+        repository.markNotificationAsRead(id)
+    }
+
     // --- Authentication Actions ---
 
     fun login(email: String, pass: String, rememberMe: Boolean = false, onSuccess: () -> Unit, onError: (String) -> Unit) {

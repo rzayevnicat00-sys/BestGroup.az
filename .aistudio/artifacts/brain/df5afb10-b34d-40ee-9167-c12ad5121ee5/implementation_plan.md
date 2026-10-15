@@ -1,52 +1,47 @@
-# Admin Paneldə Sifarişlər, Bildiriş Filtrləməsi və Müştəri Xidmətləri Çatı
+# Sifarişlərin Canlı İzlənməsi, Oxunmuş Bildirişlər və Temanın Qalıcı Saxlanması Planı
 
-Bu təkmilləşdirmə admin hesabında (`elmarmmdov1@gmail.com` və digər adminlər) müştəri sifarişlərinin dərhal görünməsini, admin tərəfindən müştərilərə telefonun SMS tətbiqi və ya WhatsApp vasitəsilə mesaj göndərilməsini, admin bildirişlərinin müştəri bildirişlərindən tam ayrılaraq yalnız adminə aid hadisələri (yeni sifariş, müştəri mesajları, status dəyişiklikləri) göstərməsini və müştərilərin Çat bölməsindən birbaşa "BestGroup.az Müştəri Xidmətləri" ilə əlaqə saxlamasını təmin edir.
+Bu təkmilləşdirmə müştəri sifarişlərinin admin panelində canlı yenilənən tam siyahı və status süzgəcləri ilə ən son yaradılanlar ən üstdə olmaqla sıralanmasını, bildirişlər bölməsində oxunmuş mesajların oxunmamış kimi qalmasının qarşısının alınaraq solğun/oxunmuş rejimdə saxlanmasını və həm admin, həm də müştəri üçün seçilmiş görünüş temasının (işıqlı / tünd) tətbiqdən çıxıb daxil olduqda sıfırlanmadan qalıcı saxlanmasını təmin edir.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
 > Təsdiqlənmiş qərarlar:
-> - **SMS və Mesajlaşma Yolu**: Telefonun SMS tətbiqi (`smsto:`) və ya WhatsApp vasitəsilə hazır şablonlu və fərdi mesaj açılışı.
-> - **Admin İcazələri**: `elmarmmdov1@gmail.com` baş admin, həmçinin Firestore `users` kolleksiyasında `role == 'admin'` və ya `admins` siyahısındakı digər adminlər.
-> - **Admin Bildirişlərinin Ayrılması**: Müştərinin şəxsi sifariş statusu bildirişləri admin bildiriş panelində göstərilməyəcək; admin panelində yalnız inzibati hadisələr (yeni sifariş daxil oldu, yeni müştəri mesajı gəldi, sifariş statusu yeniləndi) əks olunacaq.
-> - **Müştəri Xidmətləri Çatı**: Başlıq **"BestGroup.az Müştəri Xidmətləri"** olaraq təqdim ediləcək və sifarişi olmayan müştəri belə daxil olub birbaşa baş adminlə əlaqə saxlaya biləcək.
+> - **Sifarişlərin Sıralanması**: Ən son daxil olan və yaradılan sifarişlər ən üstdə (azalan xronoloji ardıcıllıqla) əks olunacaq, status çipləri üfüqi sürüşdürmə və say göstəricisi ilə təqdim ediləcək.
+> - **Oxunmuş Bildirişlərin Vəziyyəti**: Bildirişə toxunduqda və ya "Hamısını oxunmuş et" seçildikdə bildirişin oxunma statusu dərhal yenilənəcək, oxunmuş bildirişlər daha solğun rəngdə və qızılı oxunmamış nöqtəsi olmadan göstəriləcək; oxunmuş bildiriş heç bir halda yenidən oxunmamış kimi təqdim olunmayacaq.
+> - **Görünüş Temasının Qalıcılığı**: Müştəri və ya admin profilindən seçilən tema rejimi (`LIGHT`, `DARK` və ya `SYSTEM`) cihazın `SharedPreferences` yaddaşına yazılacaq və tətbiq yenidən başladıqda avtomatik bərpa ediləcək. Həmçinin admin profilinə də xüsusi tema seçimi bloku əlavə ediləcək.
 
 ## 1. Overview & Core Concept
 
 - **Nə edir**:
-  - Müştəri sifariş verdikdə bu sifariş dərhal admin paneldə ("Dashboard" və "Sifarişlər" tablarında) canlı əks olunur.
-  - Admin istənilən sifariş və ya müştəri üzərindən "SMS / WhatsApp Göndər" düyməsinə toxunaraq birbaşa telefonun mesajlaşma tətbiqini və ya WhatsApp-ı açır.
-  - Bildiriş mərkəzində rol bölgüsü tətbiq edilir: müştərinin özünə gedən "Sifarişiniz qeydə alındı" tipli bildirişlər adminə göstərilmir; admin üçün "Yeni sifariş daxil oldu: #BG-...", "Yeni dəstək müraciəti" kimi inzibati bildirişlər generasiya olunur və ya süzülür.
-  - Müştərinin aşağı menyusundakı "Çat" bölməsi açıldıqda, müştəri birbaşa "BestGroup.az Müştəri Xidmətləri" dialoquna daxil olur və yazışma baş adminin admin panelindəki "Müştəri xidmətləri" tabına düşür.
-- **Hədəf İstifadəçilər**: Sistem adminləri (`elmarmmdov1@gmail.com`), kuratorlar və tələbə müştərilər.
-- **Əsas Dəyər**: İnzibati səliqə, təmiz bildiriş paneli, operativ SMS/WhatsApp əlaqəsi və 24/7 birbaşa müştəri xidmətləri çıxışı.
+  - Admin paneldəki "Sifarişlər" bölməsində real vaxt rejimində gələn bütün sifarişlər ən son yaradılma vaxtına görə sıralanır və status süzgəcləri (`Hamısı`, `Gözləmədə`, `İcrada`, `Baxışda`, `Hazırdır`, `Ləğv edildi`) vasitəsilə asanlıqla filtirlənir.
+  - Bildirişlərdə (müştəri və admin) oxunmuş bildirişlərin ID-ləri yadda saxlanılır, fərdi klik və qlobal "Hamısını oxunmuş et" əməliyyatları ilə status dərhal əks etdirilir və oxunmuş elementlər vizual olaraq oxunmamışlardan fərqləndirilir.
+  - Tətbiqin görünüş rejimi (`ThemeMode.LIGHT` və ya `ThemeMode.DARK`) lokal yaddaşda saxlanılır; istifadəçi proqramı bağlayıb açsa belə seçdiyi tünd və ya işıqlı tema dəyişməz qalır.
+- **Hədəf İstifadəçilər**: BestGroup.az müştəriləri və sistem idarəçiləri (`elmarmmdov1@gmail.com` və digər adminlər).
+- **Əsas Dəyər**: Rahat sifariş idarəetməsi, təmiz və dəqiq bildiriş qeydiyyatı, fərdiləşdirilmiş və daimi vizual rahatlıq.
 
 ## 2. User Experience & Visual Design
 
-- **Admin Sifarişlərin İdarəsi və Əlaqə**:
-  - Sifariş kartlarında və sifariş detalında xüsusi **"SMS / WhatsApp"** düyməsi (`Gold500` və `Navy800` rəng harmoniyası ilə).
-  - Açılan `ContactCustomerBottomSheet`:
-    - Müştərinin adı və telefon nömrəsi
-    - Sürətli şablon çipləri ("Sifarişiniz təsdiqləndi", "Əlavə məlumat lazımdır", "Sifarişiniz hazırdır")
-    - Redaktə edilə bilən mətn sahəsi
-    - İki güclü hərəkət düyməsi: **"SMS ilə aç"** və **"WhatsApp-da aç"**
-- **Admin Bildiriş Paneli (`AdminNotificationsContent`)**:
-  - Yalnız inzibati kateqoriyalı bildirişlər: Yeni daxil olan sifarişlər, Müştəri müraciətləri, Sistem və status dəyişiklikləri.
-  - Müştərinin fərdi "sifarişiniz qeydə alındı / statusunuz dəyişdi" bildirişləri admin siyahısından təmizlənir.
-- **Müştəri Tərəfi Çat Ekranı (`ChatScreen`)**:
-  - Başlıq: **"BestGroup.az Müştəri Xidmətləri"**
-  - Alt yazı: *"Baş admin və kuratorluq xidməti aktivdir"*
-  - İlkin vəziyyətdə (heç bir sifariş olmasa belə) xoşgəlmisiniz mətni, sürətli sual çipləri və dərhal yazmağa hazır aktiv mətn sahəsi.
-  - Göndərilən mesaj birbaşa Firestore `conversations` kolleksiyasında dəstək dialoqu kimi formalaşır və admin tərəfində dərhal bildirişlə çıxır.
+- **Admin Sifarişlərin Siyahısı & Süzgəclər (`AdminOrdersContent`)**:
+  - **Sürüşdürülə bilən status süzgəcləri**: `Hamısı (N)`, `Gözləyir (N)`, `İcrada (N)`, `Hazırdır (N)` və s. M3 `FilterChip` dizaynında aktiv/passiv vəziyyətlər.
+  - **Avtomatik Sıralama**: Ən yeni sifarişlər dərhal siyahının başında yerləşir.
+  - **Kart Dizaynı**: Müştərinin adı, telefon nömrəsi, fənn/mövzu, son tarix və dərhal əlaqə ("SMS / WA", "Bax", "İdarə") düymələri.
+- **Bildirişlər Ekranı & Admin Bildiriş Mərkəzi**:
+  - Oxunmamış bildirişlər: Tam parlaq kart, sol zolaqda və ya sağ yuxarı küncdə qızılı indikator nöqtəsi (`Gold500`).
+  - Oxunmuş bildirişlər: Təbii solğunlaşdırma (`alpha = 0.65f`), normal şrift çəkisi, oxunmamış indikatorun gizlədilməsi.
+  - Bildirişə toxunduqda: Sifarişə/çata keçidlə bərabər dərhal həmin bildiriş oxunmuş kimi qeyd edilir və yaddaşda saxlanılır.
+- **Qalıcı Tema Dəstəyi**:
+  - Müştəri üçün: Profil ekranında mövcud olan tema seçimi birbaşa yaddaşa qeyd olunur.
+  - Admin üçün: Admin panelinin "Profil" tabında M3 kart daxilində "Görünüş Teması" seçimi (Açıq / Tünd / Sistem) təqdim olunur.
+  - Tətbiq açılarkən sıfırlanma (flicker) olmadan sonuncu yadda saxlanmış tema aktivləşir.
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Bildirişlərin İkili Rol Filtri (`NotificationItem.recipientRole` & `targetUserId`)**:
-  - *Seçilmiş Yanaşma*: Bildiriş yaradılarkən hədəf kütlə qeyd edilir: müştəri bildirişləri `recipientRole = "customer"` və `targetUserId = customerId`, admin bildirişləri isə `recipientRole = "admin"` və ya `isAdminNotification = true`.
-  - *Səbəb*: Admin müştərinin özünə aid bildirişləri görməməli, yalnız müştərinin verdiyi yeni sifariş barədə inzibati xəbərdarlıq almalıdır.
-- **Birbaşa Müştəri Xidmətləri Dialoqu**:
-  - *Seçilmiş Yanaşma*: Müştəri `Chat` tabını seçdikdə `getOrCreateSupportConversation()` avtomatik olaraq "BestGroup.az Müştəri Xidmətləri" başlığı ilə həmin müştərinin dialoqunu açır və ya aktivləşdirir.
-  - *Səbəb*: Müştərinin əvvəlcədən sifarişinin olub-olmamasından asılı olmayaraq baş adminlə birbaşa əlaqəsini təmin edir.
+- **Lokal Tema Qalıcılığı (`SharedPreferences` & `StateFlow`)**:
+  - *Seçilmiş Yanaşma*: `AppPreferencesManager` sinfi yaradılır və Android `SharedPreferences` vasitəsilə tema rejimi və oxunmuş bildiriş ID-ləri sinxron saxlanılır.
+  - *Səbəb*: Server sorğusu tələb etmir, cihazda dərhal açılır və internet bağlantısı olmadıqda belə temanı və oxunma statusunu qoruyur.
+- **Oxunmuş Bildirişlərin Birləşdirilməsi**:
+  - *Seçilmiş Yanaşma*: Bildirişlər axını (`notifications`) yadda saxlanılan oxunmuş ID-lər çoxluğu (`readNotificationIds`) ilə birləşdirilir (`isRead = isRead || readIds.contains(id)`).
+  - *Səbəb*: Yeni dinamik bildirişlər (məsələn yeni sifariş və ya status dəyişikliyi) daxil olanda əvvəl oxunmuşlar oxunmamış vəziyyətinə qayıtmır.
 
 ## 4. Technical Architecture & Data Strategy
 
@@ -54,46 +49,48 @@ Bu təkmilləşdirmə admin hesabında (`elmarmmdov1@gmail.com` və digər admin
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                           Firestore Backend                            │
-│  ┌──────────────────────┐  ┌─────────────────────┐  ┌───────────────┐  │
-│  │   /orders/{orderId}  │  │   /conversations/   │  │ /notifications│  │
-│  │  - customerName      │  │  - title: "BestGroup│  │ - targetRole  │  │
-│  │  - customerPhone     │  │    .az Müştəri Xid."│  │   ("admin" vs │  │
-│  │  - status, isoNow    │  │  - isSupport: true  │  │    "customer")│  │
-│  └──────────┬───────────┘  └──────────┬──────────┘  └───────┬───────┘  │
-└─────────────┼─────────────────────────┼─────────────────────┼──────────┘
-              │ Real-time Stream        │ Real-time Stream    │ Role Filter
-              ▼                         ▼                     ▼
+│                        AppPreferencesManager                           │
+│  - saveThemeMode(mode: ThemeMode) / getSavedThemeMode(): ThemeMode     │
+│  - markNotificationAsRead(id) / getReadNotificationIds(): Set<String>  │
+│  - markAllNotificationsAsRead(ids: List<String>)                       │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ Persistent read/write
+                                    ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│                     BestGroupRepository & Services                     │
-│  - isStaff: email == "elmarmmdov1@gmail.com" || role == "admin"       │
-│  - getOrdersFlow(userId, isStaff = true) -> All orders to admin        │
-│  - getAdminNotificationsFlow() -> Filter out customer-only notices     │
-│  - getOrCreateSupportConversation() -> "BestGroup.az Müştəri Xidmətləri"│
-└─────────────────────────────┬──────────────────────────────────────────┘
-                              │
-              ┌───────────────┴───────────────┐
-              ▼                               ▼
-┌───────────────────────────┐   ┌───────────────────────────┐
-│     Admin Panel Flow      │   │    Customer Chat Flow     │
-│ - Live Orders List        │   │ - "BestGroup.az Müştəri   │
-│ - SMS / WhatsApp Intent   │   │    Xidmətləri" Dialoqu    │
-│ - Pure Admin Notifications│   │ - No order needed to chat │
-└───────────────────────────┘   └───────────────────────────┘
+│                        BestGroupRepository                             │
+│  - _themeMode: MutableStateFlow<ThemeMode> (initial from Preferences)  │
+│  - _readNotificationIds: MutableStateFlow<Set<String>>                 │
+│  - orders: StateFlow<List<Order>> (sortedByDescending { createdAt })   │
+│  - markNotificationAsRead(id: String)                                  │
+│  - markAllNotificationsAsRead()                                        │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ StateFlow Observation
+                    ┌───────────────┴───────────────┐
+                    ▼                               ▼
+┌───────────────────────────────────────┐   ┌────────────────────────────┐
+│          Admin Panel UI               │   │    Müştəri & Bildirişlər   │
+│ - AdminOrdersContent:                 │   │ - NotificationsScreen:     │
+│   * Live descending orders            │   │   * Dimmed read cards      │
+│   * Horizontal scrollable chips       │   │   * Persistent read state  │
+│   * Status filter with order counts   │   │ - ProfileScreen & Theme:   │
+│ - AdminProfileContent:                │   │   * Persistent ThemeMode   │
+│   * Theme switcher (Light/Dark/System)│   │   * Preserved on restart   │
+└───────────────────────────────────────┘   └────────────────────────────┘
 ```
 
-### Həyata Keçiriləcək Addımlar:
-1. **Model və Bildirişlər Layeri (`NotificationItem.kt`, `BestGroupRepository.kt`)**:
-   - `NotificationItem`-ə `targetRole` (və ya `forAdmin: Boolean`) və `targetUserId` dəstəyi əlavə etmək.
-   - Müştəri sifariş verdikdə iki fərqli bildiriş yaratmaq:
-     - Müştəri üçün: "Sifarişiniz qəbul edildi" (`targetRole = "customer"`, `targetUserId = userId`)
-     - Admin üçün: "Yeni sifariş daxil oldu: #BG-..." (`targetRole = "admin"`)
-   - Admin bildiriş siyahısında müştəri bildirişlərini tam süzgəcdən keçirmək.
-2. **Sifarişlər və Əlaqə (`FirestoreOrderService.kt`, `AdminDashboardScreen.kt`, `OrderDetailScreen.kt`)**:
-   - Sifariş yaradılarkən müştərinin adı və telefonu sifariş sənədinə yazılır.
-   - `AdminDashboardScreen.kt`-də `ContactCustomerBottomSheet` və hər sifariş kartına/müştəri kartına SMS və WhatsApp düyməsi yerləşdirmək.
-3. **Müştəri Xidmətləri Çatı (`ChatScreen.kt`, `BestGroupRepository.kt`, `FirestoreChatService.kt`)**:
-   - Başlıq dəqiq "BestGroup.az Müştəri Xidmətləri" olaraq təyin ediləcək.
-   - İstifadəçi Çat bölməsinə keçəndə avtomatik baş adminlə dəstək söhbəti aktivləşdiriləcək.
-4. **Kompilyasiya və Təsdiq**:
-   - `compile_applet` ilə tətbiqin qüsursuz işləməsini yoxlamaq.
+### Həyata Keçiriləcək Dəqiq Addımlar:
+1. **Davamlı Yaddaş Qatı (`AppPreferencesManager.kt`)**:
+   - `ThemeMode` və oxunmuş bildirişlərin ID siyahısını `SharedPreferences`-də saxlayan köməkçi sinif hazırlamaq.
+2. **Repozitoriya və ViewModel İnteqrasiyası (`BestGroupRepository.kt`, `MainViewModel.kt`)**:
+   - Tətbiq açılarkən yadda saxlanmış temanı və oxunmuş bildirişləri yükləmək.
+   - `markNotificationAsRead(id: String)` funksiyasını əlavə etmək və oxunma vəziyyətini həm yaddaşa, həm də axına tətbiq etmək.
+   - Sifarişlər axınında `sortedByDescending { it.createdAt }` sıralamasını zəmanətləndirmək.
+3. **Admin Sifarişlər Siyahısının Təkmilləşdirilməsi (`AdminDashboardScreen.kt`)**:
+   - Süzgəcləri üfüqi sürüşdürülə bilən (`horizontalScroll`) formaya salmaq və hər statusun qarşısında sifariş sayını göstərmək.
+   - Admin bildiriş siyahısında oxunmuş elementləri daha solğun və oxunmamışları parlaq nöqtə ilə təqdim etmək, toxunulduqda oxunmuş kimi qeyd etmək.
+   - Admin profilinə "Görünüş Teması" seçici blokunu əlavə etmək.
+4. **Müştəri Bildirişlər və Tema Ekranı (`NotificationsScreen.kt`, `ProfileScreen.kt`, `MainActivity.kt`)**:
+   - Bildiriş kliklərində dərhal oxunmuş statusunu tətbiq etmək.
+   - Tətbiq yenidən açıldıqda seçilmiş temanın dəyişməz qalmasını yoxlamaq və təmin etmək.
+5. **Kompilyasiya və Yoxlama**:
+   - `compile_applet` ilə tətbiqin qüsursuz qurulmasını təsdiq etmək.

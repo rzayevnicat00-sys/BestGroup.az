@@ -130,6 +130,7 @@ fun NotificationsScreen(
                         NotificationCard(
                             item = item,
                             onClick = {
+                                viewModel.markNotificationAsRead(item.id)
                                 if (item.targetOrderId != null) {
                                     val matchedOrder = orders.find { it.id == item.targetOrderId }
                                     if (matchedOrder != null) {
@@ -178,6 +179,8 @@ private fun NotificationCard(
         NotificationCategory.SYSTEM, NotificationCategory.ALL -> Icons.Default.Notifications to Gold500
     }
 
+    val cardAlpha = if (item.isRead) 0.65f else 1f
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -185,14 +188,19 @@ private fun NotificationCard(
             .clickable(onClick = onClick)
             .border(
                 1.dp,
-                if (!item.isRead) Gold500.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                if (!item.isRead) Gold500.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
                 RoundedCornerShape(14.dp)
             )
             .testTag("notif_card_${item.id}"),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(
+            containerColor = if (item.isRead) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            else MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
         Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier
+                .padding(14.dp)
+                .fillMaxWidth(),
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -200,10 +208,15 @@ private fun NotificationCard(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Navy800),
+                    .background(if (item.isRead) Navy800.copy(alpha = 0.5f) else Navy800),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (item.isRead) tint.copy(alpha = 0.6f) else tint,
+                    modifier = Modifier.size(22.dp)
+                )
             }
 
             Column(modifier = Modifier.weight(1f)) {
@@ -215,11 +228,12 @@ private fun NotificationCard(
                     Text(
                         text = item.title,
                         style = MaterialTheme.typography.titleSmall,
-                        fontWeight = if (!item.isRead) FontWeight.Bold else FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = if (!item.isRead) FontWeight.Bold else FontWeight.Normal,
+                        color = if (!item.isRead) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f)
                     )
                     if (!item.isRead) {
+                        Spacer(modifier = Modifier.width(6.dp))
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
@@ -234,17 +248,17 @@ private fun NotificationCard(
                 Text(
                     text = item.body,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (item.isRead) 0.8f else 1f),
                     lineHeight = 18.sp
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = item.timestamp,
+                    text = if (item.isRead) "${item.timestamp} • Oxunub" else item.timestamp,
                     style = MaterialTheme.typography.labelSmall,
                     fontSize = 11.sp,
-                    color = Gold500
+                    color = if (!item.isRead) Gold500 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
             }
         }

@@ -56,13 +56,28 @@ class BestGroupRepository(
     private val _isAuthLoading = MutableStateFlow(false)
     val isAuthLoading: StateFlow<Boolean> = _isAuthLoading.asStateFlow()
 
-    // App Preferences
-    private val _themeMode = MutableStateFlow(ThemeMode.SYSTEM)
+    // App Preferences (Persisted across app restarts)
+    private val _themeMode = MutableStateFlow(
+        run {
+            val saved = sharedPrefs?.getString("theme_mode", ThemeMode.SYSTEM.name)
+            try {
+                ThemeMode.valueOf(saved ?: ThemeMode.SYSTEM.name)
+            } catch (_: Exception) {
+                ThemeMode.SYSTEM
+            }
+        }
+    )
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
     fun setThemeMode(mode: ThemeMode) {
+        sharedPrefs?.edit()?.putString("theme_mode", mode.name)?.apply()
         _themeMode.value = mode
     }
+
+    // Persisted Read Notifications State
+    private val _readNotificationIds = MutableStateFlow<Set<String>>(
+        sharedPrefs?.getStringSet("read_notification_ids", emptySet())?.toSet() ?: emptySet()
+    )
 
     // Role switcher (useful to inspect customer experience vs admin dashboard)
     fun switchUserRole(newRole: UserRole) {
@@ -121,7 +136,7 @@ class BestGroupRepository(
                 body = "Firebase bulud bazası və təhlükəsizlik qaydaları aktivləşdirildi.",
                 category = NotificationCategory.SYSTEM,
                 timestamp = "İndicə",
-                isRead = false
+                isRead = _readNotificationIds.value.contains("n_1")
             ),
             NotificationItem(
                 id = "n_2",
@@ -1122,12 +1137,27 @@ class BestGroupRepository(
         }
     }
 
+    fun markNotificationAsRead(id: String) {
+        val updated = _readNotificationIds.value + id
+        _readNotificationIds.value = updated
+        sharedPrefs?.edit()?.putStringSet("read_notification_ids", updated)?.apply()
+        _notifications.value = _notifications.value.map {
+            if (it.id == id) it.copy(isRead = true) else it
+        }
+    }
+
     fun markAllNotificationsAsRead() {
+        val allIds = _notifications.value.map { it.id }.toSet()
+        val updated = _readNotificationIds.value + allIds
+        _readNotificationIds.value = updated
+        sharedPrefs?.edit()?.putStringSet("read_notification_ids", updated)?.apply()
         _notifications.value = _notifications.value.map { it.copy(isRead = true) }
     }
 
     fun addNotification(item: NotificationItem) {
-        _notifications.value = listOf(item) + _notifications.value
+        val isReadPersisted = _readNotificationIds.value.contains(item.id) || item.isRead
+        val finalItem = item.copy(isRead = isReadPersisted)
+        _notifications.value = listOf(finalItem) + _notifications.value.filter { it.id != item.id }
     }
 
     companion object {

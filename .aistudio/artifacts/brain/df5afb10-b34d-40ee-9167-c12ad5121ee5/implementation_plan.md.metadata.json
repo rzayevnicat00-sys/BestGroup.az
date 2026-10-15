@@ -1,6 +1,6 @@
 {
-  "summary": "Admin paneldə sifarişlərin və bildirişlərin ayrılması, müştəriyə SMS/WhatsApp göndərişi, bildirişlərin yalnız adminə aid hadisələri göstərməsi və Çat bölməsində \"BestGroup.az Müştəri Xidmətləri\" ilə birbaşa əlaqə sisteminin tətbiq planı.",
-  "updatedAt": "2026-10-15T07:59:27.763790609Z",
+  "summary": "Admin paneldə müştəri sifarişlərinin canlı tam siyahısı və status süzgəcləri ilə sıralanması, bildirişlərdə oxunmuş mesajların vəziyyətinin yadda saxlanaraq solğun göstərilməsi və tətbiqin görünüş temasının (işıqlı / tünd) SharedPreferences vasitəsilə qalıcı saxlanması üçün ətraflı icra planı.",
+  "updatedAt": "2026-10-15T08:29:04.896632221Z",
   "requestFeedback": true,
   "userFacing": true
 }
