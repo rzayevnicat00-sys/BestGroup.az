@@ -16,5 +16,7 @@ data class NotificationItem(
     val timestamp: String,
     val isRead: Boolean = false,
     val targetOrderId: String? = null,
-    val targetChatId: String? = null
+    val targetChatId: String? = null,
+    val forAdmin: Boolean = false,
+    val targetUserId: String? = null
 )

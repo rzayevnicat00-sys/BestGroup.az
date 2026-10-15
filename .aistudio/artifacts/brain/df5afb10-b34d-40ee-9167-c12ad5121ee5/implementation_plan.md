@@ -1,108 +1,99 @@
-# Admin Paneldə Müştəri Sifarişləri və SMS/WhatsApp Əlaqə Sistemi
+# Admin Paneldə Sifarişlər, Bildiriş Filtrləməsi və Müştəri Xidmətləri Çatı
 
-Bu təkmilləşdirmə müştərilər sifariş verdikdə həmin sifarişlərin dərhal admin panelində canlı görünməsini təmin edir, `elmarmmdov1@gmail.com` və onun təyin etdiyi adminlərə tam idarəetmə səlahiyyəti verir və adminin müştəri ilə bir toxunuşla telefonun SMS tətbiqi və ya WhatsApp vasitəsilə əlaqə saxlamasına imkan yaradır.
+Bu təkmilləşdirmə admin hesabında (`elmarmmdov1@gmail.com` və digər adminlər) müştəri sifarişlərinin dərhal görünməsini, admin tərəfindən müştərilərə telefonun SMS tətbiqi və ya WhatsApp vasitəsilə mesaj göndərilməsini, admin bildirişlərinin müştəri bildirişlərindən tam ayrılaraq yalnız adminə aid hadisələri (yeni sifariş, müştəri mesajları, status dəyişiklikləri) göstərməsini və müştərilərin Çat bölməsindən birbaşa "BestGroup.az Müştəri Xidmətləri" ilə əlaqə saxlamasını təmin edir.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> İstifadəçi tərəfindən verilmiş aydınlaşdırıcı cavablar əsasında qərarlar təsdiqlənmişdir:
-> - **SMS və Mesajlaşma Yolu**: Telefonun standart SMS tətbiqi və WhatsApp tətbiqi vasitəsilə birbaşa açılış (`Intent.ACTION_SENDTO` və WhatsApp API linki).
-> - **Admin İcazələri**: `elmarmmdov1@gmail.com` baş admin təyin edilir, Firestore qaydalarında və auth xidmətində həmin email və onun təyin etdiyi adminlər bütün sifarişləri oxumaq/yeniləmək səlahiyyəti əldə edir.
-> - **Sifarişlərin Sıralanması və İdarəsi**: Canlı (real-time Firestore snapshot listener) yenilənən tam siyahı, vaxta görə ən yenilər yuxarıda olmaqla və status filterləri (Gözləyir, Qəbul edildi, Hazırlanır, Hazırdır, İmtina).
+> Təsdiqlənmiş qərarlar:
+> - **SMS və Mesajlaşma Yolu**: Telefonun SMS tətbiqi (`smsto:`) və ya WhatsApp vasitəsilə hazır şablonlu və fərdi mesaj açılışı.
+> - **Admin İcazələri**: `elmarmmdov1@gmail.com` baş admin, həmçinin Firestore `users` kolleksiyasında `role == 'admin'` və ya `admins` siyahısındakı digər adminlər.
+> - **Admin Bildirişlərinin Ayrılması**: Müştərinin şəxsi sifariş statusu bildirişləri admin bildiriş panelində göstərilməyəcək; admin panelində yalnız inzibati hadisələr (yeni sifariş daxil oldu, yeni müştəri mesajı gəldi, sifariş statusu yeniləndi) əks olunacaq.
+> - **Müştəri Xidmətləri Çatı**: Başlıq **"BestGroup.az Müştəri Xidmətləri"** olaraq təqdim ediləcək və sifarişi olmayan müştəri belə daxil olub birbaşa baş adminlə əlaqə saxlaya biləcək.
 
 ## 1. Overview & Core Concept
 
-- **Nə edir**: 
-  - Müştəri mobil tətbiqdən sifariş yerləşdirdikdə, admin paneldəki sifariş siyahısı və dashboard statistikası anında avtomatik yenilənir.
-  - Sifariş detallarında və idarəetmə kartında müştərinin əlaqə nömrəsi, adı və universitet məlumatları aydın şəkildə əks olunur.
-  - Admin istənilən sifariş üzrə və ya müştərilər bölməsindən "SMS / WhatsApp Göndər" düyməsini sıxaraq hazır şablonlu və ya fərdi mesajla cihazın SMS tətbiqinə və ya WhatsApp-a keçid edir.
-- **Hədəf İstifadəçi**: Sistem adminləri (`elmarmmdov1@gmail.com`), sifariş kuratorları və xidmət menecerləri.
-- **Əsas Dəyər**: Müştəri sifarişlərinin itməməsi, dərhal baxılması, operativ əks-əlaqə və sürətli müştəri məmnuniyyəti.
+- **Nə edir**:
+  - Müştəri sifariş verdikdə bu sifariş dərhal admin paneldə ("Dashboard" və "Sifarişlər" tablarında) canlı əks olunur.
+  - Admin istənilən sifariş və ya müştəri üzərindən "SMS / WhatsApp Göndər" düyməsinə toxunaraq birbaşa telefonun mesajlaşma tətbiqini və ya WhatsApp-ı açır.
+  - Bildiriş mərkəzində rol bölgüsü tətbiq edilir: müştərinin özünə gedən "Sifarişiniz qeydə alındı" tipli bildirişlər adminə göstərilmir; admin üçün "Yeni sifariş daxil oldu: #BG-...", "Yeni dəstək müraciəti" kimi inzibati bildirişlər generasiya olunur və ya süzülür.
+  - Müştərinin aşağı menyusundakı "Çat" bölməsi açıldıqda, müştəri birbaşa "BestGroup.az Müştəri Xidmətləri" dialoquna daxil olur və yazışma baş adminin admin panelindəki "Müştəri xidmətləri" tabına düşür.
+- **Hədəf İstifadəçilər**: Sistem adminləri (`elmarmmdov1@gmail.com`), kuratorlar və tələbə müştərilər.
+- **Əsas Dəyər**: İnzibati səliqə, təmiz bildiriş paneli, operativ SMS/WhatsApp əlaqəsi və 24/7 birbaşa müştəri xidmətləri çıxışı.
 
 ## 2. User Experience & Visual Design
 
-- **Admin Sifarişlər Tabı (`AdminOrdersContent`)**:
-  - Üst hissədə horizontal status süzgəc çipləri: *Hamısı*, *Gözləyir*, *Qəbul edildi*, *Hazırlanır*, *Hazırdır*, *İmtina*.
-  - Hər sifariş kartında:
-    - Sifariş nömrəsi (#BG-2026-XXXX) qızılı vurğu ilə (`Gold500`)
-    - Mövzu, təhsil pilləsi və təhvil tarixi
-    - Müştərinin adı və əlaqə telefonu
-    - Vəziyyət nişanı (`StatusBadge`)
-    - Əməliyyat düymələri: **"Bax"**, **"Çat"**, **"SMS / WhatsApp"** və **"İdarə et"**
-- **SMS / WhatsApp Dialoq Pəncərəsi (`ContactCustomerBottomSheet`)**:
-  - Müştərinin nömrəsi və adı göstərilir.
-  - Hazır sürətli şablon düymələri:
-    - *"Sifarişiniz qəbul edildi"*
-    - *"Sifarişiniz üzrə əlavə məlumat tələb olunur"*
-    - *"Sifarişiniz hazırdır"*
-  - Redaktə edilə bilən mesaj mətni sahəsi.
-  - İki aydın hərəkət düyməsi:
-    1. **"SMS ilə Göndər"**: Telefonun daxili mesajlaşma tətbiqini pre-fill edilmiş mətnlə açır (`smsto:+994...`).
-    2. **"WhatsApp ilə Göndər"**: WhatsApp tətbiqini müştərinin nömrəsi və mətni ilə açır (`https://api.whatsapp.com/send?phone=...`).
-- **Müştərilər Bölməsi (`AdminCustomersContent`)**:
-  - Hər müştəri üçün telefon nömrəsi yanında birbaşa SMS/WhatsApp düyməsi.
+- **Admin Sifarişlərin İdarəsi və Əlaqə**:
+  - Sifariş kartlarında və sifariş detalında xüsusi **"SMS / WhatsApp"** düyməsi (`Gold500` və `Navy800` rəng harmoniyası ilə).
+  - Açılan `ContactCustomerBottomSheet`:
+    - Müştərinin adı və telefon nömrəsi
+    - Sürətli şablon çipləri ("Sifarişiniz təsdiqləndi", "Əlavə məlumat lazımdır", "Sifarişiniz hazırdır")
+    - Redaktə edilə bilən mətn sahəsi
+    - İki güclü hərəkət düyməsi: **"SMS ilə aç"** və **"WhatsApp-da aç"**
+- **Admin Bildiriş Paneli (`AdminNotificationsContent`)**:
+  - Yalnız inzibati kateqoriyalı bildirişlər: Yeni daxil olan sifarişlər, Müştəri müraciətləri, Sistem və status dəyişiklikləri.
+  - Müştərinin fərdi "sifarişiniz qeydə alındı / statusunuz dəyişdi" bildirişləri admin siyahısından təmizlənir.
+- **Müştəri Tərəfi Çat Ekranı (`ChatScreen`)**:
+  - Başlıq: **"BestGroup.az Müştəri Xidmətləri"**
+  - Alt yazı: *"Baş admin və kuratorluq xidməti aktivdir"*
+  - İlkin vəziyyətdə (heç bir sifariş olmasa belə) xoşgəlmisiniz mətni, sürətli sual çipləri və dərhal yazmağa hazır aktiv mətn sahəsi.
+  - Göndərilən mesaj birbaşa Firestore `conversations` kolleksiyasında dəstək dialoqu kimi formalaşır və admin tərəfində dərhal bildirişlə çıxır.
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Admin İcazəsi Mexanizmi**:
-  - *Seçilmiş Yanaşma*: `elmarmmdov1@gmail.com` baş admin olaraq kod və təhlükəsizlik qaydaları səviyyəsində avtomatik admin hüququ alır. Eyni zamanda Firestore `users` kolleksiyasında `role == 'admin'` və ya `admins` siyahısındakı digər istifadəçilər də admin qəbul edilir.
-  - *Səbəb*: Müştəri hesabı ilə admin hesabı eyni Firestore bazasında işləyir. Əvvəlki kodda Firebase Auth Custom Claim gözlənilirdi, lakin client-side auth sistemində claims olmadığı üçün admin hesabı adi `customer` kimi qəbul olunurdu və Firestore qaydaları bütün sifarişlərin oxunmasını bloklayırdı.
-- **SMS və Mesajlaşma İnteqrasiyası**:
-  - *Seçilmiş Yanaşma*: Android Native Intent (`Intent.ACTION_SENDTO` və WhatsApp universal link).
-  - *Səbəb*: Əlavə ödənişli xarici SMS gateway (Twilio və s.) API açarı və ya abunəlik tələb etmədən birbaşa adminin öz cihazından rəsmi və ödənişsiz işləyir.
+- **Bildirişlərin İkili Rol Filtri (`NotificationItem.recipientRole` & `targetUserId`)**:
+  - *Seçilmiş Yanaşma*: Bildiriş yaradılarkən hədəf kütlə qeyd edilir: müştəri bildirişləri `recipientRole = "customer"` və `targetUserId = customerId`, admin bildirişləri isə `recipientRole = "admin"` və ya `isAdminNotification = true`.
+  - *Səbəb*: Admin müştərinin özünə aid bildirişləri görməməli, yalnız müştərinin verdiyi yeni sifariş barədə inzibati xəbərdarlıq almalıdır.
+- **Birbaşa Müştəri Xidmətləri Dialoqu**:
+  - *Seçilmiş Yanaşma*: Müştəri `Chat` tabını seçdikdə `getOrCreateSupportConversation()` avtomatik olaraq "BestGroup.az Müştəri Xidmətləri" başlığı ilə həmin müştərinin dialoqunu açır və ya aktivləşdirir.
+  - *Səbəb*: Müştərinin əvvəlcədən sifarişinin olub-olmamasından asılı olmayaraq baş adminlə birbaşa əlaqəsini təmin edir.
 
 ## 4. Technical Architecture & Data Strategy
 
 ### Arxitektura və Məlumat Axını Diaqramı
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Firestore Backend                    │
-│  ┌──────────────────────┐     ┌──────────────────────┐  │
-│  │   /orders/{orderId}  │     │   /users/{userId}    │  │
-│  │  - userId            │     │  - email             │  │
-│  │  - customerName      │     │  - role ("admin" /   │  │
-│  │  - customerPhone     │     │         "customer")  │  │
-│  │  - status            │     │  - phone             │  │
-│  └──────────┬───────────┘     └──────────┬───────────┘  │
-└─────────────┼────────────────────────────┼──────────────┘
-              │ Real-time Snapshot         │ Profile & Role
-              ▼                            ▼
-┌─────────────────────────────────────────────────────────┐
-│              Repository Layer (Kotlin Flow)             │
-│   BestGroupRepository -> FirestoreOrderService          │
-│   - if (isStaff) query: collection("orders")            │
-│   - isStaff = email == "elmarmmdov1@gmail.com" || ...   │
-└─────────────────────────────┬───────────────────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────┐
-│                   MainViewModel State                   │
-│   - orders: StateFlow<List<Order>>                      │
-│   - adminCustomers: StateFlow<List<User>>               │
-│   - adminUpdateOrderStatus / adminUpdatePriority        │
-└─────────────────────────────┬───────────────────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────┐
-│                  Admin UI Components                    │
-│  ┌─────────────────────────┐   ┌─────────────────────┐  │
-│  │ AdminDashboardScreen    │   │ ContactCustomerSheet│  │
-│  │ - Orders Live List      │──▶│ - Intent SMS        │  │
-│  │ - Filter Chips          │   │ - WhatsApp Action   │  │
-│  └─────────────────────────┘   └─────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                           Firestore Backend                            │
+│  ┌──────────────────────┐  ┌─────────────────────┐  ┌───────────────┐  │
+│  │   /orders/{orderId}  │  │   /conversations/   │  │ /notifications│  │
+│  │  - customerName      │  │  - title: "BestGroup│  │ - targetRole  │  │
+│  │  - customerPhone     │  │    .az Müştəri Xid."│  │   ("admin" vs │  │
+│  │  - status, isoNow    │  │  - isSupport: true  │  │    "customer")│  │
+│  └──────────┬───────────┘  └──────────┬──────────┘  └───────┬───────┘  │
+└─────────────┼─────────────────────────┼─────────────────────┼──────────┘
+              │ Real-time Stream        │ Real-time Stream    │ Role Filter
+              ▼                         ▼                     ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                     BestGroupRepository & Services                     │
+│  - isStaff: email == "elmarmmdov1@gmail.com" || role == "admin"       │
+│  - getOrdersFlow(userId, isStaff = true) -> All orders to admin        │
+│  - getAdminNotificationsFlow() -> Filter out customer-only notices     │
+│  - getOrCreateSupportConversation() -> "BestGroup.az Müştəri Xidmətləri"│
+└─────────────────────────────┬──────────────────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+┌───────────────────────────┐   ┌───────────────────────────┐
+│     Admin Panel Flow      │   │    Customer Chat Flow     │
+│ - Live Orders List        │   │ - "BestGroup.az Müştəri   │
+│ - SMS / WhatsApp Intent   │   │    Xidmətləri" Dialoqu    │
+│ - Pure Admin Notifications│   │ - No order needed to chat │
+└───────────────────────────┘   └───────────────────────────┘
 ```
 
 ### Həyata Keçiriləcək Addımlar:
-1. **Firestore Qaydaları (`firestore.rules`)**:
-   - `isStaff()` və `isAdmin()` funksiyalarına `request.auth.token.email == 'elmarmmdov1@gmail.com'` və Firestore `users` kolleksiyasındakı `role in ['admin', 'manager', 'operator']` yoxlamasının əlavə edilməsi.
-   - `orders` kolleksiyasında admin üçün qeyd-şərtsiz oxuma/yazma icazəsinin verilməsi.
-   - Dəyişikliyin `deploy_firebase` ilə serverə göndərilməsi.
-2. **Auth & Repository Qatı (`FirebaseAuthService.kt`, `BestGroupRepository.kt`)**:
-   - `elmarmmdov1@gmail.com` daxil olduqda avtomatik `UserRole.ADMIN` rolunun verilməsi və profil sənədində `role: "admin"` qeyd olunması.
-   - Admin üçün `orderService.getOrdersFlow(userId, isStaff = true)` ilə bütün sifarişlərin real vaxt rejimində dinlənilməsinin təmin edilməsi.
-   - Sifariş yaradılarkən sifariş obyektinə `customerName` və `customerPhone` sahələrinin yazılması.
-3. **SMS & WhatsApp İnteqrasiyası (`AdminDashboardScreen.kt`, `OrderDetailScreen.kt`)**:
-   - `ContactCustomerBottomSheet` komponentinin yaradılması (nömrə, hazır şablonlar, SMS və WhatsApp düymələri).
-   - Android Intent köməkçisi ilə cihazın SMS tətbiqini (`smsto:`) və ya WhatsApp-ı açmaq.
-4. **Yoxlama və Test**:
-   - `compile_applet` ilə tətbiqin xətasız qurulmasının təsdiqlənməsi.
+1. **Model və Bildirişlər Layeri (`NotificationItem.kt`, `BestGroupRepository.kt`)**:
+   - `NotificationItem`-ə `targetRole` (və ya `forAdmin: Boolean`) və `targetUserId` dəstəyi əlavə etmək.
+   - Müştəri sifariş verdikdə iki fərqli bildiriş yaratmaq:
+     - Müştəri üçün: "Sifarişiniz qəbul edildi" (`targetRole = "customer"`, `targetUserId = userId`)
+     - Admin üçün: "Yeni sifariş daxil oldu: #BG-..." (`targetRole = "admin"`)
+   - Admin bildiriş siyahısında müştəri bildirişlərini tam süzgəcdən keçirmək.
+2. **Sifarişlər və Əlaqə (`FirestoreOrderService.kt`, `AdminDashboardScreen.kt`, `OrderDetailScreen.kt`)**:
+   - Sifariş yaradılarkən müştərinin adı və telefonu sifariş sənədinə yazılır.
+   - `AdminDashboardScreen.kt`-də `ContactCustomerBottomSheet` və hər sifariş kartına/müştəri kartına SMS və WhatsApp düyməsi yerləşdirmək.
+3. **Müştəri Xidmətləri Çatı (`ChatScreen.kt`, `BestGroupRepository.kt`, `FirestoreChatService.kt`)**:
+   - Başlıq dəqiq "BestGroup.az Müştəri Xidmətləri" olaraq təyin ediləcək.
+   - İstifadəçi Çat bölməsinə keçəndə avtomatik baş adminlə dəstək söhbəti aktivləşdiriləcək.
+4. **Kompilyasiya və Təsdiq**:
+   - `compile_applet` ilə tətbiqin qüsursuz işləməsini yoxlamaq.

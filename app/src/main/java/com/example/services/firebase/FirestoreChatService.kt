@@ -145,7 +145,7 @@ class FirestoreChatService(
 
         val nowFormatted = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date())
         val isoNow = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
-        val title = "Müştəri xidmətləri"
+        val title = "BestGroup.az Müştəri Xidmətləri"
 
         val convData = hashMapOf<String, Any?>(
             "conversationId" to convId,
@@ -160,8 +160,8 @@ class FirestoreChatService(
             "unreadForCustomer" to 0,
             "unreadForStaff" to 0,
             "status" to "active",
-            "curatorName" to "Müştəri Xidmətləri Meneceri",
-            "curatorRole" to "Akademik Dəstək",
+            "curatorName" to "Baş Admin (Müştəri Xidmətləri)",
+            "curatorRole" to "Müştəri Xidmətləri",
             "isOnline" to true,
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp(),

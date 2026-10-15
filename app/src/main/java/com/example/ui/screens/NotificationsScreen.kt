@@ -36,7 +36,7 @@ fun NotificationsScreen(
     viewModel: MainViewModel,
     modifier: Modifier = Modifier
 ) {
-    val notifications by viewModel.notifications.collectAsState()
+    val notifications by viewModel.customerNotifications.collectAsState()
     val orders by viewModel.orders.collectAsState()
     var selectedCategory by remember { mutableStateOf(NotificationCategory.ALL) }
 

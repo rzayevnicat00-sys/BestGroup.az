@@ -14,6 +14,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -119,6 +123,16 @@ class MainViewModel @JvmOverloads constructor(
     val conversations = repository.conversations
     val messages = repository.messages
     val notifications = repository.notifications
+
+    // Notifications strictly segregated for Customer vs Admin
+    val customerNotifications: StateFlow<List<NotificationItem>> = combine(repository.notifications, currentUser) { list, user ->
+        val uid = user?.id ?: ""
+        list.filter { !it.forAdmin && (it.targetUserId == null || it.targetUserId == uid) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val adminNotifications: StateFlow<List<NotificationItem>> = repository.notifications
+        .map { list -> list.filter { it.forAdmin || it.category == NotificationCategory.CAMPAIGNS } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val faqs = repository.faqs
     val adminStats = repository.adminStats
     val adminCustomers = repository.adminCustomers

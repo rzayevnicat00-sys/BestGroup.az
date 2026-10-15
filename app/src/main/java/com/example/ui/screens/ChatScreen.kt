@@ -89,7 +89,7 @@ fun ChatScreen(
                         com.example.ui.components.BestGroupLogoBadge(size = 36)
                         Column {
                             Text(
-                                text = activeConversation?.title ?: "Canlı Dəstək və Sorğu",
+                                text = activeConversation?.title ?: "BestGroup.az Müştəri Xidmətləri",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1
@@ -105,7 +105,7 @@ fun ChatScreen(
                                         .background(Color(0xFF10B981))
                                 )
                                 Text(
-                                    text = activeConversation?.curatorName ?: "Müştəri Xidmətləri & Operator",
+                                    text = activeConversation?.curatorName ?: "Baş Admin (Müştəri Xidmətləri)",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -314,14 +314,14 @@ fun ChatScreen(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "Canlı Məlumat və Konsultasiya",
+                                text = "BestGroup.az Müştəri Xidmətləri",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onBackground,
                                 textAlign = TextAlign.Center
                             )
                             Text(
-                                text = "Sifariş verməzdən öncə qiymətlər, müddətlər, mövzunun seçimi və qaydalar haqqında istənilən sualınızı verə bilərsiniz. Mesaj üçün heç bir simvol limiti yoxdur.",
+                                text = "Baş admin və kuratorluq xidməti aktivdir. Sifariş verməzdən öncə və ya hazırkı sifarişlərinizlə bağlı istənilən sualınızı birbaşa buradan ünvanlaya bilərsiniz. Simvol limiti yoxdur.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center

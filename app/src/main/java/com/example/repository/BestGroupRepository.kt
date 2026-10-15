@@ -225,6 +225,7 @@ class BestGroupRepository(
                     if (profile != null) {
                         _currentUser.value = profile
                     } else {
+                        val isSuperAdmin = fbUser.email?.trim()?.equals("elmarmmdov1@gmail.com", ignoreCase = true) == true
                         _currentUser.value = User(
                             id = fbUser.uid,
                             fullName = fbUser.displayName ?: "İstifadəçi",
@@ -233,7 +234,7 @@ class BestGroupRepository(
                             university = "",
                             faculty = "",
                             degreeLevel = "Bakalavriat",
-                            role = UserRole.CUSTOMER
+                            role = if (isSuperAdmin) UserRole.ADMIN else UserRole.CUSTOMER
                         )
                     }
                     // Register FCM push token for this user safely
@@ -254,7 +255,8 @@ class BestGroupRepository(
     }
 
     private fun observeFirestoreData(scope: CoroutineScope, userId: String) {
-        val isStaff = _currentUser.value?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR)
+        val isStaff = _currentUser.value?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
+                      _currentUser.value?.email?.trim()?.equals("elmarmmdov1@gmail.com", ignoreCase = true) == true
 
         if (serviceCatalogService != null) {
             scope.launch {
@@ -583,6 +585,10 @@ class BestGroupRepository(
             throw IllegalStateException("Seçilmiş xidmət hazırda aktiv deyil.")
         }
 
+        val custName = _currentUser.value?.fullName ?: "İstifadəçi"
+        val custPhone = _currentUser.value?.phone ?: ""
+        val custEmail = _currentUser.value?.email ?: ""
+
         val createdOrder = if (orderService != null) {
             orderService.createOrder(
                 userId = currentUid,
@@ -601,7 +607,10 @@ class BestGroupRepository(
                 formattingStandard = formattingStandard,
                 specialNotes = specialNotes,
                 files = files,
-                serviceCatalogItem = resolvedServiceItem
+                serviceCatalogItem = resolvedServiceItem,
+                customerName = custName,
+                customerPhone = custPhone,
+                customerEmail = custEmail
             )
         } else {
             val dateFmt = SimpleDateFormat("dd MMMM yyyy", Locale("az"))
@@ -650,12 +659,16 @@ class BestGroupRepository(
                 statusHistory = listOf(
                     OrderStatusHistoryItem(OrderStatus.PENDING, "$now, 10:00", "Sifariş qəbul edildi və nəzərdən keçirilməyə göndərildi.", "Sistem")
                 ),
-                estimatedPriceAzn = calculatedPrice
+                estimatedPriceAzn = calculatedPrice,
+                customerName = custName,
+                customerPhone = custPhone,
+                customerEmail = custEmail
             )
         }
 
         _orders.value = listOf(createdOrder) + _orders.value.filter { it.id != createdOrder.id }
 
+        // 1. Notification for customer only
         addNotification(
             NotificationItem(
                 id = "notif_${UUID.randomUUID()}",
@@ -663,7 +676,22 @@ class BestGroupRepository(
                 body = "'${createdOrder.topic}' mövzulu sifarişiniz qəbul edildi. Tezliklə kurator sizinlə əlaqə quracaq.",
                 category = NotificationCategory.ORDERS,
                 timestamp = "İndicə",
-                targetOrderId = createdOrder.id
+                targetOrderId = createdOrder.id,
+                forAdmin = false,
+                targetUserId = currentUid
+            )
+        )
+
+        // 2. Notification for admin only (avoids cluttering customer's inbox and gives admin prompt notice)
+        addNotification(
+            NotificationItem(
+                id = "notif_admin_${UUID.randomUUID()}",
+                title = "Yeni sifariş daxil oldu (${createdOrder.orderNumber})",
+                body = "Müştəri: ${custName.ifBlank { "İstifadəçi" }} | Mövzu: '${createdOrder.topic}'",
+                category = NotificationCategory.ORDERS,
+                timestamp = "İndicə",
+                targetOrderId = createdOrder.id,
+                forAdmin = true
             )
         )
 
@@ -819,6 +847,35 @@ class BestGroupRepository(
                 )
             } else order
         }
+
+        val targetOrder = _orders.value.find { it.id == orderId }
+        if (targetOrder != null) {
+            // Notification for customer only
+            addNotification(
+                NotificationItem(
+                    id = "notif_${UUID.randomUUID()}",
+                    title = "Sifarişinizin statusu dəyişdi (${targetOrder.orderNumber})",
+                    body = "Yeni status: ${newStatus.name}. $note",
+                    category = NotificationCategory.ORDERS,
+                    timestamp = "İndicə",
+                    targetOrderId = targetOrder.id,
+                    forAdmin = false,
+                    targetUserId = targetOrder.userId
+                )
+            )
+            // Notification for admin only
+            addNotification(
+                NotificationItem(
+                    id = "notif_admin_${UUID.randomUUID()}",
+                    title = "Status yeniləndi (${targetOrder.orderNumber})",
+                    body = "Status '${newStatus.name}' olaraq dəyişdirildi. Qeyd: $note",
+                    category = NotificationCategory.ORDERS,
+                    timestamp = "İndicə",
+                    targetOrderId = targetOrder.id,
+                    forAdmin = true
+                )
+            )
+        }
     }
 
     suspend fun updateOrderPriority(orderId: String, newPriority: OrderPriority) {
@@ -930,13 +987,13 @@ class BestGroupRepository(
             id = convId,
             customerId = currentUid,
             orderId = null,
-            title = "Müştəri xidmətləri",
+            title = "BestGroup.az Müştəri Xidmətləri",
             lastMessage = "",
             lastMessageAt = "İndicə",
             unreadForCustomer = 0,
             unreadForStaff = 0,
-            curatorName = "Müştəri Xidmətləri Meneceri",
-            curatorRole = "Akademik Dəstək",
+            curatorName = "Baş Admin (Müştəri Xidmətləri)",
+            curatorRole = "Müştəri Xidmətləri",
             isOnline = true
         )
         _conversations.value = listOf(newConv) + _conversations.value
@@ -1031,6 +1088,21 @@ class BestGroupRepository(
             if (conv.id == conversationId) {
                 conv.copy(lastMessage = trimmed, lastMessageAt = sentMessage.timestamp)
             } else conv
+        }
+
+        if (!isStaff) {
+            val convTitle = _conversations.value.find { it.id == conversationId }?.title ?: "Müştəri Xidmətləri"
+            addNotification(
+                NotificationItem(
+                    id = "notif_msg_${UUID.randomUUID()}",
+                    title = "Yeni müştəri mesajı: $sender",
+                    body = "$convTitle: $trimmed",
+                    category = NotificationCategory.MESSAGES,
+                    timestamp = "İndicə",
+                    targetChatId = conversationId,
+                    forAdmin = true
+                )
+            )
         }
 
         return sentMessage

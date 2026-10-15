@@ -1,6 +1,6 @@
 {
-  "summary": "Admin paneldə müştəri sifarişlərinin real vaxt rejimində görünməsi, admin səlahiyyətlərinin (elmarmmdov1@gmail.com və təyin olunan adminlər) təmin edilməsi və sifarişçi müştərilərə SMS / WhatsApp ilə mesaj göndərmə funksiyasının tətbiqi planı.",
-  "updatedAt": "2026-10-14T15:12:27.465204683Z",
+  "summary": "Admin paneldə sifarişlərin və bildirişlərin ayrılması, müştəriyə SMS/WhatsApp göndərişi, bildirişlərin yalnız adminə aid hadisələri göstərməsi və Çat bölməsində \"BestGroup.az Müştəri Xidmətləri\" ilə birbaşa əlaqə sisteminin tətbiq planı.",
+  "updatedAt": "2026-10-15T07:59:27.763790609Z",
   "requestFeedback": true,
   "userFacing": true
 }

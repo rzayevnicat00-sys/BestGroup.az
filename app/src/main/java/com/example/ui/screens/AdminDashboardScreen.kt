@@ -17,10 +17,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import java.net.URLEncoder
 import com.example.localization.StringKey
 import com.example.localization.localizedString
 import com.example.model.*
@@ -54,10 +59,11 @@ fun AdminDashboardScreen(
     val orders by viewModel.orders.collectAsState()
     val conversations by viewModel.conversations.collectAsState()
     val customers by viewModel.adminCustomers.collectAsState()
-    val notifications by viewModel.notifications.collectAsState()
+    val notifications by viewModel.adminNotifications.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
 
     var currentTab by remember { mutableStateOf(AdminTab.DASHBOARD) }
+    var contactTargetCustomer by remember { mutableStateOf<Triple<String, String, String?>?>(null) }
 
     var showBroadcastDialog by remember { mutableStateOf(false) }
     var broadcastTitle by remember { mutableStateOf("") }
@@ -133,10 +139,17 @@ fun AdminDashboardScreen(
                 AdminDashboardContent(
                     stats = stats,
                     orders = orders,
+                    customers = customers,
                     modifier = modifier.padding(innerPadding),
                     onBroadcastClick = { showBroadcastDialog = true },
                     onManageOrder = { selectedOrderForAdminAction = it },
                     onViewOrder = { viewModel.viewOrderDetail(it) },
+                    onContactOrder = { ord ->
+                        val matchingCust = customers.find { it.id == ord.userId }
+                        val cPhone = ord.customerPhone.ifBlank { matchingCust?.phone ?: "" }
+                        val cName = ord.customerName.ifBlank { matchingCust?.fullName ?: "Müştəri" }
+                        contactTargetCustomer = Triple(cName, cPhone, ord.orderNumber)
+                    },
                     onNavigateToTab = { currentTab = it }
                 )
             }
@@ -154,12 +167,19 @@ fun AdminDashboardScreen(
             AdminTab.ORDERS -> {
                 AdminOrdersContent(
                     orders = if (orderFilterStatus != null) orders.filter { it.status == orderFilterStatus } else orders,
+                    customers = customers,
                     currentFilter = orderFilterStatus,
                     onFilterChange = { orderFilterStatus = it },
                     modifier = modifier.padding(innerPadding),
                     onManageOrder = { selectedOrderForAdminAction = it },
                     onViewOrder = { viewModel.viewOrderDetail(it) },
-                    onOpenOrderChat = { viewModel.openOrderChat(it.id) }
+                    onOpenOrderChat = { viewModel.openOrderChat(it.id) },
+                    onContactOrder = { ord ->
+                        val matchingCust = customers.find { it.id == ord.userId }
+                        val cPhone = ord.customerPhone.ifBlank { matchingCust?.phone ?: "" }
+                        val cName = ord.customerName.ifBlank { matchingCust?.fullName ?: "Müştəri" }
+                        contactTargetCustomer = Triple(cName, cPhone, ord.orderNumber)
+                    }
                 )
             }
             AdminTab.CUSTOMERS -> {
@@ -169,6 +189,9 @@ fun AdminDashboardScreen(
                     onCustomerClick = { selectedCustomerForDetail = it },
                     onOpenSupportChat = { customer ->
                         viewModel.openSupportChatForCustomer(customer)
+                    },
+                    onContactCustomer = { customer ->
+                        contactTargetCustomer = Triple(customer.fullName, customer.phone, null)
                     }
                 )
             }
@@ -296,15 +319,28 @@ fun AdminDashboardScreen(
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        val c = cust
-                        selectedCustomerForDetail = null
-                        viewModel.openSupportChatForCustomer(c)
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500)
-                ) {
-                    Text("Çat aç")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            val c = cust
+                            selectedCustomerForDetail = null
+                            contactTargetCustomer = Triple(c.fullName, c.phone, null)
+                        }
+                    ) {
+                        Icon(Icons.Default.SendToMobile, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("SMS / WA")
+                    }
+                    Button(
+                        onClick = {
+                            val c = cust
+                            selectedCustomerForDetail = null
+                            viewModel.openSupportChatForCustomer(c)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500)
+                    ) {
+                        Text("Çat aç")
+                    }
                 }
             },
             dismissButton = {
@@ -339,6 +375,26 @@ fun AdminDashboardScreen(
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = {
+                        val matchingCustomer = customers.find { it.id == o.userId }
+                        val custPhone = o.customerPhone.ifBlank { matchingCustomer?.phone ?: "" }
+                        val custName = o.customerName.ifBlank { matchingCustomer?.fullName ?: "Müştəri" }
+                        val ordNum = o.orderNumber
+                        selectedOrderForAdminAction = null
+                        contactTargetCustomer = Triple(custName, custPhone, ordNum)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(Icons.Default.SendToMobile, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Müştəriyə SMS / WhatsApp ilə Mesaj Yaz", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 Text("Statusu dəyiş (Real Firestore):", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -392,6 +448,16 @@ fun AdminDashboardScreen(
             }
         }
     }
+
+    if (contactTargetCustomer != null) {
+        val (cName, cPhone, cOrderNum) = contactTargetCustomer!!
+        ContactCustomerBottomSheet(
+            customerName = cName,
+            initialPhone = cPhone,
+            orderNumber = cOrderNum,
+            onDismiss = { contactTargetCustomer = null }
+        )
+    }
 }
 
 // ----------------------------------------------------
@@ -401,10 +467,12 @@ fun AdminDashboardScreen(
 private fun AdminDashboardContent(
     stats: AdminDashboardStats,
     orders: List<Order>,
+    customers: List<User> = emptyList(),
     modifier: Modifier = Modifier,
     onBroadcastClick: () -> Unit,
     onManageOrder: (Order) -> Unit,
     onViewOrder: (Order) -> Unit,
+    onContactOrder: (Order) -> Unit,
     onNavigateToTab: (AdminTab) -> Unit
 ) {
     LazyColumn(
@@ -572,10 +640,16 @@ private fun AdminDashboardContent(
         }
 
         items(orders.take(5), key = { it.id }) { order ->
+            val matchingCust = customers.find { it.id == order.userId }
+            val cName = order.customerName.ifBlank { matchingCust?.fullName ?: "Müştəri" }
+            val cPhone = order.customerPhone.ifBlank { matchingCust?.phone ?: "" }
             AdminOrderManageCard(
                 order = order,
+                customerName = cName,
+                customerPhone = cPhone,
                 onManageClick = { onManageOrder(order) },
-                onViewClick = { onViewOrder(order) }
+                onViewClick = { onViewOrder(order) },
+                onContactClick = { onContactOrder(order) }
             )
         }
     }
@@ -670,12 +744,14 @@ private fun AdminSupportContent(
 @Composable
 private fun AdminOrdersContent(
     orders: List<Order>,
+    customers: List<User> = emptyList(),
     currentFilter: OrderStatus?,
     onFilterChange: (OrderStatus?) -> Unit,
     modifier: Modifier = Modifier,
     onManageOrder: (Order) -> Unit,
     onViewOrder: (Order) -> Unit,
-    onOpenOrderChat: (Order) -> Unit
+    onOpenOrderChat: (Order) -> Unit,
+    onContactOrder: (Order) -> Unit
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         // Filters Row
@@ -714,11 +790,17 @@ private fun AdminOrdersContent(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(orders, key = { it.id }) { order ->
+                    val matchingCust = customers.find { it.id == order.userId }
+                    val cName = order.customerName.ifBlank { matchingCust?.fullName ?: "Müştəri" }
+                    val cPhone = order.customerPhone.ifBlank { matchingCust?.phone ?: "" }
                     AdminOrderManageCard(
                         order = order,
+                        customerName = cName,
+                        customerPhone = cPhone,
                         onManageClick = { onManageOrder(order) },
                         onViewClick = { onViewOrder(order) },
-                        onChatClick = { onOpenOrderChat(order) }
+                        onChatClick = { onOpenOrderChat(order) },
+                        onContactClick = { onContactOrder(order) }
                     )
                 }
             }
@@ -734,7 +816,8 @@ private fun AdminCustomersContent(
     customers: List<User>,
     modifier: Modifier = Modifier,
     onCustomerClick: (User) -> Unit,
-    onOpenSupportChat: (User) -> Unit
+    onOpenSupportChat: (User) -> Unit,
+    onContactCustomer: (User) -> Unit
 ) {
     if (customers.isEmpty()) {
         EmptyStateView(
@@ -810,7 +893,7 @@ private fun AdminCustomersContent(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             OutlinedButton(
                                 onClick = { onCustomerClick(cust) },
@@ -819,15 +902,25 @@ private fun AdminCustomersContent(
                             ) {
                                 Text("Profil", fontSize = 11.sp)
                             }
+                            OutlinedButton(
+                                onClick = { onContactCustomer(cust) },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Gold500),
+                                modifier = Modifier.weight(1.2f)
+                            ) {
+                                Icon(Icons.Default.SendToMobile, contentDescription = null, modifier = Modifier.size(13.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text("SMS / WA", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
                             Button(
                                 onClick = { onOpenSupportChat(cust) },
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Çat aç", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(13.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text("Çat", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -1085,9 +1178,12 @@ private fun AdminProfileContent(
 @Composable
 private fun AdminOrderManageCard(
     order: Order,
+    customerName: String = "",
+    customerPhone: String = "",
     onManageClick: () -> Unit,
     onViewClick: () -> Unit,
-    onChatClick: (() -> Unit)? = null
+    onChatClick: (() -> Unit)? = null,
+    onContactClick: (() -> Unit)? = null
 ) {
     Card(
         modifier = Modifier
@@ -1122,7 +1218,23 @@ private fun AdminOrderManageCard(
                 maxLines = 2
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            if (customerName.isNotBlank() || customerPhone.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(Icons.Default.Person, contentDescription = null, tint = Gold500, modifier = Modifier.size(13.dp))
+                    Text(
+                        text = "$customerName ${if (customerPhone.isNotBlank()) "• $customerPhone" else ""}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 text = "${order.university} • ${order.deadline}",
@@ -1134,21 +1246,34 @@ private fun AdminOrderManageCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 OutlinedButton(
                     onClick = onViewClick,
                     shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(0.9f)
                 ) {
                     Text("Bax", style = MaterialTheme.typography.labelSmall)
+                }
+
+                if (onContactClick != null) {
+                    OutlinedButton(
+                        onClick = onContactClick,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Gold500),
+                        modifier = Modifier.weight(1.2f)
+                    ) {
+                        Icon(Icons.Default.SendToMobile, contentDescription = null, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("SMS / WA", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
                 }
 
                 if (onChatClick != null) {
                     OutlinedButton(
                         onClick = onChatClick,
                         shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(0.9f)
                     ) {
                         Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(12.dp))
                         Spacer(modifier = Modifier.width(3.dp))
@@ -1160,13 +1285,185 @@ private fun AdminOrderManageCard(
                     onClick = onManageClick,
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
-                    modifier = Modifier.weight(1.3f)
+                    modifier = Modifier.weight(1.1f)
                 ) {
-                    Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("İdarə et", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text("İdarə", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ContactCustomerBottomSheet(
+    customerName: String,
+    initialPhone: String,
+    orderNumber: String?,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var phoneNumber by remember { mutableStateOf(initialPhone) }
+    
+    val defaultText = if (orderNumber != null) {
+        "Hörmətli $customerName, #$orderNumber nömrəli sifarişinizlə bağlı BestGroup.az komandasından yazırıq."
+    } else {
+        "Hörmətli $customerName, BestGroup.az müştəri xidmətlərindən müraciətinizlə bağlı yazırıq."
+    }
+    var messageText by remember { mutableStateOf(defaultText) }
+
+    val templates = listOf(
+        "Təsdiq" to if (orderNumber != null) "Hörmətli $customerName, #$orderNumber nömrəli sifarişiniz qeydə alındı və icraya başlanıldı." else "Hörmətli $customerName, müraciətiniz qeydə alındı.",
+        "Məlumat" to if (orderNumber != null) "Hörmətli $customerName, #$orderNumber nömrəli sifarişinizlə bağlı əlavə məlumata ehtiyac var. Zəhmət olmasa bizimlə əlaqə saxlayın." else "Hörmətli $customerName, əlavə məlumata ehtiyac var.",
+        "Hazırdır" to if (orderNumber != null) "Hörmətli $customerName, şad xəbər! #$orderNumber nömrəli sifarişiniz tam hazırdır. Tətbiqdən təhvil ala bilərsiniz." else "Hörmətli $customerName, işiniz hazırdır."
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Müştəri ilə Əlaqə",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "$customerName ${if (orderNumber != null) "(#$orderNumber)" else ""}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Gold500
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Bağla")
+                }
+            }
+
+            OutlinedTextField(
+                value = phoneNumber,
+                onValueChange = { phoneNumber = it },
+                label = { Text("Telefon nömrəsi") },
+                placeholder = { Text("+994 50 123 45 67") },
+                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = Gold500) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Text(
+                text = "Sürətli Şablonlar:",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                templates.forEach { (label, text) ->
+                    SuggestionChip(
+                        onClick = { messageText = text },
+                        label = { Text(label, fontSize = 11.sp) },
+                        colors = SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = messageText,
+                onValueChange = { messageText = it },
+                label = { Text("Mesaj mətni") },
+                minLines = 3,
+                maxLines = 6,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // SMS Button
+                Button(
+                    onClick = {
+                        val cleanPhone = phoneNumber.filter { it.isDigit() || it == '+' }
+                        if (cleanPhone.isBlank()) {
+                            Toast.makeText(context, "Telefon nömrəsi daxil edilməyib", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        try {
+                            val smsUri = Uri.parse("smsto:$cleanPhone")
+                            val intent = Intent(Intent.ACTION_SENDTO, smsUri).apply {
+                                putExtra("sms_body", messageText)
+                            }
+                            context.startActivity(intent)
+                            onDismiss()
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "SMS tətbiqi açıla bilmədi: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500)
+                ) {
+                    Icon(Icons.Default.Sms, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("SMS ilə aç", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                // WhatsApp Button
+                Button(
+                    onClick = {
+                        val rawPhone = phoneNumber.filter { it.isDigit() }
+                        if (rawPhone.isBlank()) {
+                            Toast.makeText(context, "Telefon nömrəsi daxil edilməyib", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        val formattedPhone = when {
+                            rawPhone.startsWith("994") -> rawPhone
+                            rawPhone.startsWith("0") -> "994" + rawPhone.substring(1)
+                            else -> rawPhone
+                        }
+                        try {
+                            val encodedText = URLEncoder.encode(messageText, "UTF-8")
+                            val waUri = Uri.parse("https://api.whatsapp.com/send?phone=$formattedPhone&text=$encodedText")
+                            val intent = Intent(Intent.ACTION_VIEW, waUri)
+                            context.startActivity(intent)
+                            onDismiss()
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "WhatsApp açıla bilmədi: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366), contentColor = Color.White)
+                ) {
+                    Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("WhatsApp", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
         }
     }
 }

@@ -65,7 +65,10 @@ class FirestoreOrderService(
         formattingStandard: String,
         specialNotes: String,
         files: List<OrderAttachedFile>,
-        serviceCatalogItem: ServiceCatalogItem? = null
+        serviceCatalogItem: ServiceCatalogItem? = null,
+        customerName: String = "",
+        customerPhone: String = "",
+        customerEmail: String = ""
     ): Order {
         if (userId.isBlank()) {
             throw IllegalStateException("İstifadəçi daxil olmayıb. Sifariş yaratmaq üçün giriş edin.")
@@ -168,6 +171,9 @@ class FirestoreOrderService(
             "status" to "waiting",
             "progressPercent" to 15,
             "estimatedPriceAzn" to calculatedEstimatedPrice,
+            "customerName" to customerName,
+            "customerPhone" to customerPhone,
+            "customerEmail" to customerEmail,
             "files" to filesData,
             "statusHistory" to initialHistory,
             "createdAt" to isoNow,
@@ -208,7 +214,10 @@ class FirestoreOrderService(
                     actor = "Sistem"
                 )
             ),
-            estimatedPriceAzn = calculatedEstimatedPrice
+            estimatedPriceAzn = calculatedEstimatedPrice,
+            customerName = customerName,
+            customerPhone = customerPhone,
+            customerEmail = customerEmail
         )
     }
 
@@ -442,7 +451,10 @@ class FirestoreOrderService(
                 files = files,
                 statusHistory = history,
                 review = review,
-                estimatedPriceAzn = (data["estimatedPriceAzn"] as? Number)?.toInt() ?: 0
+                estimatedPriceAzn = (data["estimatedPriceAzn"] as? Number)?.toInt() ?: 0,
+                customerName = data["customerName"] as? String ?: "",
+                customerPhone = data["customerPhone"] as? String ?: "",
+                customerEmail = data["customerEmail"] as? String ?: ""
             )
         } catch (e: Exception) {
             null
