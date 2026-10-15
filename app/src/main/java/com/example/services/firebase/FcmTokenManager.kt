@@ -42,11 +42,23 @@ class FcmTokenManager(
         val auth = authProvider() ?: return
         val uid = userId ?: auth.currentUser?.uid ?: return
         try {
-            val token = FirebaseMessaging.getInstance().token.await()
-            if (token.isNullOrBlank()) return
-            saveToken(uid, token)
-        } catch (e: Exception) {
-            // Non-blocking error handling
+            val messaging = try {
+                FirebaseMessaging.getInstance()
+            } catch (_: Throwable) {
+                null
+            } ?: return
+
+            val token = try {
+                messaging.token.await()
+            } catch (_: Throwable) {
+                null
+            }
+
+            if (!token.isNullOrBlank()) {
+                saveToken(uid, token)
+            }
+        } catch (_: Throwable) {
+            // Non-blocking fail-safe error handling
         }
     }
 

@@ -62,9 +62,11 @@ fun ChatScreen(
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(activeConversation?.id) {
+    LaunchedEffect(activeConversation?.id, conversations.size) {
         if (activeConversation != null && activeConvId != activeConversation.id) {
             viewModel.setActiveConversation(activeConversation.id)
+        } else if (conversations.isEmpty() && activeConvId == null) {
+            viewModel.openSupportInquiryChat()
         }
     }
 
@@ -87,7 +89,7 @@ fun ChatScreen(
                         com.example.ui.components.BestGroupLogoBadge(size = 36)
                         Column {
                             Text(
-                                text = activeConversation?.title ?: localizedString(StringKey.CHAT_TITLE),
+                                text = activeConversation?.title ?: "Canlı Dəstək və Sorğu",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1
@@ -100,10 +102,10 @@ fun ChatScreen(
                                     modifier = Modifier
                                         .size(7.dp)
                                         .clip(CircleShape)
-                                        .background(if (activeConversation != null) Color(0xFF10B981) else Color.Gray)
+                                        .background(Color(0xFF10B981))
                                 )
                                 Text(
-                                    text = activeConversation?.curatorName ?: if (isChatLoading) localizedString(StringKey.CHAT_LOADING) else "Fəal söhbət yoxdur",
+                                    text = activeConversation?.curatorName ?: "Müştəri Xidmətləri & Operator",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -186,28 +188,27 @@ fun ChatScreen(
                                     snackbarHostState.showSnackbar("Fayl əlavəsi üçün Sifariş Detalları bölməsindən istifadə edə bilərsiniz.")
                                 }
                             },
-                            enabled = activeConversation != null,
+                            enabled = !isChatLoading,
                             modifier = Modifier.testTag("chat_attachment_btn")
                         ) {
                             Icon(
                                 Icons.Default.AttachFile,
                                 contentDescription = "Fayl qoş",
-                                tint = if (activeConversation != null) Gold500 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                tint = Gold500
                             )
                         }
 
-                        // Message input field
-                        val hasActiveConv = activeConversation != null
+                        // Message input field (no character limit)
                         OutlinedTextField(
                             value = inputMessageText,
                             onValueChange = {
-                                if (it.length <= 4000) inputMessageText = it
+                                inputMessageText = it
                             },
-                            enabled = hasActiveConv && !isChatLoading,
+                            enabled = !isChatLoading,
                             placeholder = {
                                 Text(
-                                    if (hasActiveConv) localizedString(StringKey.CHAT_INPUT_HINT)
-                                    else "Fəal söhbət yoxdur"
+                                    if (activeConversation != null) localizedString(StringKey.CHAT_INPUT_HINT)
+                                    else "Sualınızı və ya sorğunuzu bura yazın..."
                                 )
                             },
                             singleLine = false,
@@ -219,7 +220,7 @@ fun ChatScreen(
                         )
 
                         // Send Button
-                        val canSend = hasActiveConv && inputMessageText.isNotBlank() && !isSending && !isChatLoading
+                        val canSend = inputMessageText.isNotBlank() && !isSending && !isChatLoading
                         IconButton(
                             onClick = {
                                 if (canSend) {
@@ -281,92 +282,106 @@ fun ChatScreen(
                         )
                     }
                 }
-            } else if (activeConversation == null) {
-                // Clear empty state when accessed directly without an active conversation
-                Box(
+            } else if (activeConversation == null || currentMessages.isEmpty()) {
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
+                        .padding(horizontal = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(vertical = 20.dp)
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
-                        modifier = Modifier.padding(horizontal = 24.dp)
-                    ) {
+                    item {
                         Box(
                             modifier = Modifier
-                                .size(72.dp)
+                                .size(68.dp)
                                 .clip(CircleShape)
                                 .background(Gold500.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.ChatBubbleOutline,
+                                imageVector = Icons.Default.SupportAgent,
                                 contentDescription = null,
                                 tint = Gold500,
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(38.dp)
                             )
-                        }
-                        Text(
-                            text = "Fəal söhbət yoxdur",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            textAlign = TextAlign.Center
-                        )
-                        Text(
-                            text = "Sifarişləriniz bölməsindən kuratorla əlaqəli söhbəti aça bilərsiniz.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Button(
-                            onClick = { viewModel.selectBottomTab(BottomTab.ORDERS) },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Navy800,
-                                contentColor = Gold500
-                            )
-                        ) {
-                            Icon(Icons.Default.Assignment, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(localizedString(StringKey.NAV_ORDERS), fontWeight = FontWeight.Bold)
                         }
                     }
-                }
-            } else if (currentMessages.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(Gold500.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
+
+                    item {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.ChatBubbleOutline,
-                                contentDescription = null,
-                                tint = Gold500,
-                                modifier = Modifier.size(32.dp)
+                            Text(
+                                text = "Canlı Məlumat və Konsultasiya",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Sifariş verməzdən öncə qiymətlər, müddətlər, mövzunun seçimi və qaydalar haqqında istənilən sualınızı verə bilərsiniz. Mesaj üçün heç bir simvol limiti yoxdur.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
                             )
                         }
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = localizedString(StringKey.CHAT_EMPTY_MESSAGES),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
+                            text = "Tez-tez verilən suallar:",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Gold500,
+                            modifier = Modifier.fillMaxWidth()
                         )
+                    }
+
+                    val sampleQuestions = listOf(
+                        "Qiymətlər və ödəniş şərtləri necə hesablanır?",
+                        "Sifariş neçə günə hazırlanır və təhvil verilir?",
+                        "Anti-plagiat zəmanəti və yoxlanışı necə təmin edilir?",
+                        "Mövzu seçimi və plan hazırlanmasında köməklik göstərilirmi?",
+                        "Magistr və ya dissertasiya işi üçün akademik kurator təyin edilirmi?"
+                    )
+
+                    items(sampleQuestions) { question ->
+                        Card(
+                            onClick = {
+                                inputMessageText = question
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = question,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    tint = Gold500,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
                     }
                 }
             } else {

@@ -106,7 +106,10 @@ data class Order(
     val files: List<OrderAttachedFile> = emptyList(),
     val statusHistory: List<OrderStatusHistoryItem> = emptyList(),
     val review: OrderReview? = null,
-    val estimatedPriceAzn: Int = 0
+    val estimatedPriceAzn: Int = 0,
+    val customerName: String = "",
+    val customerPhone: String = "",
+    val customerEmail: String = ""
 ) {
     val orderId: String get() = id
     val subject: String get() = topic

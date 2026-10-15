@@ -274,13 +274,6 @@ class MainViewModel @JvmOverloads constructor(
     }
 
     fun sendChatMessage(text: String, file: String? = null, onComplete: ((Boolean, String?) -> Unit)? = null) {
-        val convId = _activeConversationId.value
-            ?: run {
-                val err = "Fəal söhbət yoxdur. Sifarişləriniz bölməsindən kuratorla əlaqəli söhbəti aça bilərsiniz."
-                chatErrorMessage.value = err
-                onComplete?.invoke(false, err)
-                return
-            }
         if (isSendingChatMessage.value) return // Duplicate submission protection
 
         val trimmed = text.trim()
@@ -289,18 +282,19 @@ class MainViewModel @JvmOverloads constructor(
             onComplete?.invoke(false, "Boş mesaj göndərilə bilməz.")
             return
         }
-        if (trimmed.length > 4000) {
-            chatErrorMessage.value = "Mesaj mətni 4000 simvoldan çox ola bilməz."
-            onComplete?.invoke(false, "Mesaj mətni 4000 simvoldan çox ola bilməz.")
-            return
-        }
 
         isSendingChatMessage.value = true
         chatErrorMessage.value = null
 
         viewModelScope.launch {
             try {
-                repository.sendMessage(convId, trimmed, file)
+                val targetConvId = _activeConversationId.value ?: run {
+                    val supportConv = repository.getOrCreateGeneralSupportConversation()
+                    _activeConversationId.value = supportConv.id
+                    repository.listenToConversationMessages(supportConv.id, viewModelScope)
+                    supportConv.id
+                }
+                repository.sendMessage(targetConvId, trimmed, file)
                 onComplete?.invoke(true, null)
             } catch (e: Exception) {
                 val err = e.localizedMessage ?: "Mesaj göndərilmədi. İnternet bağlantısını yoxlayın."
@@ -308,6 +302,22 @@ class MainViewModel @JvmOverloads constructor(
                 onComplete?.invoke(false, err)
             } finally {
                 isSendingChatMessage.value = false
+            }
+        }
+    }
+
+    fun openSupportInquiryChat() {
+        viewModelScope.launch {
+            isChatLoading.value = true
+            try {
+                val supportConv = repository.getOrCreateGeneralSupportConversation()
+                _activeConversationId.value = supportConv.id
+                repository.listenToConversationMessages(supportConv.id, viewModelScope)
+                selectBottomTab(BottomTab.CHAT)
+            } catch (e: Exception) {
+                selectBottomTab(BottomTab.CHAT)
+            } finally {
+                isChatLoading.value = false
             }
         }
     }

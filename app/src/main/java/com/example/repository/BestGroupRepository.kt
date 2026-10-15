@@ -236,8 +236,12 @@ class BestGroupRepository(
                             role = UserRole.CUSTOMER
                         )
                     }
-                    // Register FCM push token for this user
-                    fcmTokenManager?.registerCurrentToken(fbUser.uid)
+                    // Register FCM push token for this user safely
+                    try {
+                        fcmTokenManager?.registerCurrentToken(fbUser.uid)
+                    } catch (_: Throwable) {
+                        // Safe non-blocking fallback
+                    }
                     observeFirestoreData(scope, fbUser.uid)
                 } else {
                     _currentUser.value = null
@@ -984,9 +988,6 @@ class BestGroupRepository(
         val trimmed = text.trim()
         if (trimmed.isEmpty()) {
             throw IllegalArgumentException("Boş mesaj göndərilə bilməz.")
-        }
-        if (trimmed.length > FirestoreChatService.MAX_MESSAGE_LENGTH) {
-            throw IllegalArgumentException("Mesaj mətni 4000 simvoldan çox ola bilməz.")
         }
 
         val sender = _currentUser.value?.fullName ?: "İstifadəçi"

@@ -29,6 +29,11 @@
             </intent-filter>
         </activity>
 
+        <!-- Disable automatic Firebase Cloud Messaging registration on boot to avoid hard failure exceptions in emulators/containers -->
+        <meta-data
+            android:name="firebase_messaging_auto_init_enabled"
+            android:value="false" />
+
         <service
             android:name=".services.firebase.BestGroupFirebaseMessagingService"
             android:exported="false">

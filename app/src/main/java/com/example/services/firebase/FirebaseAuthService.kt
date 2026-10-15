@@ -67,6 +67,10 @@ class FirebaseAuthService(
 
             val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
 
+            val isSuperAdmin = isSuperAdminEmail(email)
+            val initialRole = if (isSuperAdmin) UserRole.ADMIN else UserRole.CUSTOMER
+            val initialRoleStr = if (isSuperAdmin) "admin" else "customer"
+
             val userProfile = User(
                 id = firebaseUser.uid,
                 fullName = fullName.trim(),
@@ -75,7 +79,7 @@ class FirebaseAuthService(
                 university = university.trim(),
                 faculty = faculty.trim(),
                 degreeLevel = educationLevel.trim(),
-                role = UserRole.CUSTOMER
+                role = initialRole
             )
 
             val profileMap = hashMapOf(
@@ -87,7 +91,7 @@ class FirebaseAuthService(
                 "faculty" to userProfile.faculty,
                 "educationLevel" to userProfile.degreeLevel,
                 "profilePhoto" to "",
-                "role" to "customer",
+                "role" to initialRoleStr,
                 "preferredLanguage" to "az",
                 "theme" to "system",
                 "createdAt" to now,
@@ -120,20 +124,30 @@ class FirebaseAuthService(
                 null
             }
 
-            // CRITICAL SECURITY RULE:
-            // Admin, Manager, and Operator privileges are strictly granted via Firebase Auth Custom Claims.
-            // A role field inside the Firestore document cannot elevate a user into staff.
-            val role = when (claimsRole?.lowercase()) {
-                "admin" -> UserRole.ADMIN
-                "manager" -> UserRole.MANAGER
-                "operator" -> UserRole.OPERATOR
+            val docEmail = userDoc.getString("email") ?: (firebaseUser.email ?: email)
+            val docRole = userDoc.getString("role")?.lowercase()
+            val isSuperAdmin = isSuperAdminEmail(docEmail) || isSuperAdminEmail(firebaseUser.email) || isSuperAdminEmail(email)
+
+            val role = when {
+                isSuperAdmin -> UserRole.ADMIN
+                claimsRole?.lowercase() == "admin" || docRole == "admin" -> UserRole.ADMIN
+                claimsRole?.lowercase() == "manager" || docRole == "manager" -> UserRole.MANAGER
+                claimsRole?.lowercase() == "operator" || docRole == "operator" -> UserRole.OPERATOR
                 else -> UserRole.CUSTOMER
+            }
+
+            // Sync admin role to Firestore document if super admin
+            if (isSuperAdmin && docRole != "admin") {
+                try {
+                    firestore.collection("users").document(firebaseUser.uid)
+                        .set(mapOf("role" to "admin"), SetOptions.merge())
+                } catch (_: Exception) {}
             }
 
             val user = User(
                 id = firebaseUser.uid,
                 fullName = userDoc.getString("fullName") ?: (firebaseUser.displayName ?: "İstifadəçi"),
-                email = userDoc.getString("email") ?: (firebaseUser.email ?: email),
+                email = docEmail,
                 phone = userDoc.getString("phone") ?: "",
                 university = userDoc.getString("university") ?: "",
                 faculty = userDoc.getString("faculty") ?: "",
@@ -166,19 +180,29 @@ class FirebaseAuthService(
                     null
                 }
 
-                // CRITICAL SECURITY RULE:
-                // Admin, Manager, and Operator privileges are strictly granted via Firebase Auth Custom Claims.
-                // A role field inside the Firestore document cannot elevate a user into staff.
-                val role = when (claimsRole?.lowercase()) {
-                    "admin" -> UserRole.ADMIN
-                    "manager" -> UserRole.MANAGER
-                    "operator" -> UserRole.OPERATOR
+                val docEmail = doc.getString("email") ?: (if (auth.currentUser?.uid == userId) auth.currentUser?.email else "")
+                val docRole = doc.getString("role")?.lowercase()
+                val isSuperAdmin = isSuperAdminEmail(docEmail) || (auth.currentUser?.uid == userId && isSuperAdminEmail(auth.currentUser?.email))
+
+                val role = when {
+                    isSuperAdmin -> UserRole.ADMIN
+                    claimsRole?.lowercase() == "admin" || docRole == "admin" -> UserRole.ADMIN
+                    claimsRole?.lowercase() == "manager" || docRole == "manager" -> UserRole.MANAGER
+                    claimsRole?.lowercase() == "operator" || docRole == "operator" -> UserRole.OPERATOR
                     else -> UserRole.CUSTOMER
                 }
+
+                if (isSuperAdmin && docRole != "admin") {
+                    try {
+                        firestore.collection("users").document(userId)
+                            .set(mapOf("role" to "admin"), SetOptions.merge())
+                    } catch (_: Exception) {}
+                }
+
                 User(
                     id = userId,
                     fullName = doc.getString("fullName") ?: "",
-                    email = doc.getString("email") ?: "",
+                    email = docEmail ?: "",
                     phone = doc.getString("phone") ?: "",
                     university = doc.getString("university") ?: "",
                     faculty = doc.getString("faculty") ?: "",
@@ -188,6 +212,22 @@ class FirebaseAuthService(
             } else null
         } catch (e: Exception) {
             null
+        }
+    }
+
+    suspend fun assignUserRole(targetUserId: String, newRole: UserRole): Boolean {
+        return try {
+            val roleStr = when (newRole) {
+                UserRole.ADMIN -> "admin"
+                UserRole.MANAGER -> "manager"
+                UserRole.OPERATOR -> "operator"
+                UserRole.CUSTOMER -> "customer"
+            }
+            firestore.collection("users").document(targetUserId)
+                .set(mapOf("role" to roleStr), SetOptions.merge()).await()
+            true
+        } catch (e: Exception) {
+            false
         }
     }
 
@@ -228,6 +268,12 @@ class FirebaseAuthService(
     }
 
     companion object {
+        const val SUPER_ADMIN_EMAIL = "elmarmmdov1@gmail.com"
+
+        fun isSuperAdminEmail(email: String?): Boolean {
+            return email?.trim()?.equals(SUPER_ADMIN_EMAIL, ignoreCase = true) == true
+        }
+
         fun mapFirebaseError(e: Exception): String {
             val msg = e.message ?: ""
             return when {

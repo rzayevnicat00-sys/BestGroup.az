@@ -27,21 +27,38 @@ service cloud.firestore {
       );
     }
 
-    // Role check strictly requires secure Firebase Authentication Custom Claims
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.keys().hasAny(['email']) && request.auth.token.email.lower() == 'elmarmmdov1@gmail.com')
+      );
+    }
+
+    function isDocAdmin() {
+      return isAuthenticated() && (
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager', 'operator']
+      );
+    }
+
+    // Role check: super admin (elmarmmdov1@gmail.com), custom claims, or user document role
     function isAdmin() {
-      return hasAdminClaim();
+      return isSuperAdmin() || hasAdminClaim() || (
+        isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
     }
 
     function isStaff() {
-      return hasStaffClaim();
+      return isSuperAdmin() || hasStaffClaim() || isDocAdmin();
     }
 
     // Users Collection
     match /users/{userId} {
       allow read: if isOwner(userId) || isStaff();
-      // On registration, role must strictly default to customer
-      allow create: if isOwner(userId) && request.resource.data.role == 'customer';
-      // User cannot elevate their own role or tamper with identity
+      // On registration, role must strictly default to customer (or admin if super admin)
+      allow create: if isOwner(userId) && (request.resource.data.role == 'customer' || isSuperAdmin() || isAdmin());
+      // User cannot elevate their own role or tamper with identity, unless updated by admin
       allow update: if (
         isOwner(userId) &&
         request.resource.data.role == resource.data.role &&
@@ -173,8 +190,7 @@ service cloud.firestore {
             request.resource.data.senderRole == 'customer' &&
             request.resource.data.conversationId == conversationId &&
             request.resource.data.text is string &&
-            request.resource.data.text.size() > 0 &&
-            request.resource.data.text.size() <= 4000
+            request.resource.data.text.size() > 0
           )
         );
 

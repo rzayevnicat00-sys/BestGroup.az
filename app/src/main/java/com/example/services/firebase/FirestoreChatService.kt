@@ -24,7 +24,6 @@ class FirestoreChatService(
     private val convCollection = firestore.collection("conversations")
 
     companion object {
-        const val MAX_MESSAGE_LENGTH = 4000
         const val DEFAULT_MESSAGES_LIMIT = 50L
 
         fun deterministicOrderConversationId(orderId: String): String = "order_$orderId"
@@ -193,9 +192,6 @@ class FirestoreChatService(
         }
         if (trimmed.isEmpty()) {
             throw IllegalArgumentException("Boş mesaj göndərilə bilməz.")
-        }
-        if (trimmed.length > MAX_MESSAGE_LENGTH) {
-            throw IllegalArgumentException("Mesaj mətni 4000 simvoldan çox ola bilməz.")
         }
 
         val dateFmt = SimpleDateFormat("HH:mm", Locale.getDefault())

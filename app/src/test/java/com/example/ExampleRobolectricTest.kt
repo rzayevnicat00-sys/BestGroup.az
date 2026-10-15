@@ -1169,18 +1169,15 @@ class ExampleRobolectricTest {
         }
     }
 
-    // 5. 4000+ character message rejected
+    // 5. 4000+ character message is accepted without character limit
     @Test
-    fun `chat scenario 5 - message exceeding 4000 characters is rejected`() = runTest {
+    fun `chat scenario 5 - message exceeding 4000 characters is accepted without character limit`() = runTest {
         val repo = BestGroupRepository()
         repo.signIn("telebe@bestgroup.az", "pass123")
-        val longText = "a".repeat(4001)
-        try {
-            repo.sendMessage("conv_test", longText)
-            fail("4000 simvoldan böyük mesaj rədd edilməlidir")
-        } catch (e: IllegalArgumentException) {
-            assertTrue(e.message?.contains("4000") == true)
-        }
+        val longText = "a".repeat(4500)
+        val msg = repo.sendMessage("conv_test", longText)
+        assertNotNull(msg)
+        assertEquals(4500, msg.text.length)
     }
 
     // 6. SenderId comes from authenticated user
@@ -1605,21 +1602,25 @@ class ExampleRobolectricTest {
         assertEquals("Salam, işə nə vaxt başlanılacaq?", sentMsg.text)
     }
 
-    // 6. ChatScreen without order context does not send
+    // 6. ChatScreen without order context creates and sends to general support chat
     @Test
-    fun `chat bugfix 6 - chat without order context fails gracefully with clear message`() = runTest {
+    fun `chat bugfix 6 - chat without order context creates and sends to general support chat`() = runTest {
         val app = ApplicationProvider.getApplicationContext<android.app.Application>()
         val vm = com.example.viewmodel.MainViewModel(app)
-        // No conversation selected
+        vm.repository.signIn("telebe@bestgroup.az", "pass123")
+        testScheduler.advanceUntilIdle()
+
+        // No conversation selected beforehand, user sends pre-order inquiry
         var completedSuccess = false
         var completedError: String? = null
-        vm.sendChatMessage("Mesaj göndərməyə çalışıram") { success, err ->
+        vm.sendChatMessage("Sifariş verməzdən öncə qiyməti bilmək istəyirəm") { success, err ->
             completedSuccess = success
             completedError = err
         }
-        assertFalse(completedSuccess)
-        assertNotNull(completedError)
-        assertTrue(completedError?.contains("Fəal söhbət yoxdur") == true || completedError?.contains("Aktiv söhbət tapılmadı") == true)
+        testScheduler.advanceUntilIdle()
+        assertTrue(completedSuccess)
+        assertNull(completedError)
+        assertNotNull(vm.activeConversationId.value)
     }
 
     // 7. Another customer's order cannot initialize a conversation

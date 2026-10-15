@@ -253,6 +253,7 @@ exports.onOrderStatusUpdated = onDocumentUpdated("orders/{orderId}", async (even
 
 /**
  * Secure Admin Claims Setting: Callable only by existing Admins
+ * Enforces that the 'admin' role can ONLY ever be assigned to the single authorized master admin: elmarmmdov1@gmail.com
  */
 exports.setUserRole = onCall(async (request) => {
   // Check caller claims
@@ -267,18 +268,32 @@ exports.setUserRole = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "targetUid və role vacibdir.");
   }
 
+  const normalizedRole = role.toLowerCase().trim();
   const validRoles = ["admin", "manager", "operator", "customer"];
-  if (!validRoles.includes(role.toLowerCase())) {
+  if (!validRoles.includes(normalizedRole)) {
     throw new HttpsError("invalid-argument", "Yolverilməz rol.");
   }
 
-  const claims = { role: role.toLowerCase() };
-  if (role === "admin") claims.admin = true;
-  if (role === "manager") claims.manager = true;
-  if (role === "operator") claims.operator = true;
+  // CRITICAL SECURITY ENFORCEMENT:
+  // "elmarmmdov1@gmail.com" is the only authorized Admin.
+  // No other user can ever be granted the 'admin' role.
+  if (normalizedRole === "admin") {
+    const targetUserRecord = await admin.auth().getUser(targetUid);
+    if ((targetUserRecord.email || "").toLowerCase() !== "elmarmmdov1@gmail.com") {
+      throw new HttpsError(
+        "permission-denied",
+        "Bu sistemdə yalnız 'elmarmmdov1@gmail.com' Admin ola bilər."
+      );
+    }
+  }
+
+  const claims = { role: normalizedRole };
+  if (normalizedRole === "admin") claims.admin = true;
+  if (normalizedRole === "manager") claims.manager = true;
+  if (normalizedRole === "operator") claims.operator = true;
 
   await admin.auth().setCustomUserClaims(targetUid, claims);
-  await db.collection("users").doc(targetUid).set({ role: role.toLowerCase() }, { merge: true });
+  await db.collection("users").doc(targetUid).set({ role: normalizedRole }, { merge: true });
 
-  return { success: true, message: `İstifadəçiyə '${role}' rolu təyin edildi.` };
+  return { success: true, message: `İstifadəçiyə '${normalizedRole}' rolu təyin edildi.` };
 });
