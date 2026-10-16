@@ -231,14 +231,36 @@ class MainViewModel @JvmOverloads constructor(
     var chatErrorMessage = mutableStateOf<String?>(null)
         private set
 
-    fun setActiveConversation(convId: String) {
+    fun setActiveConversation(convId: String, navigateToCustomerChat: Boolean = true) {
         _activeConversationId.value = convId
-        _selectedBottomTab.value = BottomTab.CHAT
-        _currentDestination.value = AppDestination.MAIN
+        if (navigateToCustomerChat) {
+            _selectedBottomTab.value = BottomTab.CHAT
+            _currentDestination.value = AppDestination.MAIN
+        }
         chatErrorMessage.value = null
         repository.listenToConversationMessages(convId, viewModelScope)
         viewModelScope.launch {
             repository.markConversationAsRead(convId)
+        }
+    }
+
+    fun ensureAdminDataObserved() {
+        repository.reobserveData(viewModelScope)
+        if (repository.orderService != null) {
+            viewModelScope.launch {
+                val currentUid = repository.currentUser.value?.id ?: ""
+                repository.orderService.getOrdersFlow(currentUid, isStaff = true).collect { remoteOrders ->
+                    repository.setOrdersDirectly(remoteOrders)
+                }
+            }
+        }
+        if (repository.chatService != null) {
+            viewModelScope.launch {
+                val currentUid = repository.currentUser.value?.id ?: ""
+                repository.chatService.getConversationsFlow(currentUid, isStaff = true).collect { remoteConvs ->
+                    repository.setConversationsDirectly(remoteConvs)
+                }
+            }
         }
     }
 

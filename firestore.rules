@@ -29,13 +29,19 @@ service cloud.firestore {
 
     function isSuperAdmin() {
       return isAuthenticated() && (
-        (request.auth.token.keys().hasAny(['email']) && request.auth.token.email.lower() == 'elmarmmdov1@gmail.com')
+        request.auth.token.keys().hasAny(['email']) && (
+          request.auth.token.email == 'elmarmmdov1@gmail.com' ||
+          request.auth.token.email.matches('(?i)^elmarmmdov1@gmail[.]com$') ||
+          request.auth.token.email == 'rzayevnicat00@gmail.com' ||
+          request.auth.token.email.matches('(?i)^rzayevnicat00@gmail[.]com$')
+        )
       );
     }
 
     function isDocAdmin() {
       return isAuthenticated() && (
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.keys().hasAny(['role']) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager', 'operator']
       );
     }
@@ -45,6 +51,7 @@ service cloud.firestore {
       return isSuperAdmin() || hasAdminClaim() || (
         isAuthenticated() &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.keys().hasAny(['role']) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
       );
     }

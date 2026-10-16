@@ -22,6 +22,7 @@ import com.example.localization.StringKey
 import com.example.localization.localizedString
 import com.example.model.Order
 import com.example.model.OrderStatus
+import com.example.model.UserRole
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.PriorityBadge
 import com.example.ui.components.StatusBadge
@@ -72,11 +73,16 @@ fun OrdersScreen(
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = { viewModel.startNewOrder() },
-                        modifier = Modifier.testTag("orders_add_new_order_btn")
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Yeni Sifariş", tint = Gold500)
+                    val currentUser by viewModel.currentUser.collectAsState()
+                    val isStaff = currentUser?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
+                                  com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(currentUser?.email)
+                    if (!isStaff) {
+                        IconButton(
+                            onClick = { viewModel.startNewOrder() },
+                            modifier = Modifier.testTag("orders_add_new_order_btn")
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Yeni Sifariş", tint = Gold500)
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
@@ -142,11 +148,14 @@ fun OrdersScreen(
 
             // Orders List or Empty State
             if (filteredOrders.isEmpty()) {
+                val currentUser by viewModel.currentUser.collectAsState()
+                val isStaff = currentUser?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
+                              com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(currentUser?.email)
                 EmptyStateView(
                     titleKey = StringKey.EMPTY_ORDERS_TITLE,
                     descKey = StringKey.EMPTY_ORDERS_DESC,
-                    actionButtonTextKey = StringKey.BTN_NEW_ORDER,
-                    onActionClick = { viewModel.startNewOrder() },
+                    actionButtonTextKey = if (!isStaff) StringKey.BTN_NEW_ORDER else null,
+                    onActionClick = if (!isStaff) { { viewModel.startNewOrder() } } else null,
                     modifier = Modifier.weight(1f)
                 )
             } else {

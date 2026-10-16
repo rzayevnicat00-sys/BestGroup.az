@@ -32,7 +32,7 @@ class FirestoreChatService(
 
     fun getConversationsFlow(userId: String, isStaff: Boolean): Flow<List<ChatConversation>> = callbackFlow {
         val query = if (isStaff) {
-            convCollection.orderBy("updatedAt", Query.Direction.DESCENDING)
+            convCollection
         } else {
             convCollection.whereEqualTo("customerId", userId)
         }
@@ -45,7 +45,7 @@ class FirestoreChatService(
             if (snapshot != null) {
                 val list = snapshot.documents.mapNotNull { doc ->
                     mapDocumentToConversation(doc.id, doc.data ?: emptyMap())
-                }
+                }.sortedByDescending { it.lastMessageAt }
                 trySend(list)
             }
         }

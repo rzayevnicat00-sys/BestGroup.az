@@ -70,7 +70,7 @@ class BestGroupRepository(
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
     fun setThemeMode(mode: ThemeMode) {
-        sharedPrefs?.edit()?.putString("theme_mode", mode.name)?.apply()
+        sharedPrefs?.edit()?.putString("theme_mode", mode.name)?.commit()
         _themeMode.value = mode
     }
 
@@ -236,11 +236,11 @@ class BestGroupRepository(
         scope.launch {
             authService.authStateFlow().collect { fbUser ->
                 if (fbUser != null) {
+                    val isSuperAdmin = FirebaseAuthService.isSuperAdminEmail(fbUser.email)
                     val profile = authService.fetchUserProfile(fbUser.uid)
                     if (profile != null) {
-                        _currentUser.value = profile
+                        _currentUser.value = if (isSuperAdmin) profile.copy(role = UserRole.ADMIN) else profile
                     } else {
-                        val isSuperAdmin = fbUser.email?.trim()?.equals("elmarmmdov1@gmail.com", ignoreCase = true) == true
                         _currentUser.value = User(
                             id = fbUser.uid,
                             fullName = fbUser.displayName ?: "İstifadəçi",
@@ -260,6 +260,7 @@ class BestGroupRepository(
                     }
                     observeFirestoreData(scope, fbUser.uid)
                 } else {
+                    dataObservationJob?.cancel()
                     _currentUser.value = null
                     _orders.value = emptyList()
                     _conversations.value = emptyList()
@@ -269,76 +270,99 @@ class BestGroupRepository(
         }
     }
 
-    private fun observeFirestoreData(scope: CoroutineScope, userId: String) {
-        val isStaff = _currentUser.value?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
-                      _currentUser.value?.email?.trim()?.equals("elmarmmdov1@gmail.com", ignoreCase = true) == true
+    private var dataObservationJob: kotlinx.coroutines.Job? = null
 
-        if (serviceCatalogService != null) {
-            scope.launch {
-                try {
-                    serviceCatalogService.seedDefaultServicesIfEmpty()
-                } catch (_: Exception) {}
-                serviceCatalogService.getServicesFlow(onlyActive = !isStaff).collect { remoteServices ->
-                    if (remoteServices.isNotEmpty()) {
-                        _catalogServices.value = remoteServices
+    fun reobserveData(scope: CoroutineScope) {
+        val uid = _currentUser.value?.id ?: authService?.currentUserId ?: ""
+        if (uid.isNotBlank()) {
+            observeFirestoreData(scope, uid)
+        }
+    }
+
+    fun setOrdersDirectly(newOrders: List<Order>) {
+        _orders.value = newOrders.sortedByDescending { it.createdAt }
+        recalculateAdminStats()
+    }
+
+    fun setConversationsDirectly(newConvs: List<ChatConversation>) {
+        _conversations.value = newConvs
+        recalculateAdminStats()
+    }
+
+    private fun observeFirestoreData(scope: CoroutineScope, userId: String) {
+        dataObservationJob?.cancel()
+        dataObservationJob = scope.launch {
+            val isStaff = _currentUser.value?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
+                          FirebaseAuthService.isSuperAdminEmail(_currentUser.value?.email) ||
+                          FirebaseAuthService.isSuperAdminEmail(authService?.currentUser?.email)
+
+            if (serviceCatalogService != null) {
+                launch {
+                    try {
+                        serviceCatalogService.seedDefaultServicesIfEmpty()
+                    } catch (_: Exception) {}
+                    serviceCatalogService.getServicesFlow(onlyActive = !isStaff).collect { remoteServices ->
+                        if (remoteServices.isNotEmpty()) {
+                            _catalogServices.value = remoteServices
+                        }
                     }
                 }
             }
-        }
 
-        if (orderService != null) {
-            scope.launch {
-                orderService.getOrdersFlow(userId, isStaff).collect { remoteOrders ->
-                    _orders.value = remoteOrders
-                    recalculateAdminStats()
+            if (orderService != null) {
+                launch {
+                    orderService.getOrdersFlow(userId, isStaff).collect { remoteOrders ->
+                        _orders.value = remoteOrders
+                        recalculateAdminStats()
+                    }
                 }
             }
-        }
 
-        if (chatService != null) {
-            scope.launch {
-                chatService.getConversationsFlow(userId, isStaff).collect { remoteConvs ->
-                    _conversations.value = remoteConvs
-                    recalculateAdminStats()
+            if (chatService != null) {
+                launch {
+                    chatService.getConversationsFlow(userId, isStaff).collect { remoteConvs ->
+                        _conversations.value = remoteConvs
+                        recalculateAdminStats()
+                    }
                 }
             }
-        }
 
-        // If authorized staff, load real customers list from Firestore users collection
-        if (isStaff && authService != null) {
-            scope.launch {
-                try {
-                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                        .collection("users")
-                        .addSnapshotListener { snapshot, error ->
-                            if (error != null || snapshot == null) return@addSnapshotListener
-                            val customerList = snapshot.documents.mapNotNull { doc ->
-                                val data = doc.data ?: return@mapNotNull null
-                                val roleStr = data["role"] as? String ?: "customer"
-                                val cRole = when (roleStr.lowercase()) {
-                                    "admin" -> UserRole.ADMIN
-                                    "manager" -> UserRole.MANAGER
-                                    "operator" -> UserRole.OPERATOR
-                                    else -> UserRole.CUSTOMER
+            // If authorized staff, load real customers list from Firestore users collection
+            if (isStaff && authService != null) {
+                launch {
+                    try {
+                        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                            .collection("users")
+                            .addSnapshotListener { snapshot, error ->
+                                if (error != null || snapshot == null) return@addSnapshotListener
+                                val customerList = snapshot.documents.mapNotNull { doc ->
+                                    val data = doc.data ?: return@mapNotNull null
+                                    val roleStr = data["role"] as? String ?: "customer"
+                                    val cRole = when (roleStr.lowercase()) {
+                                        "admin" -> UserRole.ADMIN
+                                        "manager" -> UserRole.MANAGER
+                                        "operator" -> UserRole.OPERATOR
+                                        else -> UserRole.CUSTOMER
+                                    }
+                                    val cOrdersCount = _orders.value.count { it.userId == doc.id }
+                                    User(
+                                        id = doc.id,
+                                        fullName = data["fullName"] as? String ?: "Müştəri",
+                                        email = data["email"] as? String ?: "",
+                                        phone = data["phone"] as? String ?: "",
+                                        university = data["university"] as? String ?: "",
+                                        faculty = data["faculty"] as? String ?: "",
+                                        degreeLevel = (data["educationLevel"] as? String) ?: (data["degreeLevel"] as? String) ?: "Bakalavriat",
+                                        role = cRole,
+                                        createdAt = data["createdAt"] as? String ?: "",
+                                        orderCount = cOrdersCount
+                                    )
                                 }
-                                val cOrdersCount = _orders.value.count { it.userId == doc.id }
-                                User(
-                                    id = doc.id,
-                                    fullName = data["fullName"] as? String ?: "Müştəri",
-                                    email = data["email"] as? String ?: "",
-                                    phone = data["phone"] as? String ?: "",
-                                    university = data["university"] as? String ?: "",
-                                    faculty = data["faculty"] as? String ?: "",
-                                    degreeLevel = (data["educationLevel"] as? String) ?: (data["degreeLevel"] as? String) ?: "Bakalavriat",
-                                    role = cRole,
-                                    createdAt = data["createdAt"] as? String ?: "",
-                                    orderCount = cOrdersCount
-                                )
+                                _adminCustomers.value = customerList
+                                recalculateAdminStats()
                             }
-                            _adminCustomers.value = customerList
-                            recalculateAdminStats()
-                        }
-                } catch (_: Exception) {}
+                    } catch (_: Exception) {}
+                }
             }
         }
     }
@@ -466,11 +490,14 @@ class BestGroupRepository(
                 val res = authService.signIn(email, pass)
                 if (res is AuthResult.Success) {
                     setRememberMe(rememberMe)
-                    _currentUser.value = res.data
+                    val isSuperAdmin = FirebaseAuthService.isSuperAdminEmail(res.data.email)
+                    val finalUser = if (isSuperAdmin) res.data.copy(role = UserRole.ADMIN) else res.data
+                    _currentUser.value = finalUser
                 }
                 res
             } else {
                 setRememberMe(rememberMe)
+                val isSuperAdmin = FirebaseAuthService.isSuperAdminEmail(email)
                 val fallbackUser = User(
                     id = "usr_${UUID.randomUUID()}",
                     fullName = email.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
@@ -479,7 +506,7 @@ class BestGroupRepository(
                     university = "",
                     faculty = "",
                     degreeLevel = "Bakalavriat",
-                    role = UserRole.CUSTOMER
+                    role = if (isSuperAdmin) UserRole.ADMIN else UserRole.CUSTOMER
                 )
                 _currentUser.value = fallbackUser
                 AuthResult.Success(fallbackUser)

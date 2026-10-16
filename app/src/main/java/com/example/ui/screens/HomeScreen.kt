@@ -233,66 +233,132 @@ fun HomeScreen(
                     }
                 }
 
-                // Big Primary Hero Button: “Yeni sifariş”
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable { viewModel.startNewOrder() }
-                        .border(
-                            1.5.dp,
-                            Brush.horizontalGradient(listOf(Gold500, Color(0xFFF3E5AB), Gold500)),
-                            RoundedCornerShape(16.dp)
-                        )
-                        .testTag("home_hero_new_order_button"),
-                    colors = CardDefaults.cardColors(containerColor = Navy700)
-                ) {
-                    Row(
+                val isStaff = user?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
+                              com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(user?.email)
+                if (isStaff) {
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(18.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD) }
+                            .border(
+                                1.5.dp,
+                                Brush.horizontalGradient(listOf(Gold500, Color(0xFFF3E5AB), Gold500)),
+                                RoundedCornerShape(16.dp)
+                            )
+                            .testTag("home_hero_admin_dashboard_button"),
+                        colors = CardDefaults.cardColors(containerColor = Navy700)
                     ) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(18.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(46.dp)
-                                    .clip(CircleShape)
-                                    .background(Gold500),
-                                contentAlignment = Alignment.Center
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = null,
-                                    tint = Navy900,
-                                    modifier = Modifier.size(28.dp)
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .clip(CircleShape)
+                                        .background(Gold500),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AdminPanelSettings,
+                                        contentDescription = null,
+                                        tint = Navy900,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = "Admin İdarəetmə Paneli",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "Sifarişlər, Müştəri xidmətləri və Statistika",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Gold400
+                                    )
+                                }
                             }
-                            Column {
-                                Text(
-                                    text = localizedString(StringKey.BTN_NEW_ORDER),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = "8 addımlı rahat sifariş sistemi",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Gold400
-                                )
-                            }
-                        }
 
-                        Icon(
-                            imageVector = Icons.Default.ArrowForwardIos,
-                            contentDescription = null,
-                            tint = Gold500,
-                            modifier = Modifier.size(16.dp)
-                        )
+                            Icon(
+                                imageVector = Icons.Default.ArrowForwardIos,
+                                contentDescription = null,
+                                tint = Gold500,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                } else {
+                    // Big Primary Hero Button: “Yeni sifariş”
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { viewModel.startNewOrder() }
+                            .border(
+                                1.5.dp,
+                                Brush.horizontalGradient(listOf(Gold500, Color(0xFFF3E5AB), Gold500)),
+                                RoundedCornerShape(16.dp)
+                            )
+                            .testTag("home_hero_new_order_button"),
+                        colors = CardDefaults.cardColors(containerColor = Navy700)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(18.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .clip(CircleShape)
+                                        .background(Gold500),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = Navy900,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = localizedString(StringKey.BTN_NEW_ORDER),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "8 addımlı rahat sifariş sistemi",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Gold400
+                                    )
+                                }
+                            }
+
+                            Icon(
+                                imageVector = Icons.Default.ArrowForwardIos,
+                                contentDescription = null,
+                                tint = Gold500,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
 

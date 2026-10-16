@@ -1,47 +1,50 @@
-# Sifarişlərin Canlı İzlənməsi, Oxunmuş Bildirişlər və Temanın Qalıcı Saxlanması Planı
+# Admin Çat İdarəsi, Sifariş Sinxronizasiyası və Qalıcı Tema Planı
 
-Bu təkmilləşdirmə müştəri sifarişlərinin admin panelində canlı yenilənən tam siyahı və status süzgəcləri ilə ən son yaradılanlar ən üstdə olmaqla sıralanmasını, bildirişlər bölməsində oxunmuş mesajların oxunmamış kimi qalmasının qarşısının alınaraq solğun/oxunmuş rejimdə saxlanmasını və həm admin, həm də müştəri üçün seçilmiş görünüş temasının (işıqlı / tünd) tətbiqdən çıxıb daxil olduqda sıfırlanmadan qalıcı saxlanmasını təmin edir.
+Bu təkmilləşdirmə admin hesabında (`elmarmmdov1@gmail.com`) müştəri sifarişlərinin dərhal və etibarlı şəkildə görünməsini təmin edir, Firestore təhlükəsizlik qaydalarındakı xətanı aradan qaldırır, admin panelində sifariş vermək və ya yeni çat yaratmaq düymələrini tam ləğv edərək yalnız daxil olan müştəri mesajlarını əks etdirir və adminin həmin dialoq daxilində birbaşa cavab yazmasına şərait yaradır. Həmçinin həm müştəri, həm də admin üçün seçilmiş tünd/işıqlı görünüş temasının daimi saxlanılmasını zəmanətləndirir.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
 > Təsdiqlənmiş qərarlar:
-> - **Sifarişlərin Sıralanması**: Ən son daxil olan və yaradılan sifarişlər ən üstdə (azalan xronoloji ardıcıllıqla) əks olunacaq, status çipləri üfüqi sürüşdürmə və say göstəricisi ilə təqdim ediləcək.
-> - **Oxunmuş Bildirişlərin Vəziyyəti**: Bildirişə toxunduqda və ya "Hamısını oxunmuş et" seçildikdə bildirişin oxunma statusu dərhal yenilənəcək, oxunmuş bildirişlər daha solğun rəngdə və qızılı oxunmamış nöqtəsi olmadan göstəriləcək; oxunmuş bildiriş heç bir halda yenidən oxunmamış kimi təqdim olunmayacaq.
-> - **Görünüş Temasının Qalıcılığı**: Müştəri və ya admin profilindən seçilən tema rejimi (`LIGHT`, `DARK` və ya `SYSTEM`) cihazın `SharedPreferences` yaddaşına yazılacaq və tətbiq yenidən başladıqda avtomatik bərpa ediləcək. Həmçinin admin profilinə də xüsusi tema seçimi bloku əlavə ediləcək.
+> - **Sifariş və Yeni Çat Düymələrinin Ləğvi**: Admin hesabında sifariş yaratmaq və ya yeni çat açmaq funksiyaları tamamilə gizlədilir; sifariş vermək sırf müştərilərə aiddir.
+> - **Müştəri Mesajlarına Birbaşa Cavab**: Admin panelinin "Müştəri xidmətləri" bölməsində yalnız müştərilərin baş adminə/dəstəyə yazdığı söhbətlər göstərilir. Admin hər hansı müştərini seçdikdə admin panelinin daxilində tam çat pəncərəsi açılır və admin birbaşa oradan cavab yazır.
+> - **Sifarişlərin Admin Paneldə Canlı Görünməsi**: Firestore qaydalarındakı `isSuperAdmin()` yoxlaması düzəldilərək `elmarmmdov1@gmail.com` üçün sifariş və çat axınlarına tam oxuma/yazma hüququ təmin edilir.
+> - **Temanın Dəyişməz Qalması**: İstər müştəri, istərsə də admin tünd və ya işıqlı temanı seçdikdə, tətbiqdən çıxıb yenidən daxil olduqda seçilmiş tema sıfırlanmadan qorunur.
 
 ## 1. Overview & Core Concept
 
 - **Nə edir**:
-  - Admin paneldəki "Sifarişlər" bölməsində real vaxt rejimində gələn bütün sifarişlər ən son yaradılma vaxtına görə sıralanır və status süzgəcləri (`Hamısı`, `Gözləmədə`, `İcrada`, `Baxışda`, `Hazırdır`, `Ləğv edildi`) vasitəsilə asanlıqla filtirlənir.
-  - Bildirişlərdə (müştəri və admin) oxunmuş bildirişlərin ID-ləri yadda saxlanılır, fərdi klik və qlobal "Hamısını oxunmuş et" əməliyyatları ilə status dərhal əks etdirilir və oxunmuş elementlər vizual olaraq oxunmamışlardan fərqləndirilir.
-  - Tətbiqin görünüş rejimi (`ThemeMode.LIGHT` və ya `ThemeMode.DARK`) lokal yaddaşda saxlanılır; istifadəçi proqramı bağlayıb açsa belə seçdiyi tünd və ya işıqlı tema dəyişməz qalır.
-- **Hədəf İstifadəçilər**: BestGroup.az müştəriləri və sistem idarəçiləri (`elmarmmdov1@gmail.com` və digər adminlər).
-- **Əsas Dəyər**: Rahat sifariş idarəetməsi, təmiz və dəqiq bildiriş qeydiyyatı, fərdiləşdirilmiş və daimi vizual rahatlıq.
+  - Müştəri sifariş göndərdikdə sifariş dərhal admin panelindəki "Dashboard" və "Sifarişlər" bölmələrində görünür.
+  - Müştəri sifariş verməsə belə, "Çat" bölməsindən "BestGroup.az Müştəri Xidmətləri"nə yazdığı mesajlar dərhal admin panelinin "Müştəri xidmətləri" bölməsinə düşür.
+  - Admin panelində sifariş vermək və ya yeni çat açmaq seçimləri tam yığışdırılır; admin yalnız müştərilərin müraciətlərini qəbul edir və cavablandırır.
+  - Admin panel daxilində inteqrasiya olunmuş `AdminSupportChatDetailView` açılır, admin müştərinin yazdığı sualları oxuyur və birbaşa cavab göndərir.
+  - Həm admin profilində, həm də müştəri profilində seçilən tema `SharedPreferences` vasitəsilə bərpa olunur və sıfırlanmır.
+- **Hədəf İstifadəçilər**: Sistem idarəçisi (`elmarmmdov1@gmail.com`) və sifarişçi tələbələr.
+- **Əsas Dəyər**: İnzibati səlahiyyətlərin dəqiq ayrılması, sifarişlərin fasiləsiz sinxronizasiyası və təmiz müştəri xidməti iş axını.
 
 ## 2. User Experience & Visual Design
 
-- **Admin Sifarişlərin Siyahısı & Süzgəclər (`AdminOrdersContent`)**:
-  - **Sürüşdürülə bilən status süzgəcləri**: `Hamısı (N)`, `Gözləyir (N)`, `İcrada (N)`, `Hazırdır (N)` və s. M3 `FilterChip` dizaynında aktiv/passiv vəziyyətlər.
-  - **Avtomatik Sıralama**: Ən yeni sifarişlər dərhal siyahının başında yerləşir.
-  - **Kart Dizaynı**: Müştərinin adı, telefon nömrəsi, fənn/mövzu, son tarix və dərhal əlaqə ("SMS / WA", "Bax", "İdarə") düymələri.
-- **Bildirişlər Ekranı & Admin Bildiriş Mərkəzi**:
-  - Oxunmamış bildirişlər: Tam parlaq kart, sol zolaqda və ya sağ yuxarı küncdə qızılı indikator nöqtəsi (`Gold500`).
-  - Oxunmuş bildirişlər: Təbii solğunlaşdırma (`alpha = 0.65f`), normal şrift çəkisi, oxunmamış indikatorun gizlədilməsi.
-  - Bildirişə toxunduqda: Sifarişə/çata keçidlə bərabər dərhal həmin bildiriş oxunmuş kimi qeyd edilir və yaddaşda saxlanılır.
-- **Qalıcı Tema Dəstəyi**:
-  - Müştəri üçün: Profil ekranında mövcud olan tema seçimi birbaşa yaddaşa qeyd olunur.
-  - Admin üçün: Admin panelinin "Profil" tabında M3 kart daxilində "Görünüş Teması" seçimi (Açıq / Tünd / Sistem) təqdim olunur.
-  - Tətbiq açılarkən sıfırlanma (flicker) olmadan sonuncu yadda saxlanmış tema aktivləşir.
+- **Admin Müştəri Xidmətləri Çatı (`AdminSupportContent` & `AdminSupportChatDetailView`)**:
+  - **Söhbət Siyahısı**: Yalnız müştərilərin Müştəri Xidmətlərinə yazdığı dialoqlar (`orderId == null`). Müştərinin adı, telefon nömrəsi, son mesajı və oxunmamış mesaj sayı əks olunur.
+  - **Dialoqa Daxil Olma**: Söhbətə toxunduqda admin paneldən çıxmadan daxili çat ekranı açılır:
+    - Yuxarı zolaq: Geri qayıtma oxu, müştərinin adı, universiteti və "Aktiv Müştəri" statusu.
+    - Mesajlar lenti: Müştərinin göndərdiyi mesajlar (sola düzlənmiş) və adminin göndərdiyi cavablar (sağa düzlənmiş, qızılı/tünd göy tonlarda).
+    - Mesaj yazma zolağı: "Müştəriyə cavab yazın..." və Göndər düyməsi.
+  - **Artıq Düymələrin Yığışdırılması**: Heç bir "Yeni çat yarat" və ya "Sifariş ver" düyməsi olmayacaq.
+- **Admin Paneldə Sifarişlər Paneli**:
+  - Ən son sifarişlər ən üstdə olmaqla canlı yenilənən siyahı.
+  - Müştərinin adı, telefonu və sifariş statusları ilə birbaşa əlaqə.
+- **Qalıcı Görünüş Teması**:
+  - Admin panelinin "Profil" tabında və müştərinin Profil ekranında seçilmiş işıqlı və ya tünd tema tətbiq bağlanıb açıldıqda dərhal bərpa olunur.
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Lokal Tema Qalıcılığı (`SharedPreferences` & `StateFlow`)**:
-  - *Seçilmiş Yanaşma*: `AppPreferencesManager` sinfi yaradılır və Android `SharedPreferences` vasitəsilə tema rejimi və oxunmuş bildiriş ID-ləri sinxron saxlanılır.
-  - *Səbəb*: Server sorğusu tələb etmir, cihazda dərhal açılır və internet bağlantısı olmadıqda belə temanı və oxunma statusunu qoruyur.
-- **Oxunmuş Bildirişlərin Birləşdirilməsi**:
-  - *Seçilmiş Yanaşma*: Bildirişlər axını (`notifications`) yadda saxlanılan oxunmuş ID-lər çoxluğu (`readNotificationIds`) ilə birləşdirilir (`isRead = isRead || readIds.contains(id)`).
-  - *Səbəb*: Yeni dinamik bildirişlər (məsələn yeni sifariş və ya status dəyişikliyi) daxil olanda əvvəl oxunmuşlar oxunmamış vəziyyətinə qayıtmır.
+- **Firestore Qaydalarının Təkmilləşdirilməsi (`firestore.rules`)**:
+  - *Seçilmiş Yanaşma*: `isSuperAdmin()` funksiyasında dəstəklənməyən `.lower()` metodunu aradan qaldırmaq, dəqiq və təhlükəsiz regex/bərabərlik (`request.auth.token.email.matches('(?i)^elmarmmdov1@gmail[.]com$')`) tətbiq etmək və qaydaları dərhal Firebase-ə deploy etmək.
+  - *Səbəb*: `.lower()` metodu Firestore qaydalarında sintaksis xətası yaradaraq `PERMISSION_DENIED` verirdi və bu səbəbdən admin sifarişləri görə bilmirdi.
+- **Admin Panel Daxili Çat Dialoqu**:
+  - *Seçilmiş Yanaşma*: Müştəri söhbətini seçdikdə müştəri ekranlarına keçmək əvəzinə, admin panelin öz içərisində `AdminSupportChatDetailView` komponenti ilə dialoqu açmaq.
+  - *Səbəb*: Admin müştəri tətbiqinin navigasiyasına keçmir, sifariş vermək və ya yeni çat açmaq kimi müştəriyə aid düymələri görmür, sırf operator/baş admin rolunda cavab yazır.
 
 ## 4. Technical Architecture & Data Strategy
 
@@ -49,48 +52,49 @@ Bu təkmilləşdirmə müştəri sifarişlərinin admin panelində canlı yenil�
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        AppPreferencesManager                           │
-│  - saveThemeMode(mode: ThemeMode) / getSavedThemeMode(): ThemeMode     │
-│  - markNotificationAsRead(id) / getReadNotificationIds(): Set<String>  │
-│  - markAllNotificationsAsRead(ids: List<String>)                       │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ Persistent read/write
-                                    ▼
+│                        Firestore Cloud Backend                         │
+│  ┌──────────────────────┐  ┌─────────────────────┐  ┌───────────────┐  │
+│  │   /orders/{orderId}  │  │   /conversations/   │  │ /users/{uid}  │  │
+│  │  - userId            │  │  - customerId       │  │ - role: admin │  │
+│  │  - customerName      │  │  - orderId: null    │  └───────────────┘  │
+│  │  - status, createdAt │  │  - /messages/...    │                     │
+│  └──────────┬───────────┘  └──────────┬──────────┘                     │
+└─────────────┼─────────────────────────┼────────────────────────────────┘
+              │ Real-time Stream        │ Real-time Stream
+              ▼                         ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        BestGroupRepository                             │
-│  - _themeMode: MutableStateFlow<ThemeMode> (initial from Preferences)  │
-│  - _readNotificationIds: MutableStateFlow<Set<String>>                 │
-│  - orders: StateFlow<List<Order>> (sortedByDescending { createdAt })   │
-│  - markNotificationAsRead(id: String)                                  │
-│  - markAllNotificationsAsRead()                                        │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ StateFlow Observation
-                    ┌───────────────┴───────────────┐
-                    ▼                               ▼
-┌───────────────────────────────────────┐   ┌────────────────────────────┐
-│          Admin Panel UI               │   │    Müştəri & Bildirişlər   │
-│ - AdminOrdersContent:                 │   │ - NotificationsScreen:     │
-│   * Live descending orders            │   │   * Dimmed read cards      │
-│   * Horizontal scrollable chips       │   │   * Persistent read state  │
-│   * Status filter with order counts   │   │ - ProfileScreen & Theme:   │
-│ - AdminProfileContent:                │   │   * Persistent ThemeMode   │
-│   * Theme switcher (Light/Dark/System)│   │   * Preserved on restart   │
-└───────────────────────────────────────┘   └────────────────────────────┘
+│                  BestGroupRepository & Services                        │
+│  - isStaff check: email == "elmarmmdov1@gmail.com" || role == "admin"  │
+│  - getOrdersFlow(isStaff = true) -> Real-time orders to Admin Panel    │
+│  - getConversationsFlow() -> Support conversations to Admin Panel      │
+│  - sharedPrefs.getString("theme_mode") -> Restores theme on startup    │
+└─────────────────────────────┬──────────────────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+┌───────────────────────────┐   ┌───────────────────────────┐
+│     Admin Panel Flow      │   │    Customer App Flow      │
+│ - Live Orders List        │   │ - "Sifariş ver" aktivdir  │
+│ - NO "Sifariş ver"        │   │ - Sifarişsiz belə Müştəri │
+│ - NO "Yeni çat yarat"     │   │   Xidmətlərinə yaza bilir │
+│ - Customer Support Chats: │   │ - Seçilən tema dəyişməz   │
+│   * AdminSupportChatDetail│   │   qalıcı qalır            │
+│   * Direct reply to user  │   └───────────────────────────┘
+└───────────────────────────┘
 ```
 
 ### Həyata Keçiriləcək Dəqiq Addımlar:
-1. **Davamlı Yaddaş Qatı (`AppPreferencesManager.kt`)**:
-   - `ThemeMode` və oxunmuş bildirişlərin ID siyahısını `SharedPreferences`-də saxlayan köməkçi sinif hazırlamaq.
-2. **Repozitoriya və ViewModel İnteqrasiyası (`BestGroupRepository.kt`, `MainViewModel.kt`)**:
-   - Tətbiq açılarkən yadda saxlanmış temanı və oxunmuş bildirişləri yükləmək.
-   - `markNotificationAsRead(id: String)` funksiyasını əlavə etmək və oxunma vəziyyətini həm yaddaşa, həm də axına tətbiq etmək.
-   - Sifarişlər axınında `sortedByDescending { it.createdAt }` sıralamasını zəmanətləndirmək.
-3. **Admin Sifarişlər Siyahısının Təkmilləşdirilməsi (`AdminDashboardScreen.kt`)**:
-   - Süzgəcləri üfüqi sürüşdürülə bilən (`horizontalScroll`) formaya salmaq və hər statusun qarşısında sifariş sayını göstərmək.
-   - Admin bildiriş siyahısında oxunmuş elementləri daha solğun və oxunmamışları parlaq nöqtə ilə təqdim etmək, toxunulduqda oxunmuş kimi qeyd etmək.
-   - Admin profilinə "Görünüş Teması" seçici blokunu əlavə etmək.
-4. **Müştəri Bildirişlər və Tema Ekranı (`NotificationsScreen.kt`, `ProfileScreen.kt`, `MainActivity.kt`)**:
-   - Bildiriş kliklərində dərhal oxunmuş statusunu tətbiq etmək.
-   - Tətbiq yenidən açıldıqda seçilmiş temanın dəyişməz qalmasını yoxlamaq və təmin etmək.
-5. **Kompilyasiya və Yoxlama**:
-   - `compile_applet` ilə tətbiqin qüsursuz qurulmasını təsdiq etmək.
+1. **Firestore Qaydalarının Düzəldilməsi və Deploy Edilməsi (`firestore.rules`)**:
+   - `isSuperAdmin()` funksiyasında `.lower()` xətasını aradan qaldırmaq və regex bərabərliyi tətbiq etmək.
+   - Qaydaları `deploy_firebase` aləti ilə dərhal canlı bazaya göndərmək.
+2. **Admin Çat İnteqrasiyası (`AdminDashboardScreen.kt`)**:
+   - "Müştəri xidmətləri" bölməsində dialoqa toxunduqda birbaşa admin panel daxilində `AdminSupportChatDetailView` açmaq.
+   - Dialoq daxilində mesaj axını, oxunma və birbaşa cavab göndərmə imkanı təqdim etmək.
+   - Bütün lazımsız düymələri ("Sifariş ver", "Yeni çat yarat") admindən tamamilə təmizləmək.
+3. **Müştəri Tərəfində Sifarişsiz Dəstək və Rol Ayrımı (`HomeScreen.kt`, `OrdersScreen.kt`)**:
+   - Müştərilər sifariş yaratmasalar belə birbaşa baş adminlə əlaqə saxlaya biləcəklər.
+   - Əgər daxil olan istifadəçi admindirsə (`isStaff == true`), müştəri ekranlarındakı "Sifariş ver" FAB düymələri gizlədilir.
+4. **Temanın Qalıcılığının Yoxlanılması**:
+   - `BestGroupRepository` və `MainActivity`-də temanın həm admin, həm də müştəri üçün `SharedPreferences`-dən düzgün oxunub saxlandığını təsdiqləmək.
+5. **Kompilyasiya və Sınaq**:
+   - `compile_applet` ilə tətbiqin qüsursuz işləməsini yoxlamaq.

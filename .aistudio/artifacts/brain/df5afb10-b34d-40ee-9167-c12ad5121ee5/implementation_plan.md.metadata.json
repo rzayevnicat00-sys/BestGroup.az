@@ -1,6 +1,6 @@
 {
-  "summary": "Admin paneldə müştəri sifarişlərinin canlı tam siyahısı və status süzgəcləri ilə sıralanması, bildirişlərdə oxunmuş mesajların vəziyyətinin yadda saxlanaraq solğun göstərilməsi və tətbiqin görünüş temasının (işıqlı / tünd) SharedPreferences vasitəsilə qalıcı saxlanması üçün ətraflı icra planı.",
-  "updatedAt": "2026-10-15T08:29:04.896632221Z",
+  "summary": "Admin paneldə müştəri sifarişlərinin canlı əks olunması (Firestore təhlükəsizlik qaydalarının düzəldilməsi), admində sifariş və yeni çat yaratma düymələrinin tam yığışdırılması, Çat bölməsində yalnız daxil olan müştəri mesajlarının göstərilməsi və dialoq daxilində birbaşa cavab yazılması, həmçinin görünüş temasının qalıcı saxlanması üçün icra planı.",
+  "updatedAt": "2026-10-16T07:48:02.763477257Z",
   "requestFeedback": true,
   "userFacing": true
 }

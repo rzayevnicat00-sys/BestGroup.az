@@ -12,6 +12,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import com.example.ui.theme.ThemeMode
@@ -67,7 +72,12 @@ fun AdminDashboardScreen(
     val themeMode by viewModel.themeMode.collectAsState()
 
     var currentTab by remember { mutableStateOf(AdminTab.DASHBOARD) }
+    var selectedSupportConversation by remember { mutableStateOf<ChatConversation?>(null) }
     var contactTargetCustomer by remember { mutableStateOf<Triple<String, String, String?>?>(null) }
+
+    LaunchedEffect(Unit) {
+        viewModel.ensureAdminDataObserved()
+    }
 
     var showBroadcastDialog by remember { mutableStateOf(false) }
     var broadcastTitle by remember { mutableStateOf("") }
@@ -128,7 +138,10 @@ fun AdminDashboardScreen(
                 AdminTab.values().forEach { tab ->
                     Tab(
                         selected = currentTab == tab,
-                        onClick = { currentTab = tab },
+                        onClick = {
+                            currentTab = tab
+                            selectedSupportConversation = null
+                        },
                         text = { Text(tab.title, fontSize = 12.sp, fontWeight = if (currentTab == tab) FontWeight.Bold else FontWeight.Normal) },
                         icon = { Icon(tab.icon, contentDescription = tab.title, modifier = Modifier.size(18.dp)) },
                         selectedContentColor = Gold500,
@@ -158,15 +171,25 @@ fun AdminDashboardScreen(
                 )
             }
             AdminTab.SUPPORT -> {
-                AdminSupportContent(
-                    conversations = conversations.filter { it.orderId == null },
-                    modifier = modifier.padding(innerPadding),
-                    onOpenChat = { conv ->
-                        viewModel.setActiveConversation(conv.id)
-                        viewModel.navigateTo(AppDestination.MAIN)
-                        viewModel.selectBottomTab(com.example.viewmodel.BottomTab.CHAT)
-                    }
-                )
+                if (selectedSupportConversation != null) {
+                    AdminSupportChatDetailView(
+                        conversation = selectedSupportConversation!!,
+                        viewModel = viewModel,
+                        customers = customers,
+                        modifier = modifier.padding(innerPadding),
+                        onBack = { selectedSupportConversation = null }
+                    )
+                } else {
+                    AdminSupportContent(
+                        conversations = conversations.filter { it.orderId == null },
+                        customers = customers,
+                        modifier = modifier.padding(innerPadding),
+                        onOpenChat = { conv ->
+                            selectedSupportConversation = conv
+                            viewModel.setActiveConversation(conv.id, navigateToCustomerChat = false)
+                        }
+                    )
+                }
             }
             AdminTab.ORDERS -> {
                 val sortedOrders = remember(orders) {
@@ -655,18 +678,46 @@ private fun AdminDashboardContent(
             }
         }
 
-        items(orders.take(5), key = { it.id }) { order ->
-            val matchingCust = customers.find { it.id == order.userId }
-            val cName = order.customerName.ifBlank { matchingCust?.fullName ?: "Müştəri" }
-            val cPhone = order.customerPhone.ifBlank { matchingCust?.phone ?: "" }
-            AdminOrderManageCard(
-                order = order,
-                customerName = cName,
-                customerPhone = cPhone,
-                onManageClick = { onManageOrder(order) },
-                onViewClick = { onViewOrder(order) },
-                onContactClick = { onContactOrder(order) }
-            )
+        if (orders.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Hələlik heç bir sifariş daxil olmayıb",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Müştərilər sifariş verdikdə burada dərhal canlı əks olunacaq.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        } else {
+            items(orders.take(5), key = { it.id }) { order ->
+                val matchingCust = customers.find { it.id == order.userId }
+                val cName = order.customerName.ifBlank { matchingCust?.fullName ?: "Müştəri" }
+                val cPhone = order.customerPhone.ifBlank { matchingCust?.phone ?: "" }
+                AdminOrderManageCard(
+                    order = order,
+                    customerName = cName,
+                    customerPhone = cPhone,
+                    onManageClick = { onManageOrder(order) },
+                    onViewClick = { onViewOrder(order) },
+                    onContactClick = { onContactOrder(order) }
+                )
+            }
         }
     }
 }
@@ -677,78 +728,395 @@ private fun AdminDashboardContent(
 @Composable
 private fun AdminSupportContent(
     conversations: List<ChatConversation>,
+    customers: List<User> = emptyList(),
     modifier: Modifier = Modifier,
     onOpenChat: (ChatConversation) -> Unit
 ) {
-    if (conversations.isEmpty()) {
-        EmptyStateView(
-            titleKey = StringKey.CHAT_EMPTY_MESSAGES,
-            descKey = StringKey.EMPTY_ORDERS_DESC,
-            modifier = modifier
-        )
-    } else {
-        LazyColumn(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(horizontal = 20.dp),
-            contentPadding = PaddingValues(top = 14.dp, bottom = 48.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+    Column(modifier = modifier.fillMaxSize()) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            items(conversations, key = { it.id }) { conv ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(Icons.Default.SupportAgent, contentDescription = null, tint = Gold500)
+                Column {
+                    Text(
+                        text = "Müştəri Xidmətləri Müraciətləri",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Yalnız müştərilər tərəfindən göndərilən canlı sorğular və suallar",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        if (conversations.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .clickable { onOpenChat(conv) }
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(14.dp)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(46.dp)
+                                .size(56.dp)
                                 .clip(CircleShape)
                                 .background(Navy800),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.SupportAgent, contentDescription = null, tint = Gold500)
+                            Icon(Icons.Default.MarkUnreadChatAlt, contentDescription = null, tint = Gold500, modifier = Modifier.size(30.dp))
                         }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                        Text(
+                            text = "Aktiv müştəri müraciəti yoxdur",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "Müştərilər 'Müştəri Xidmətləri' bölməsindən sual və ya müraciət göndərdikdə burada canlı əks olunacaq və birbaşa cavab yaza biləcəksiniz.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp),
+                contentPadding = PaddingValues(top = 14.dp, bottom = 48.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(conversations, key = { it.id }) { conv ->
+                    val matchingUser = customers.find { it.id == conv.customerId }
+                    val displayTitle = conv.title.ifBlank { matchingUser?.fullName ?: "Müştəri" }
+                    val subInfo = matchingUser?.phone?.takeIf { it.isNotBlank() }
+                        ?: matchingUser?.university?.takeIf { it.isNotBlank() }
+                        ?: "Canlı Müştəri Sorğusu"
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { onOpenChat(conv) }
+                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(14.dp)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .clip(CircleShape)
+                                    .background(Navy800),
+                                contentAlignment = Alignment.Center
                             ) {
+                                Icon(Icons.Default.SupportAgent, contentDescription = null, tint = Gold500)
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = displayTitle,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = conv.lastMessageTime,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                                 Text(
-                                    text = conv.title.ifBlank { "Müştəri Söhbəti" },
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = conv.lastMessageTime,
+                                    text = subInfo,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Gold500
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = conv.lastMessageText.ifBlank { "Yeni söhbət başlandı" },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
                                 )
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = conv.lastMessageText.ifBlank { "Yeni söhbət başlandı" },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1
-                            )
-                        }
-                        if (conv.unreadCount > 0) {
-                            Badge(containerColor = Gold500, contentColor = Navy900) {
-                                Text("${conv.unreadCount}", fontWeight = FontWeight.Bold)
+                            if (conv.unreadCount > 0) {
+                                Badge(containerColor = Gold500, contentColor = Navy900) {
+                                    Text("${conv.unreadCount}", fontWeight = FontWeight.Bold)
+                                }
                             }
+                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Gold500)
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdminSupportChatDetailView(
+    conversation: ChatConversation,
+    viewModel: MainViewModel,
+    customers: List<User> = emptyList(),
+    modifier: Modifier = Modifier,
+    onBack: () -> Unit
+) {
+    androidx.activity.compose.BackHandler {
+        onBack()
+    }
+
+    val matchingUser = remember(conversation, customers) {
+        customers.find { it.id == conversation.customerId }
+    }
+    val customerDisplayName = remember(conversation, matchingUser) {
+        matchingUser?.fullName?.takeIf { it.isNotBlank() } ?: conversation.title.ifBlank { "Müştəri" }
+    }
+    val customerSubInfo = remember(matchingUser) {
+        val phone = matchingUser?.phone?.takeIf { it.isNotBlank() }
+        val uni = matchingUser?.university?.takeIf { it.isNotBlank() }
+        when {
+            phone != null && uni != null -> "$phone • $uni"
+            phone != null -> phone
+            uni != null -> uni
+            else -> "Müştəri Xidmətləri Sorğusu"
+        }
+    }
+
+    val allMessages by viewModel.messages.collectAsState()
+    val chatMessages = allMessages[conversation.id] ?: emptyList()
+    val listState = rememberLazyListState()
+    var replyText by remember { mutableStateOf("") }
+
+    LaunchedEffect(chatMessages.size) {
+        if (chatMessages.isNotEmpty()) {
+            listState.animateScrollToItem(chatMessages.size - 1)
+        }
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        // Chat Header with Back button
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 4.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Geri",
+                        tint = Gold500
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(Navy800),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Person, contentDescription = null, tint = Gold500)
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = customerDisplayName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF10B981))
+                        )
+                        Text(
+                            text = customerSubInfo,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+
+        // Messages List
+        if (chatMessages.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        Icons.Default.ChatBubbleOutline,
+                        contentDescription = null,
+                        tint = Gold500,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Text(
+                        text = "Bu müştəri ilə hələ ki mesaj yoxdur",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Aşağıdakı sahədən müştəriyə dərhal cavab yaza bilərsiniz.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(top = 12.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(chatMessages, key = { it.id }) { msg ->
+                    AdminChatBubbleItem(message = msg)
+                }
+            }
+        }
+
+        // Reply Input Bar
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = replyText,
+                    onValueChange = { replyText = it },
+                    placeholder = { Text("Müştəriyə cavab yazın...") },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(24.dp),
+                    maxLines = 4
+                )
+                IconButton(
+                    onClick = {
+                        val text = replyText.trim()
+                        if (text.isNotBlank()) {
+                            viewModel.sendChatMessage(text)
+                            replyText = ""
+                        }
+                    },
+                    enabled = replyText.isNotBlank(),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(if (replyText.isNotBlank()) Gold500 else MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Send,
+                        contentDescription = "Göndər",
+                        tint = if (replyText.isNotBlank()) Navy900 else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdminChatBubbleItem(message: ChatMessage) {
+    val isAdmin = message.senderRole.equals("staff", ignoreCase = true) ||
+                  message.senderRole.equals("admin", ignoreCase = true) ||
+                  !message.isFromUser
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = if (isAdmin) Alignment.End else Alignment.Start
+    ) {
+        Surface(
+            color = if (isAdmin) Navy800 else MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(
+                topStart = 16.dp,
+                topEnd = 16.dp,
+                bottomStart = if (isAdmin) 16.dp else 2.dp,
+                bottomEnd = if (isAdmin) 2.dp else 16.dp
+            ),
+            border = if (!isAdmin) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)) else null,
+            modifier = Modifier.widthIn(max = 300.dp)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(
+                    text = if (isAdmin) "Siz (Baş Admin)" else message.senderName.ifBlank { "Müştəri" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Gold500,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = message.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (isAdmin) Color.White else MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = message.timestamp,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isAdmin) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.End),
+                    fontSize = 10.sp
+                )
             }
         }
     }

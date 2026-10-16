@@ -432,7 +432,7 @@ class FirestoreOrderService(
                 serviceId = serviceIdStr,
                 serviceName = data["serviceName"] as? String ?: "Diplom işi",
                 serviceType = serviceType,
-                topic = data["subject"] as? String ?: "",
+                topic = data["subject"] as? String ?: (data["topic"] as? String ?: ""),
                 scopeDescription = data["scopeDescription"] as? String ?: "",
                 university = data["university"] as? String ?: "",
                 faculty = data["faculty"] as? String ?: "",
