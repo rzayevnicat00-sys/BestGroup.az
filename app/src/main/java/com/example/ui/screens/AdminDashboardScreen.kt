@@ -181,7 +181,7 @@ fun AdminDashboardScreen(
                     )
                 } else {
                     AdminSupportContent(
-                        conversations = conversations.filter { it.orderId == null },
+                        conversations = conversations,
                         customers = customers,
                         modifier = modifier.padding(innerPadding),
                         onOpenChat = { conv ->
@@ -208,7 +208,16 @@ fun AdminDashboardScreen(
                     modifier = modifier.padding(innerPadding),
                     onManageOrder = { selectedOrderForAdminAction = it },
                     onViewOrder = { viewModel.viewOrderDetail(it) },
-                    onOpenOrderChat = { viewModel.openOrderChat(it.id) },
+                    onOpenOrderChat = { ord ->
+                        val matchedConv = conversations.find { it.orderId == ord.id }
+                            ?: conversations.find { it.id == "order_${ord.id}" }
+                        if (matchedConv != null) {
+                            selectedSupportConversation = matchedConv
+                            currentTab = AdminTab.SUPPORT
+                        } else {
+                            viewModel.openOrderChat(ord.id)
+                        }
+                    },
                     onContactOrder = { ord ->
                         val matchingCust = customers.find { it.id == ord.userId }
                         val cPhone = ord.customerPhone.ifBlank { matchingCust?.phone ?: "" }
@@ -223,7 +232,13 @@ fun AdminDashboardScreen(
                     modifier = modifier.padding(innerPadding),
                     onCustomerClick = { selectedCustomerForDetail = it },
                     onOpenSupportChat = { customer ->
-                        viewModel.openSupportChatForCustomer(customer)
+                        val supportConv = conversations.find { it.customerId == customer.id && it.orderId == null }
+                        if (supportConv != null) {
+                            selectedSupportConversation = supportConv
+                            currentTab = AdminTab.SUPPORT
+                        } else {
+                            viewModel.openSupportChatForCustomer(customer)
+                        }
                     },
                     onContactCustomer = { customer ->
                         contactTargetCustomer = Triple(customer.fullName, customer.phone, null)
@@ -231,15 +246,24 @@ fun AdminDashboardScreen(
                 )
             }
             AdminTab.ORDER_CHATS -> {
-                AdminOrderChatsContent(
-                    conversations = conversations.filter { it.orderId != null },
-                    modifier = modifier.padding(innerPadding),
-                    onOpenChat = { conv ->
-                        viewModel.setActiveConversation(conv.id)
-                        viewModel.navigateTo(AppDestination.MAIN)
-                        viewModel.selectBottomTab(com.example.viewmodel.BottomTab.CHAT)
-                    }
-                )
+                if (selectedSupportConversation != null) {
+                    AdminSupportChatDetailView(
+                        conversation = selectedSupportConversation!!,
+                        viewModel = viewModel,
+                        customers = customers,
+                        modifier = modifier.padding(innerPadding),
+                        onBack = { selectedSupportConversation = null }
+                    )
+                } else {
+                    AdminOrderChatsContent(
+                        conversations = conversations.filter { it.orderId != null },
+                        modifier = modifier.padding(innerPadding),
+                        onOpenChat = { conv ->
+                            selectedSupportConversation = conv
+                            viewModel.setActiveConversation(conv.id, navigateToCustomerChat = false)
+                        }
+                    )
+                }
             }
             AdminTab.NOTIFICATIONS -> {
                 AdminNotificationsContent(
@@ -884,7 +908,7 @@ private fun AdminSupportContent(
 }
 
 @Composable
-private fun AdminSupportChatDetailView(
+fun AdminSupportChatDetailView(
     conversation: ChatConversation,
     viewModel: MainViewModel,
     customers: List<User> = emptyList(),
@@ -1382,11 +1406,38 @@ private fun AdminOrderChatsContent(
     onOpenChat: (ChatConversation) -> Unit
 ) {
     if (conversations.isEmpty()) {
-        EmptyStateView(
-            titleKey = StringKey.CHAT_EMPTY_MESSAGES,
-            descKey = StringKey.EMPTY_ORDERS_DESC,
+        Box(
             modifier = modifier
-        )
+                .fillMaxSize()
+                .padding(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, tint = Gold500, modifier = Modifier.size(36.dp))
+                    Text(
+                        text = "Aktiv sifariş çatı yoxdur",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "Müştərilər sifarişləri üzrə sual və ya müraciət yazdıqda bütün canlı söhbətlər burada real vaxt rejimində əks olunacaq.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
     } else {
         LazyColumn(
             modifier = modifier

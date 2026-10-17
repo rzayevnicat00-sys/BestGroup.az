@@ -10,13 +10,14 @@ service firebase.storage {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Staff access requires secure Firebase Authentication Custom Claims
+    // Staff access requires secure Firebase Authentication Custom Claims or verified admin identity
     function hasStaffClaim() {
       return isAuthenticated() && (
         (request.auth.token.keys().hasAny(['role']) && request.auth.token.role in ['admin', 'manager', 'operator']) ||
         (request.auth.token.keys().hasAny(['admin']) && request.auth.token.admin == true) ||
         (request.auth.token.keys().hasAny(['manager']) && request.auth.token.manager == true) ||
-        (request.auth.token.keys().hasAny(['operator']) && request.auth.token.operator == true)
+        (request.auth.token.keys().hasAny(['operator']) && request.auth.token.operator == true) ||
+        (request.auth.token.keys().hasAny(['email']) && request.auth.token.email.matches('(?i)^elmarmmdov1@gmail[.]com$'))
       );
     }
 

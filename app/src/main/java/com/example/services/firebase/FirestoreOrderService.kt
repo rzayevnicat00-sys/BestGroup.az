@@ -28,6 +28,7 @@ class FirestoreOrderService(
 
         val registration = query.addSnapshotListener { snapshot, error ->
             if (error != null) {
+                android.util.Log.e("FirestoreOrderService", "SnapshotListener error [userId=$userId, isStaff=$isStaff]: ${error.message}", error)
                 return@addSnapshotListener
             }
             if (snapshot != null) {
@@ -156,6 +157,8 @@ class FirestoreOrderService(
             "userId" to userId,
             "serviceId" to serviceId.ifBlank { serviceType.name.lowercase() },
             "serviceName" to resolvedServiceName,
+            "serviceType" to serviceType.name,
+            "topic" to topic,
             "subject" to topic,
             "scopeDescription" to scopeDescription,
             "university" to university,
@@ -171,7 +174,7 @@ class FirestoreOrderService(
             "status" to "waiting",
             "progressPercent" to 15,
             "estimatedPriceAzn" to calculatedEstimatedPrice,
-            "customerName" to customerName,
+            "customerName" to customerName.ifBlank { "Müştəri" },
             "customerPhone" to customerPhone,
             "customerEmail" to customerEmail,
             "files" to filesData,
@@ -425,6 +428,21 @@ class FirestoreOrderService(
                 )
             } else null
 
+            val createdAtRaw = data["createdAt"]
+            val createdAtStr = when (createdAtRaw) {
+                is String -> createdAtRaw
+                is com.google.firebase.Timestamp -> SimpleDateFormat("dd MMMM yyyy", Locale("az")).format(createdAtRaw.toDate())
+                is Date -> SimpleDateFormat("dd MMMM yyyy", Locale("az")).format(createdAtRaw)
+                else -> ""
+            }
+            val updatedAtRaw = data["updatedAt"]
+            val updatedAtStr = when (updatedAtRaw) {
+                is String -> updatedAtRaw
+                is com.google.firebase.Timestamp -> SimpleDateFormat("dd MMMM yyyy", Locale("az")).format(updatedAtRaw.toDate())
+                is Date -> SimpleDateFormat("dd MMMM yyyy", Locale("az")).format(updatedAtRaw)
+                else -> ""
+            }
+
             Order(
                 id = docId,
                 orderNumber = data["orderNumber"] as? String ?: "#BG-2026",
@@ -446,8 +464,8 @@ class FirestoreOrderService(
                 additionalNotes = data["additionalNotes"] as? String ?: (data["notes"] as? String ?: ""),
                 status = status,
                 progressPercent = (data["progressPercent"] as? Number)?.toInt() ?: 15,
-                createdAt = (data["createdAt"] as? String)?.take(10) ?: "",
-                updatedAt = (data["updatedAt"] as? String)?.take(10) ?: "",
+                createdAt = createdAtStr,
+                updatedAt = updatedAtStr,
                 files = files,
                 statusHistory = history,
                 review = review,
@@ -457,6 +475,7 @@ class FirestoreOrderService(
                 customerEmail = data["customerEmail"] as? String ?: ""
             )
         } catch (e: Exception) {
+            android.util.Log.e("FirestoreOrderService", "Failed to parse order doc $docId: ${e.message}", e)
             null
         }
     }

@@ -269,12 +269,10 @@ class FirebaseAuthService(
 
     companion object {
         const val SUPER_ADMIN_EMAIL = "elmarmmdov1@gmail.com"
-        const val SECONDARY_ADMIN_EMAIL = "rzayevnicat00@gmail.com"
 
         fun isSuperAdminEmail(email: String?): Boolean {
             val clean = email?.trim() ?: return false
-            return clean.equals(SUPER_ADMIN_EMAIL, ignoreCase = true) ||
-                   clean.equals(SECONDARY_ADMIN_EMAIL, ignoreCase = true)
+            return clean.equals(SUPER_ADMIN_EMAIL, ignoreCase = true)
         }
 
         fun mapFirebaseError(e: Exception): String {

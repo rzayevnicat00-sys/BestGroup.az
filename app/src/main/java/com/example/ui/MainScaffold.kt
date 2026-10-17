@@ -104,7 +104,7 @@ fun MainApp(viewModel: MainViewModel) {
                         com.example.model.UserRole.ADMIN,
                         com.example.model.UserRole.MANAGER,
                         com.example.model.UserRole.OPERATOR
-                    )
+                    ) || com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(currentUser?.email)
                     if (isStaff) {
                         AdminDashboardScreen(viewModel = viewModel)
                     } else {
@@ -235,7 +235,18 @@ fun MainApp(viewModel: MainViewModel) {
                             when (selectedTab) {
                                 BottomTab.HOME -> HomeScreen(viewModel = viewModel)
                                 BottomTab.ORDERS -> OrdersScreen(viewModel = viewModel)
-                                BottomTab.CHAT -> ChatScreen(viewModel = viewModel)
+                                BottomTab.CHAT -> {
+                                    val isStaffUser = currentUser?.role in listOf(
+                                        com.example.model.UserRole.ADMIN,
+                                        com.example.model.UserRole.MANAGER,
+                                        com.example.model.UserRole.OPERATOR
+                                    ) || com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(currentUser?.email)
+                                    if (isStaffUser) {
+                                        AdminChatScreen(viewModel = viewModel)
+                                    } else {
+                                        ChatScreen(viewModel = viewModel)
+                                    }
+                                }
                                 BottomTab.NOTIFICATIONS -> NotificationsScreen(viewModel = viewModel)
                                 BottomTab.PROFILE -> ProfileScreen(viewModel = viewModel)
                             }

@@ -27,6 +27,8 @@ import com.example.ui.components.EmptyStateView
 import com.example.ui.components.PriorityBadge
 import com.example.ui.components.StatusBadge
 import com.example.ui.theme.Gold500
+import com.example.ui.theme.Navy800
+import com.example.viewmodel.AppDestination
 import com.example.viewmodel.MainViewModel
 import com.example.viewmodel.OrdersFilter
 
@@ -151,13 +153,57 @@ fun OrdersScreen(
                 val currentUser by viewModel.currentUser.collectAsState()
                 val isStaff = currentUser?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
                               com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(currentUser?.email)
-                EmptyStateView(
-                    titleKey = StringKey.EMPTY_ORDERS_TITLE,
-                    descKey = StringKey.EMPTY_ORDERS_DESC,
-                    actionButtonTextKey = if (!isStaff) StringKey.BTN_NEW_ORDER else null,
-                    onActionClick = if (!isStaff) { { viewModel.startNewOrder() } } else null,
-                    modifier = Modifier.weight(1f)
-                )
+                if (isStaff) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(Icons.Default.Assignment, contentDescription = null, tint = Gold500, modifier = Modifier.size(48.dp))
+                                Text(
+                                    text = "Sistemdə sifariş tapılmadı",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Text(
+                                    text = "Müştərilər yeni sifariş yaratdıqda burada və Admin İdarəetmə Panelində dərhal əks olunacaq.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Button(
+                                    onClick = { viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text("Admin İdarəetmə Panelinə keç", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    EmptyStateView(
+                        titleKey = StringKey.EMPTY_ORDERS_TITLE,
+                        descKey = StringKey.EMPTY_ORDERS_DESC,
+                        actionButtonTextKey = StringKey.BTN_NEW_ORDER,
+                        onActionClick = { viewModel.startNewOrder() },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 96.dp),

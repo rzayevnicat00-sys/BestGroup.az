@@ -1,6 +1,6 @@
 {
-  "summary": "Admin paneldə müştəri sifarişlərinin canlı əks olunması (Firestore təhlükəsizlik qaydalarının düzəldilməsi), admində sifariş və yeni çat yaratma düymələrinin tam yığışdırılması, Çat bölməsində yalnız daxil olan müştəri mesajlarının göstərilməsi və dialoq daxilində birbaşa cavab yazılması, həmçinin görünüş temasının qalıcı saxlanması üçün icra planı.",
-  "updatedAt": "2026-10-16T07:48:02.763477257Z",
+  "summary": "BestGroup.az Android tətbiqində Admin və Müştəri rollarının ayrılması, real Firestore sifariş və çat sinxronizasiyası, təhlükəsizlik qaydaları və interfeys düzəlişlərini əhatə edən ətraflı icra planı.",
+  "updatedAt": "2026-10-17T07:13:02.424907034Z",
   "requestFeedback": true,
   "userFacing": true
 }

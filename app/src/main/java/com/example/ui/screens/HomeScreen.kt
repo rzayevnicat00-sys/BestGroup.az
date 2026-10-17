@@ -51,6 +51,8 @@ fun HomeScreen(
     modifier: Modifier = Modifier
 ) {
     val user by viewModel.currentUser.collectAsState()
+    val isStaff = user?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
+                  com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(user?.email)
     val orders by viewModel.orders.collectAsState()
     val catalogServices by viewModel.catalogServices.collectAsState()
     val currentLanguage by viewModel.currentLanguage.collectAsState()
@@ -233,8 +235,6 @@ fun HomeScreen(
                     }
                 }
 
-                val isStaff = user?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
-                              com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(user?.email)
                 if (isStaff) {
                     Card(
                         modifier = Modifier
@@ -362,78 +362,19 @@ fun HomeScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-                // Pre-order consultation / inquiry button for customers
-                OutlinedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .clickable { viewModel.openSupportInquiryChat() }
-                        .testTag("home_pre_order_chat_shortcut"),
-                    colors = CardDefaults.outlinedCardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Gold500.copy(alpha = 0.5f))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(Gold500.copy(alpha = 0.15f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ChatBubbleOutline,
-                                    contentDescription = null,
-                                    tint = Gold500,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Column {
-                                Text(
-                                    text = "Sualınız var? Öncədən soruşun",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "Sifariş vermədən öncə limitsiz canlı dəstək",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = null,
-                            tint = Gold500,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-
-                // If user is Staff (Admin, Manager, Operator), show direct access button to Admin Panel
-                if (user?.role == UserRole.ADMIN || user?.role == UserRole.MANAGER || user?.role == UserRole.OPERATOR) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Card(
+                if (!isStaff) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    // Pre-order consultation / inquiry button for customers
+                    OutlinedCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .clickable { viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD) }
-                            .border(1.dp, Gold500, RoundedCornerShape(14.dp))
-                            .testTag("home_admin_panel_shortcut"),
-                        colors = CardDefaults.cardColors(containerColor = Navy800)
+                            .clickable { viewModel.openSupportInquiryChat() }
+                            .testTag("home_pre_order_chat_shortcut"),
+                        colors = CardDefaults.outlinedCardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Gold500.copy(alpha = 0.5f))
                     ) {
                         Row(
                             modifier = Modifier
@@ -446,96 +387,174 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Icon(
-                                    Icons.Default.AdminPanelSettings,
-                                    contentDescription = null,
-                                    tint = Gold500,
-                                    modifier = Modifier.size(24.dp)
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(Gold500.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ChatBubbleOutline,
+                                        contentDescription = null,
+                                        tint = Gold500,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                                 Column {
                                     Text(
-                                        text = "Admin İdarəetmə Paneli",
+                                        text = "Sualınız var? Öncədən soruşun",
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold,
-                                        color = Gold500
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "Sifarişlər, müştərilər, çat və statistikalar",
+                                        text = "Sifariş vermədən öncə limitsiz canlı dəstək",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Color(0xFFCBD5E1)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
-                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Gold500)
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = Gold500,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
                 }
             }
         }
 
-        // 2. Active Orders Section
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 20.dp, start = 20.dp, end = 20.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+        // 2. Active Orders Section (Customer only) vs System Summary (Admin)
+        if (!isStaff) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 20.dp, start = 20.dp, end = 20.dp)
                 ) {
-                    Text(
-                        text = localizedString(StringKey.HOME_ACTIVE_ORDERS_TITLE),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    TextButton(
-                        onClick = { viewModel.selectBottomTab(BottomTab.ORDERS) },
-                        modifier = Modifier.testTag("home_view_all_orders_button")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = localizedString(StringKey.BTN_VIEW_ALL),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Gold500,
-                            fontWeight = FontWeight.SemiBold
+                            text = localizedString(StringKey.HOME_ACTIVE_ORDERS_TITLE),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground
                         )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                if (activeOrders.isEmpty()) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        TextButton(
+                            onClick = { viewModel.selectBottomTab(BottomTab.ORDERS) },
+                            modifier = Modifier.testTag("home_view_all_orders_button")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = null,
-                                tint = Gold500
-                            )
                             Text(
-                                text = localizedString(StringKey.EMPTY_ORDERS_TITLE),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = localizedString(StringKey.BTN_VIEW_ALL),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Gold500,
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                     }
-                } else {
-                    activeOrders.take(2).forEach { order ->
-                        HomeActiveOrderCard(
-                            order = order,
-                            onClick = { viewModel.viewOrderDetail(order) }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    if (activeOrders.isEmpty()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = Gold500
+                                )
+                                Text(
+                                    text = localizedString(StringKey.EMPTY_ORDERS_TITLE),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    } else {
+                        activeOrders.take(2).forEach { order ->
+                            HomeActiveOrderCard(
+                                order = order,
+                                onClick = { viewModel.viewOrderDetail(order) }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                    }
+                }
+            }
+        } else {
+            // For Admin profile: Professional System Overview card instead of customer order empty state
+            item {
+                val stats by viewModel.adminStats.collectAsState()
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 20.dp, start = 20.dp, end = 20.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable { viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD) }
+                        .border(1.dp, Gold500.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Default.Insights, contentDescription = null, tint = Gold500)
+                                Text(
+                                    text = "Sistem Göstəriciləri (Admin)",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Text(
+                                text = "Panelə keçid",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Gold500,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text("Gözləyən", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${stats.pendingOrdersCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Gold500)
+                            }
+                            Column {
+                                Text("Ümumi Sifariş", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${stats.totalOrdersCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            }
+                            Column {
+                                Text("Müştəri Çatı", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${stats.waitingSupportMessagesCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
+                            }
+                            Column {
+                                Text("Müştərilər", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${stats.totalCustomersCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }
@@ -562,7 +581,10 @@ fun HomeScreen(
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     TextButton(
-                        onClick = { viewModel.navigateTo(AppDestination.ORDER_WIZARD) }
+                        onClick = {
+                            if (!isStaff) viewModel.navigateTo(AppDestination.ORDER_WIZARD)
+                            else viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD)
+                        }
                     ) {
                         Text(
                             text = localizedString(StringKey.BTN_VIEW_ALL),
@@ -583,7 +605,10 @@ fun HomeScreen(
                         ServiceMiniCard(
                             item = cat,
                             language = currentLanguage,
-                            onClick = { viewModel.startNewOrder(preselectedCatalogService = cat) }
+                            onClick = {
+                                if (!isStaff) viewModel.startNewOrder(preselectedCatalogService = cat)
+                                else viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD)
+                            }
                         )
                     }
                 }
