@@ -180,7 +180,7 @@ val LocaleAz: Map<StringKey, String> = mapOf(
     StringKey.ORDER_TIMELINE_TITLE to "Status tarixçəsi",
     StringKey.ORDER_FILES_TITLE to "Qoşulmuş sənədlər",
     StringKey.ORDER_NOTES_TITLE to "Əlavə qeydlər",
-    StringKey.ORDER_CHAT_ACTION to "Kuratorla əlaqə",
+    StringKey.ORDER_CHAT_ACTION to "Dəstəklə əlaqə",
     StringKey.ORDER_RATE_ACTION to "Xidməti qiymətləndir",
 
     // Statuses
@@ -191,9 +191,9 @@ val LocaleAz: Map<StringKey, String> = mapOf(
     StringKey.STATUS_CANCELLED to "Ləğv edildi",
 
     // Chat
-    StringKey.CHAT_TITLE to "Akademik Dəstək Çatı",
+    StringKey.CHAT_TITLE to "Müştəri Dəstəyi Çatı",
     StringKey.CHAT_INPUT_HINT to "Mesajınızı daxil edin...",
-    StringKey.CHAT_TYPING to "Kurator yazır...",
+    StringKey.CHAT_TYPING to "Dəstək yazır...",
     StringKey.CHAT_ONLINE to "Onlayn",
     StringKey.CHAT_ATTACHMENT to "Fayl qoşuldu",
     StringKey.CHAT_NO_CONVERSATIONS to "Aktiv söhbət tapılmadı",
@@ -292,7 +292,7 @@ val LocaleAz: Map<StringKey, String> = mapOf(
     StringKey.CHAT_RETRY to "Yenidən cəhd et",
     StringKey.CHAT_NETWORK_ERROR to "İnternet bağlantısını yoxlayın",
     StringKey.ORDER_CHAT_SECTION_TITLE to "Sifariş üzrə söhbət",
-    StringKey.ORDER_CHAT_OPEN_BUTTON to "Kuratorla yazışın",
+    StringKey.ORDER_CHAT_OPEN_BUTTON to "Dəstəklə yazışın",
     StringKey.CHAT_MESSAGE_TOO_LONG to "Mesaj mətni 4000 simvoldan çox ola bilməz.",
     StringKey.CHAT_MESSAGE_EMPTY to "Boş mesaj göndərilə bilməz."
 )

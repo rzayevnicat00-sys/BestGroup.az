@@ -45,6 +45,18 @@ fun ChatScreen(
     viewModel: MainViewModel,
     modifier: Modifier = Modifier
 ) {
+    val currentUser by viewModel.currentUser.collectAsState()
+    val isStaff = currentUser?.role in listOf(
+        com.example.model.UserRole.ADMIN,
+        com.example.model.UserRole.MANAGER,
+        com.example.model.UserRole.OPERATOR
+    ) || com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(currentUser?.email)
+
+    if (isStaff) {
+        AdminChatScreen(viewModel = viewModel, modifier = modifier)
+        return
+    }
+
     val conversations by viewModel.conversations.collectAsState()
     val allMessages by viewModel.messages.collectAsState()
     val activeConvId by viewModel.activeConversationId.collectAsState()
@@ -105,7 +117,7 @@ fun ChatScreen(
                                         .background(Color(0xFF10B981))
                                 )
                                 Text(
-                                    text = activeConversation?.curatorName ?: "Baş Admin (Müştəri Xidmətləri)",
+                                    text = activeConversation?.curatorName ?: "Müştəri Xidmətləri",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -321,7 +333,7 @@ fun ChatScreen(
                                 textAlign = TextAlign.Center
                             )
                             Text(
-                                text = "Baş admin və kuratorluq xidməti aktivdir. Sifariş verməzdən öncə və ya hazırkı sifarişlərinizlə bağlı istənilən sualınızı birbaşa buradan ünvanlaya bilərsiniz. Simvol limiti yoxdur.",
+                                text = "Canlı müştəri dəstəyi aktivdir. Xidmətlərimiz və ya sifarişlərinizlə bağlı istənilən sualınızı birbaşa buradan ünvanlaya bilərsiniz.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -345,7 +357,7 @@ fun ChatScreen(
                         "Sifariş neçə günə hazırlanır və təhvil verilir?",
                         "Anti-plagiat zəmanəti və yoxlanışı necə təmin edilir?",
                         "Mövzu seçimi və plan hazırlanmasında köməklik göstərilirmi?",
-                        "Magistr və ya dissertasiya işi üçün akademik kurator təyin edilirmi?"
+                        "Magistr və ya dissertasiya işi üçün akademik dəstək göstərilirmi?"
                     )
 
                     items(sampleQuestions) { question ->
