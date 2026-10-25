@@ -1057,7 +1057,10 @@ fun AdminSupportChatDetailView(
         Surface(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 8.dp,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .imePadding()
+                .navigationBarsPadding()
         ) {
             Row(
                 modifier = Modifier

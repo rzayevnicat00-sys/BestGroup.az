@@ -457,6 +457,51 @@ class MainViewModel @JvmOverloads constructor(
         _currentDestination.value = AppDestination.AUTH
     }
 
+    // --- Profile Editing & Real Persistence ---
+    val isProfileUpdating = mutableStateOf(false)
+    val profileUpdateError = mutableStateOf<String?>(null)
+    val profileUpdateSuccess = mutableStateOf(false)
+
+    fun saveUserProfile(
+        fullName: String,
+        phone: String,
+        university: String,
+        faculty: String,
+        degreeLevel: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            isProfileUpdating.value = true
+            profileUpdateError.value = null
+            profileUpdateSuccess.value = false
+            val result = repository.saveUserProfile(
+                fullName = fullName,
+                phone = phone,
+                university = university,
+                faculty = faculty,
+                degreeLevel = degreeLevel
+            )
+            isProfileUpdating.value = false
+            result.fold(
+                onSuccess = {
+                    profileUpdateSuccess.value = true
+                    onSuccess()
+                },
+                onFailure = { err ->
+                    val msg = err.localizedMessage ?: "Profil yadda saxlanılarkən xəta baş verdi."
+                    profileUpdateError.value = msg
+                    onError(msg)
+                }
+            )
+        }
+    }
+
+    fun clearProfileUpdateStatus() {
+        profileUpdateError.value = null
+        profileUpdateSuccess.value = false
+    }
+
     // --- Wizard Management ---
 
     fun startNewOrder(preselectedService: ServiceType? = null, preselectedCatalogService: ServiceCatalogItem? = null) {

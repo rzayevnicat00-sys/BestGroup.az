@@ -157,7 +157,6 @@ service cloud.firestore {
           ) &&
           (!resource.data.keys().hasAny(['assignedStaffId']) || request.resource.data.assignedStaffId == resource.data.assignedStaffId) &&
           (!resource.data.keys().hasAny(['status']) || request.resource.data.status == resource.data.status) &&
-          (!resource.data.keys().hasAny(['unreadForStaff']) || request.resource.data.unreadForStaff == resource.data.unreadForStaff) &&
           (!resource.data.keys().hasAny(['createdAt']) || request.resource.data.createdAt == resource.data.createdAt)
         )
       );

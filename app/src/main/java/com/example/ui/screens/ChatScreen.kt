@@ -151,7 +151,10 @@ fun ChatScreen(
             Surface(
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 8.dp,
-                modifier = Modifier.navigationBarsPadding()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .navigationBarsPadding()
             ) {
                 Column {
                     // Chat error feedback banner

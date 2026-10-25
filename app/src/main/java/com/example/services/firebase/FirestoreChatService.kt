@@ -264,6 +264,8 @@ class FirestoreChatService(
         )
         if (!isFromCustomer) {
             convUpdate["unreadForCustomer"] = FieldValue.increment(1)
+        } else {
+            convUpdate["unreadForStaff"] = FieldValue.increment(1)
         }
 
         convCollection.document(conversationId).update(convUpdate).await()

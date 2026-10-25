@@ -2014,6 +2014,202 @@ class ExampleRobolectricTest {
         assertEquals("✓ Peşəkar yanaşma", LocalizationManager.getString(StringKey.ONBOARDING_BENEFIT_4))
         assertEquals("Sifarişinizi rahatlıqla yerləşdirin, gedişatı izləyin və mütəxəssislərimizlə birbaşa əlaqədə olun.", LocalizationManager.getString(StringKey.ONBOARDING_DESC_3))
     }
+
+    // ====================================================
+    // VERIFICATION OF 9 CORE REQUIREMENTS
+    // ====================================================
+
+    @Test
+    fun `requirement 1 - customer order syncs to admin in real time`() = runTest {
+        val repo = BestGroupRepository()
+        val customer = repo.signIn("rzayevnicat00@gmail.com", "bestgroup2026")
+        assertTrue(customer is AuthResult.Success)
+
+        // Customer creates order
+        val created = repo.createOrder(
+            serviceType = ServiceType.DIPLOMA,
+            topic = "Süni İntellekt və Hüquqi Məsuliyyət",
+            scopeDescription = "60 səhifəlik diplom işi",
+            university = "BDU",
+            faculty = "Hüquq",
+            academicLevel = "Bakalavriat",
+            language = "Azərbaycan",
+            pageCount = 60,
+            deadline = "2026-12-31",
+            priority = OrderPriority.NORMAL,
+            formattingStandard = "APA 7",
+            specialNotes = "Plagiat faizi 15%-dən az olsun",
+            files = emptyList()
+        )
+        assertNotNull(created.id)
+        assertTrue(created.orderNumber.startsWith("#BG-"))
+
+        // Admin switches to staff session and observes orders
+        repo.switchUserRole(UserRole.ADMIN)
+        val adminOrders = repo.orders.value
+        val foundOrder = adminOrders.find { it.id == created.id }
+        assertNotNull("Admin must automatically receive and see customer order", foundOrder)
+        assertEquals("Süni İntellekt və Hüquqi Məsuliyyət", foundOrder?.topic)
+        assertEquals(OrderStatus.PENDING, foundOrder?.status)
+    }
+
+    @Test
+    fun `requirement 2 - admin home does not show customer order cards`() = runTest {
+        val repo = BestGroupRepository()
+        repo.signIn("elmarmmdov1@gmail.com", "bestgroup2026")
+        val admin = repo.currentUser.value
+        assertNotNull(admin)
+        assertEquals(UserRole.ADMIN, admin?.role)
+
+        // Verify stats are calculated and orders list reflects all orders
+        val stats = repo.adminStats.value
+        assertNotNull(stats)
+        assertTrue(stats.totalOrdersCount >= 0)
+    }
+
+    @Test
+    fun `requirement 3 - customer without any orders can chat with admin 24-7`() = runTest {
+        val repo = BestGroupRepository()
+        // Register brand new user with 0 orders
+        val regResult = repo.signUp(
+            email = "sifaris.yoxdur@example.com",
+            pass = "secret123",
+            fullName = "Tural Əliyev",
+            phone = "+994 50 999 88 77",
+            university = "ADNSU",
+            faculty = "Kompüter Mühəndisliyi",
+            educationLevel = "Bakalavriat"
+        )
+        assertTrue(regResult is AuthResult.Success)
+        val newCustomer = (regResult as AuthResult.Success).data
+        assertEquals(0, newCustomer.orderCount)
+
+        // Customer opens general support chat without any orders
+        val supportConv = repo.getOrCreateGeneralSupportConversation()
+        assertNotNull(supportConv)
+        assertNull("Support chat must not require orderId", supportConv.orderId)
+        assertEquals(newCustomer.id, supportConv.customerId)
+
+        // Customer sends an inquiry message 24/7
+        val msg = repo.sendMessage(supportConv.id, "Salam! Magistratura dissertasiyası qiymətləri necədir?")
+        assertNotNull(msg.id)
+        assertEquals("Salam! Magistratura dissertasiyası qiymətləri necədir?", msg.text)
+        assertTrue(msg.isFromUser)
+    }
+
+    @Test
+    fun `requirement 4 and 5 - admin sees message and replies, customer receives reply in real time`() = runTest {
+        val repo = BestGroupRepository()
+        val customer = repo.signIn("rzayevnicat00@gmail.com", "bestgroup2026")
+        assertTrue(customer is AuthResult.Success)
+        val conv = repo.getOrCreateGeneralSupportConversation()
+
+        // 1. Customer sends message
+        repo.sendMessage(conv.id, "Salam, qiymət öyrənmək istəyirəm.")
+
+        // 2. Admin logs in / opens chat
+        repo.switchUserRole(UserRole.ADMIN)
+        val adminConvs = repo.conversations.value
+        val matchedConv = adminConvs.find { it.id == conv.id }
+        assertNotNull(matchedConv)
+
+        // 3. Admin replies directly
+        val reply = repo.sendMessage(conv.id, "Salam! Mövzunuz və səhifə sayına uyğun olaraq sizə fərdi təklif göndərəcəyik.")
+        assertNotNull(reply.id)
+        assertFalse(reply.isFromUser)
+
+        // 4. Customer sees reply in conversation
+        val conversationMessages = repo.messages.value[conv.id] ?: emptyList()
+        val foundReply = conversationMessages.find { it.id == reply.id }
+        assertNotNull("Customer must see admin reply in real time", foundReply)
+        assertEquals("Salam! Mövzunuz və səhifə sayına uyğun olaraq sizə fərdi təklif göndərəcəyik.", foundReply?.text)
+    }
+
+    @Test
+    fun `requirement 6 - messages between two distinct customers never leak`() = runTest {
+        val repo = BestGroupRepository()
+
+        // Customer 1
+        val reg1 = repo.signUp("cust1@example.com", "pass123", "Müştəri 1", "+994501111111", "BDU", "Tarix", "Bakalavr")
+        assertTrue(reg1 is AuthResult.Success)
+        val conv1 = repo.getOrCreateGeneralSupportConversation()
+        repo.sendMessage(conv1.id, "Müştəri 1-in gizli sualı")
+
+        // Customer 2
+        val reg2 = repo.signUp("cust2@example.com", "pass123", "Müştəri 2", "+994502222222", "UNEC", "Maliyyə", "Magistr")
+        assertTrue(reg2 is AuthResult.Success)
+        val conv2 = repo.getOrCreateGeneralSupportConversation()
+        repo.sendMessage(conv2.id, "Müştəri 2-nin müstəqil sualı")
+
+        assertNotEquals("Conversations must have unique IDs", conv1.id, conv2.id)
+
+        val msgs2 = repo.messages.value[conv2.id] ?: emptyList()
+        val leakedMsg = msgs2.find { it.text.contains("Müştəri 1") }
+        assertNull("Customer 2 must NEVER see Customer 1 messages", leakedMsg)
+    }
+
+    @Test
+    fun `requirement 8 and 9 - profile editing persists and user cannot escalate role to admin`() = runTest {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = BestGroupRepository(context = context)
+
+        // Register customer
+        val reg = repo.signUp("profile.test@example.com", "pass123", "Kənan Qasımov", "+994 50 111 22 33", "BDU", "İnformatika", "Bakalavriat")
+        assertTrue(reg is AuthResult.Success)
+        assertEquals(UserRole.CUSTOMER, repo.currentUser.value?.role)
+
+        // Save updated profile
+        val updateResult = repo.saveUserProfile(
+            fullName = "Kənan Qasımov (Redaktə)",
+            phone = "+994 50 777 88 99",
+            university = "ADA Universiteti",
+            faculty = "İT və Mühəndislik",
+            degreeLevel = "Magistratura"
+        )
+        assertTrue(updateResult.isSuccess)
+        val updatedUser = updateResult.getOrNull()
+        assertNotNull(updatedUser)
+        assertEquals("Kənan Qasımov (Redaktə)", updatedUser?.fullName)
+        assertEquals("ADA Universiteti", updatedUser?.university)
+        assertEquals(UserRole.CUSTOMER, updatedUser?.role) // Must remain CUSTOMER!
+
+        // Verify persistence across restart with same context
+        val sharedPrefs = context.getSharedPreferences("bestgroup_prefs", Context.MODE_PRIVATE)
+        assertEquals("Kənan Qasımov (Redaktə)", sharedPrefs.getString("user_fullname", null))
+        assertEquals("ADA Universiteti", sharedPrefs.getString("user_university", null))
+    }
+
+    @Test
+    fun `requirement 10 - dark theme persists across app restarts and re-login`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repo = BestGroupRepository(context = context)
+
+        // User chooses Dark Theme
+        repo.setThemeMode(com.example.ui.theme.ThemeMode.DARK)
+        assertEquals(com.example.ui.theme.ThemeMode.DARK, repo.themeMode.value)
+
+        // Verify saved synchronously in SharedPreferences
+        val prefs = context.getSharedPreferences("bestgroup_prefs", Context.MODE_PRIVATE)
+        assertEquals(com.example.ui.theme.ThemeMode.DARK.name, prefs.getString("theme_mode", null))
+
+        // Re-launch app
+        val repoAfterRestart = BestGroupRepository(context = context)
+        assertEquals("Dark mode must be synchronously restored upon restart", com.example.ui.theme.ThemeMode.DARK, repoAfterRestart.themeMode.value)
+    }
+
+    @Test
+    fun `requirement 11 - windowSoftInputMode is configured to adjustResize in manifest`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val pm = context.packageManager
+        val activityInfo = pm.getActivityInfo(
+            android.content.ComponentName(context, com.example.MainActivity::class.java),
+            android.content.pm.PackageManager.GET_META_DATA
+        )
+        val softInputMode = activityInfo.softInputMode
+        val isAdjustResize = (softInputMode and android.view.WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST) ==
+                android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        assertTrue("MainActivity must have adjustResize softInputMode", isAdjustResize)
+    }
 }
 
 

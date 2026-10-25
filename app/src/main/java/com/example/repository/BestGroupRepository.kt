@@ -72,6 +72,19 @@ class BestGroupRepository(
     fun setThemeMode(mode: ThemeMode) {
         sharedPrefs?.edit()?.putString("theme_mode", mode.name)?.commit()
         _themeMode.value = mode
+        val uid = _currentUser.value?.id ?: authService?.currentUserId
+        if (uid != null && authService != null) {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    val themeStr = when (mode) {
+                        ThemeMode.DARK -> "dark"
+                        ThemeMode.LIGHT -> "light"
+                        ThemeMode.SYSTEM -> "system"
+                    }
+                    authService.updateUserTheme(uid, themeStr)
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     // Persisted Read Notifications State
@@ -82,6 +95,71 @@ class BestGroupRepository(
     // Role switcher (useful to inspect customer experience vs admin dashboard)
     fun switchUserRole(newRole: UserRole) {
         _currentUser.value = _currentUser.value?.copy(role = newRole)
+    }
+
+    suspend fun saveUserProfile(
+        fullName: String,
+        phone: String,
+        university: String,
+        faculty: String,
+        degreeLevel: String,
+        avatarUrl: String? = null
+    ): Result<User> {
+        val current = _currentUser.value ?: return Result.failure(IllegalStateException("İstifadəçi təsdiqlənməyib."))
+        val uid = current.id
+        if (uid.isBlank()) {
+            return Result.failure(IllegalStateException("İstifadəçi ID tapılmadı."))
+        }
+
+        val trimmedName = fullName.trim()
+        if (trimmedName.length < 3) {
+            return Result.failure(IllegalArgumentException("Ad və soyad ən azı 3 hərfdən ibarət olmalıdır."))
+        }
+
+        val cleanPhone = phone.trim()
+        if (cleanPhone.isNotEmpty() && !cleanPhone.matches(Regex("^[+0-9\\s()\\-]{7,20}$"))) {
+            return Result.failure(IllegalArgumentException("Telefon nömrəsi düzgün formatda deyil (məsələn: +994 50 123 45 67)."))
+        }
+
+        // Strictly preserve existing role and ID to prevent privilege escalation!
+        val updatedUser = current.copy(
+            fullName = trimmedName,
+            phone = cleanPhone,
+            university = university.trim(),
+            faculty = faculty.trim(),
+            degreeLevel = degreeLevel.trim(),
+            avatarUrl = avatarUrl ?: current.avatarUrl
+        )
+
+        // Write directly to real Firestore database
+        if (authService != null) {
+            val firestoreRes = authService.updateUserProfile(
+                userId = uid,
+                fullName = updatedUser.fullName,
+                phone = updatedUser.phone,
+                university = updatedUser.university,
+                faculty = updatedUser.faculty,
+                educationLevel = updatedUser.degreeLevel,
+                avatarUrl = updatedUser.avatarUrl
+            )
+            if (firestoreRes.isFailure) {
+                return Result.failure(firestoreRes.exceptionOrNull() ?: Exception("Məlumatlar Firestore-da saxlanıla bilmədi."))
+            }
+        }
+
+        // Persist to local storage so it survives app restarts
+        try {
+            sharedPrefs?.edit()
+                ?.putString("user_fullname", updatedUser.fullName)
+                ?.putString("user_phone", updatedUser.phone)
+                ?.putString("user_university", updatedUser.university)
+                ?.putString("user_faculty", updatedUser.faculty)
+                ?.putString("user_degree", updatedUser.degreeLevel)
+                ?.apply()
+        } catch (_: Exception) {}
+
+        _currentUser.value = updatedUser
+        return Result.success(updatedUser)
     }
 
     fun updateUserProfile(fullName: String, phone: String, university: String, faculty: String, degreeLevel: String) {
@@ -1111,6 +1189,7 @@ class BestGroupRepository(
                 senderId = currentUid,
                 senderRole = role,
                 senderName = sender,
+                isFromUser = !isStaff,
                 text = trimmed,
                 timestamp = now,
                 isRead = false,

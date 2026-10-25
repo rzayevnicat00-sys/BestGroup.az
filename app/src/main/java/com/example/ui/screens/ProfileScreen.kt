@@ -7,10 +7,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,6 +29,7 @@ import com.example.localization.localizedString
 import com.example.model.UserRole
 import com.example.ui.theme.Gold500
 import com.example.ui.theme.Navy800
+import com.example.ui.theme.Navy900
 import com.example.ui.theme.ThemeMode
 import com.example.viewmodel.AppDestination
 import com.example.viewmodel.MainViewModel
@@ -40,6 +44,10 @@ fun ProfileScreen(
     val currentTheme by viewModel.themeMode.collectAsState()
     val currentLang by viewModel.currentLanguage.collectAsState()
 
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    var showEditProfileDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showTermsDialog by remember { mutableStateOf(false) }
@@ -48,6 +56,7 @@ fun ProfileScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -131,6 +140,22 @@ fun ProfileScreen(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        OutlinedButton(
+                            onClick = { showEditProfileDialog = true },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Gold500),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .testTag("edit_profile_header_btn")
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Profili Redaktə Et", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
                     }
                 }
             }
@@ -162,6 +187,15 @@ fun ProfileScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Column {
+                        ProfileMenuItem(
+                            icon = Icons.Default.PersonOutline,
+                            title = "Profili Redaktə Et",
+                            subtitle = "Ad, telefon, universitet və fakültə",
+                            onClick = { showEditProfileDialog = true },
+                            tag = "profile_menu_edit"
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
                         ProfileMenuItem(
                             icon = Icons.Default.Translate,
                             title = localizedString(StringKey.PROFILE_LANGUAGE),
@@ -220,6 +254,24 @@ fun ProfileScreen(
                 }
             }
         }
+    }
+
+    // Edit Profile Dialog
+    if (showEditProfileDialog) {
+        EditProfileDialog(
+            user = user,
+            viewModel = viewModel,
+            onDismiss = {
+                viewModel.clearProfileUpdateStatus()
+                showEditProfileDialog = false
+            },
+            onSuccess = {
+                showEditProfileDialog = false
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar("Profil məlumatlarınız uğurla yeniləndi.")
+                }
+            }
+        )
     }
 
     // Language Selector Dialog
@@ -435,4 +487,232 @@ private fun ProfileMenuItem(
             modifier = Modifier.size(20.dp)
         )
     }
+}
+
+@Composable
+private fun EditProfileDialog(
+    user: com.example.model.User?,
+    viewModel: MainViewModel,
+    onDismiss: () -> Unit,
+    onSuccess: () -> Unit
+) {
+    var fullName by remember(user) { mutableStateOf(user?.fullName ?: "") }
+    var phone by remember(user) { mutableStateOf(user?.phone ?: "") }
+    var university by remember(user) { mutableStateOf(user?.university ?: "") }
+    var faculty by remember(user) { mutableStateOf(user?.faculty ?: "") }
+    var degreeLevel by remember(user) { mutableStateOf(user?.degreeLevel?.ifBlank { "Bakalavriat" } ?: "Bakalavriat") }
+    var localError by remember { mutableStateOf<String?>(null) }
+
+    val isUpdating = viewModel.isProfileUpdating.value
+    val serverError = viewModel.profileUpdateError.value
+
+    val degreeOptions = listOf("Bakalavriat", "Magistratura", "Doktorantura")
+
+    AlertDialog(
+        onDismissRequest = { if (!isUpdating) onDismiss() },
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Default.Edit, contentDescription = null, tint = Gold500)
+                Text("Profili Redaktə Et", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Server or local error feedback
+                val activeError = localError ?: serverError
+                if (activeError != null) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = activeError,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+
+                // Ad və Soyad
+                OutlinedTextField(
+                    value = fullName,
+                    onValueChange = {
+                        fullName = it
+                        localError = null
+                    },
+                    label = { Text("Ad və Soyad *") },
+                    singleLine = true,
+                    enabled = !isUpdating,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("edit_profile_name_input")
+                )
+
+                // Telefon nömrəsi
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = {
+                        phone = it
+                        localError = null
+                    },
+                    label = { Text("Telefon nömrəsi (məs: +994 50 123 45 67)") },
+                    singleLine = true,
+                    enabled = !isUpdating,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("edit_profile_phone_input")
+                )
+
+                // Universitet
+                OutlinedTextField(
+                    value = university,
+                    onValueChange = {
+                        university = it
+                        localError = null
+                    },
+                    label = { Text("Universitet / Təhsil müəssisəsi") },
+                    singleLine = true,
+                    enabled = !isUpdating,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("edit_profile_uni_input")
+                )
+
+                // Fakültə
+                OutlinedTextField(
+                    value = faculty,
+                    onValueChange = {
+                        faculty = it
+                        localError = null
+                    },
+                    label = { Text("Fakültə / İxtisas") },
+                    singleLine = true,
+                    enabled = !isUpdating,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("edit_profile_faculty_input")
+                )
+
+                // Təhsil səviyyəsi
+                Text(
+                    text = "Təhsil səviyyəsi:",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    degreeOptions.forEach { opt ->
+                        FilterChip(
+                            selected = degreeLevel == opt,
+                            onClick = { if (!isUpdating) degreeLevel = opt },
+                            label = { Text(opt, fontSize = 11.sp) }
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                // Security-Locked Fields (UID, Email, Role)
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Lock,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.outline
+                            )
+                            Text(
+                                "Təhlükəsizlik sahələri (Dəyişdirilə bilməz):",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            "• E-mail: ${user?.email ?: "-"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "• Rol: ${user?.role?.title ?: "Müştəri"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "• Sistem ID: ${user?.id?.take(16) ?: "-"}...",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (fullName.trim().length < 3) {
+                        localError = "Ad və soyad ən azı 3 hərfdən ibarət olmalıdır."
+                        return@Button
+                    }
+                    val cleanPhone = phone.trim()
+                    if (cleanPhone.isNotEmpty() && !cleanPhone.matches(Regex("^[+0-9\\s()\\-]{7,20}$"))) {
+                        localError = "Telefon nömrəsi düzgün formatda deyil."
+                        return@Button
+                    }
+
+                    viewModel.saveUserProfile(
+                        fullName = fullName,
+                        phone = phone,
+                        university = university,
+                        faculty = faculty,
+                        degreeLevel = degreeLevel,
+                        onSuccess = {
+                            onSuccess()
+                        }
+                    )
+                },
+                enabled = !isUpdating,
+                colors = ButtonDefaults.buttonColors(containerColor = Gold500, contentColor = Navy900),
+                modifier = Modifier.testTag("save_profile_btn")
+            ) {
+                if (isUpdating) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Navy900, strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Saxlanılır...")
+                } else {
+                    Text("Yadda saxla", fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isUpdating
+            ) {
+                Text(localizedString(StringKey.FILE_ACTION_CANCEL))
+            }
+        }
+    )
 }

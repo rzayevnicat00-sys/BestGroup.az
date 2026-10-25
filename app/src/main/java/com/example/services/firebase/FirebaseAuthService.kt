@@ -215,6 +215,45 @@ class FirebaseAuthService(
         }
     }
 
+    suspend fun updateUserProfile(
+        userId: String,
+        fullName: String,
+        phone: String,
+        university: String,
+        faculty: String,
+        educationLevel: String,
+        avatarUrl: String? = null
+    ): Result<Unit> {
+        return try {
+            val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
+            val updates = hashMapOf<String, Any>(
+                "fullName" to fullName.trim(),
+                "phone" to phone.trim(),
+                "university" to university.trim(),
+                "faculty" to faculty.trim(),
+                "educationLevel" to educationLevel.trim(),
+                "updatedAt" to now
+            )
+            if (avatarUrl != null) {
+                updates["profilePhoto"] = avatarUrl
+            }
+            firestore.collection("users").document(userId).set(updates, SetOptions.merge()).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateUserTheme(userId: String, theme: String) {
+        try {
+            val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
+            firestore.collection("users").document(userId).set(
+                mapOf("theme" to theme, "updatedAt" to now),
+                SetOptions.merge()
+            ).await()
+        } catch (_: Exception) {}
+    }
+
     suspend fun assignUserRole(targetUserId: String, newRole: UserRole): Boolean {
         return try {
             val roleStr = when (newRole) {
