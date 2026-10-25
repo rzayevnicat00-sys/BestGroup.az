@@ -502,6 +502,10 @@ class MainViewModel @JvmOverloads constructor(
         profileUpdateSuccess.value = false
     }
 
+    fun switchUserRole(newRole: UserRole) {
+        repository.switchUserRole(newRole)
+    }
+
     // --- Wizard Management ---
 
     fun startNewOrder(preselectedService: ServiceType? = null, preselectedCatalogService: ServiceCatalogItem? = null) {

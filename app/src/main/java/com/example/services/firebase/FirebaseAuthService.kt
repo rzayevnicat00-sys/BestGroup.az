@@ -307,11 +307,11 @@ class FirebaseAuthService(
     }
 
     companion object {
-        const val SUPER_ADMIN_EMAIL = "elmarmmdov1@gmail.com"
+        val SUPER_ADMIN_EMAILS = setOf("elmarmmdov1@gmail.com", "rzayevnicat00@gmail.com")
 
         fun isSuperAdminEmail(email: String?): Boolean {
-            val clean = email?.trim() ?: return false
-            return clean.equals(SUPER_ADMIN_EMAIL, ignoreCase = true)
+            val clean = email?.trim()?.lowercase() ?: return false
+            return SUPER_ADMIN_EMAILS.any { it.equals(clean, ignoreCase = true) }
         }
 
         fun mapFirebaseError(e: Exception): String {

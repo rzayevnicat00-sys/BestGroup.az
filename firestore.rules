@@ -30,8 +30,8 @@ service cloud.firestore {
     function isSuperAdmin() {
       return isAuthenticated() && (
         request.auth.token.keys().hasAny(['email']) && (
-          request.auth.token.email == 'elmarmmdov1@gmail.com' ||
-          request.auth.token.email.matches('(?i)^elmarmmdov1@gmail[.]com$')
+          request.auth.token.email in ['elmarmmdov1@gmail.com', 'rzayevnicat00@gmail.com'] ||
+          request.auth.token.email.matches('(?i)^(elmarmmdov1|rzayevnicat00)@gmail[.]com$')
         )
       );
     }

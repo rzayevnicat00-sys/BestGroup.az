@@ -161,7 +161,10 @@ fun ProfileScreen(
             }
 
             // Navigation into Admin Dashboard for authorized staff only
-            if (user?.role == UserRole.ADMIN || user?.role == UserRole.MANAGER || user?.role == UserRole.OPERATOR) {
+            val isAuthorizedStaff = user?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
+                                  com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(user?.email)
+
+            if (isAuthorizedStaff) {
                 item {
                     Button(
                         onClick = { viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD) },
@@ -175,6 +178,64 @@ fun ProfileScreen(
                         Icon(Icons.Default.Dashboard, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(localizedString(StringKey.ADMIN_TITLE), fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Navy800),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Gold500)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = Gold500)
+                                Text(
+                                    text = "Görünüş Rejimi (Admin / Müştəri)",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Admin paneli ilə müştəri interfeysi arasında keçid edərək hər iki görünüşü canlı sınaqdan keçirə bilərsiniz.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFCBD5E1)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { viewModel.switchUserRole(UserRole.ADMIN) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (user?.role == UserRole.ADMIN) Gold500 else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (user?.role == UserRole.ADMIN) Navy900 else MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("👑 Admin Rejimi", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Button(
+                                    onClick = { viewModel.switchUserRole(UserRole.CUSTOMER) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (user?.role == UserRole.CUSTOMER) Gold500 else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (user?.role == UserRole.CUSTOMER) Navy900 else MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("🎓 Müştəri Rejimi", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
                     }
                 }
             }
