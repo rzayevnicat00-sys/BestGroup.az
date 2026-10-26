@@ -979,7 +979,7 @@ fun AdminSupportChatDetailView(
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = customerDisplayName,
+                        text = "Müştəri ilə yazışın ($customerDisplayName)",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1

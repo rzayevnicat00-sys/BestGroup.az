@@ -101,7 +101,7 @@ fun ChatScreen(
                         com.example.ui.components.BestGroupLogoBadge(size = 36)
                         Column {
                             Text(
-                                text = activeConversation?.title ?: "BestGroup.az Müştəri Xidmətləri",
+                                text = "Müştəri Xidmətlərinə yaz",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1
@@ -117,7 +117,7 @@ fun ChatScreen(
                                         .background(Color(0xFF10B981))
                                 )
                                 Text(
-                                    text = activeConversation?.curatorName ?: "Müştəri Xidmətləri",
+                                    text = activeConversation?.curatorName ?: "24/7 Canlı Dəstək və Kurator",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

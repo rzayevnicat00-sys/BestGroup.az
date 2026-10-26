@@ -105,7 +105,7 @@ fun AdminChatScreen(
                             BestGroupLogoBadge(size = 34)
                             Column {
                                 Text(
-                                    text = "Müştəri Çatları (Admin)",
+                                    text = "Müştəri ilə yazışın",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )

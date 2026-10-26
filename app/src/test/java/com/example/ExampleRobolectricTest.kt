@@ -730,15 +730,15 @@ class ExampleRobolectricTest {
         }
     }
 
-    // 12. File > 20 MB rədd edilir
+    // 12. File > 50 MB rədd edilir
     @Test
-    fun `storage scenario 12 - file exceeding 20 MB is rejected`() {
-        val size21MB = 21L * 1024L * 1024L
+    fun `storage scenario 12 - file exceeding 50 MB is rejected`() {
+        val size51MB = 51L * 1024L * 1024L
         try {
-            com.example.services.firebase.FirebaseStorageService.validateFile("boyuk_kitab.pdf", size21MB, "application/pdf")
-            fail("20 MB-dan böyük fayl qəbul edilməməlidir")
+            com.example.services.firebase.FirebaseStorageService.validateFile("boyuk_kitab.pdf", size51MB, "application/pdf")
+            fail("50 MB-dan böyük fayl qəbul edilməməlidir")
         } catch (e: IllegalArgumentException) {
-            assertEquals("Fayl ölçüsü 20 MB-dan çox ola bilməz.", e.message)
+            assertEquals("Fayl ölçüsü 50 MB-dan çox ola bilməz.", e.message)
         }
     }
 

@@ -18,5 +18,6 @@ data class User(
     val role: UserRole = UserRole.CUSTOMER,
     val avatarUrl: String? = null,
     val createdAt: String = "",
-    val orderCount: Int = 0
+    val orderCount: Int = 0,
+    val phoneVerified: Boolean = false
 )

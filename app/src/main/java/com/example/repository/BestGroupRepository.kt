@@ -433,7 +433,8 @@ class BestGroupRepository(
                                         degreeLevel = (data["educationLevel"] as? String) ?: (data["degreeLevel"] as? String) ?: "Bakalavriat",
                                         role = cRole,
                                         createdAt = data["createdAt"] as? String ?: "",
-                                        orderCount = cOrdersCount
+                                        orderCount = cOrdersCount,
+                                        phoneVerified = (data["phoneVerified"] as? Boolean) ?: false
                                     )
                                 }
                                 _adminCustomers.value = customerList
@@ -601,12 +602,13 @@ class BestGroupRepository(
         phone: String,
         university: String,
         faculty: String,
-        educationLevel: String
+        educationLevel: String,
+        phoneVerified: Boolean = false
     ): AuthResult<User> {
         _isAuthLoading.value = true
         return try {
             if (authService != null) {
-                val res = authService.signUp(email, pass, fullName, phone, university, faculty, educationLevel)
+                val res = authService.signUp(email, pass, fullName, phone, university, faculty, educationLevel, phoneVerified)
                 if (res is AuthResult.Success) {
                     _currentUser.value = res.data
                 }
@@ -620,7 +622,8 @@ class BestGroupRepository(
                     university = university,
                     faculty = faculty,
                     degreeLevel = educationLevel,
-                    role = UserRole.CUSTOMER
+                    role = UserRole.CUSTOMER,
+                    phoneVerified = phoneVerified
                 )
                 _currentUser.value = fallbackUser
                 AuthResult.Success(fallbackUser)

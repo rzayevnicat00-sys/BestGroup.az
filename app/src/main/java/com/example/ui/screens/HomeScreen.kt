@@ -427,8 +427,223 @@ fun HomeScreen(
             }
         }
 
-        // 2. Active Orders Section (Customer only) vs System Summary (Admin)
-        if (!isStaff) {
+        if (isStaff) {
+            // ==========================================
+            // ADMIN HOME EXPERIENCE
+            // ==========================================
+            item {
+                val stats by viewModel.adminStats.collectAsState()
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 20.dp, start = 20.dp, end = 20.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable { viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD) }
+                        .border(1.dp, Gold500.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Default.Insights, contentDescription = null, tint = Gold500)
+                                Text(
+                                    text = "Sistem Göstəriciləri (Admin)",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Text(
+                                text = "Admin Paneli →",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Gold500,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Gözləyən", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${stats.pendingOrdersCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Gold500)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("İcrada", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${stats.inProgressOrdersCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF8B5CF6))
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Hazır", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${stats.readyOrdersCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Ümumi", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${stats.totalOrdersCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Çat", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${stats.waitingSupportMessagesCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF3B82F6))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Admin Quick Actions
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 20.dp, start = 20.dp, end = 20.dp)
+                ) {
+                    Text(
+                        text = "İdarəetmə Qısayolları",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { viewModel.selectBottomTab(BottomTab.ORDERS) },
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.Assignment, contentDescription = null, tint = Gold500)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text("Sifarişlər", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { viewModel.selectBottomTab(BottomTab.CHAT) },
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.SupportAgent, contentDescription = null, tint = Gold500)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text("Müştəri Çatı", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Card(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD) },
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.People, contentDescription = null, tint = Gold500)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text("Müştərilər", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Son Daxil Olmuş Sifarişlər (Admin View)
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 24.dp, start = 20.dp, end = 20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Son Daxil Olmuş Sifarişlər",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        TextButton(
+                            onClick = { viewModel.selectBottomTab(BottomTab.ORDERS) }
+                        ) {
+                            Text("Hamısına bax (${orders.size})", color = Gold500, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    if (orders.isEmpty()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(Icons.Default.Inbox, contentDescription = null, tint = Gold500, modifier = Modifier.size(32.dp))
+                                Text("Daxil olmuş sifariş yoxdur", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                Text("Müştərilər yeni sifariş verdikdə burada avtomatik əks olunacaq.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    } else {
+                        orders.take(4).forEach { ord ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { viewModel.viewOrderDetail(ord) }
+                                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(ord.orderNumber, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Gold500)
+                                        StatusBadge(status = ord.status)
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(ord.topic, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(ord.customerName.ifBlank { "Müştəri" }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("${ord.estimatedPriceAzn} AZN", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Gold500)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // ==========================================
+            // CUSTOMER HOME EXPERIENCE
+            // ==========================================
+            // 2. Active Orders Section
             item {
                 Column(
                     modifier = Modifier
@@ -495,224 +710,157 @@ fun HomeScreen(
                     }
                 }
             }
-        } else {
-            // For Admin profile: Professional System Overview card instead of customer order empty state
+
+            // 3. Service Categories Grid/Carousel
             item {
-                val stats by viewModel.adminStats.collectAsState()
-                Card(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 20.dp, start = 20.dp, end = 20.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .clickable { viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD) }
-                        .border(1.dp, Gold500.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(top = 24.dp)
                 ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = localizedString(StringKey.HOME_SERVICES_TITLE),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        TextButton(
+                            onClick = { viewModel.navigateTo(AppDestination.ORDER_WIZARD) }
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(Icons.Default.Insights, contentDescription = null, tint = Gold500)
-                                Text(
-                                    text = "Sistem Göstəriciləri (Admin)",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
                             Text(
-                                text = "Panelə keçid",
-                                style = MaterialTheme.typography.labelSmall,
+                                text = localizedString(StringKey.BTN_VIEW_ALL),
+                                style = MaterialTheme.typography.labelMedium,
                                 color = Gold500,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
-                        Spacer(modifier = Modifier.height(14.dp))
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(catalogServices.take(8), key = { it.serviceId }) { cat ->
+                            ServiceMiniCard(
+                                item = cat,
+                                language = currentLanguage,
+                                onClick = {
+                                    viewModel.startNewOrder(preselectedCatalogService = cat)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 4. Featured Campaign / Announcement Banner
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                Brush.horizontalGradient(listOf(Navy800, TechBlue600))
+                            )
+                            .border(
+                                1.dp,
+                                Gold500.copy(alpha = 0.5f),
+                                RoundedCornerShape(16.dp)
+                            ),
+                        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                    ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            modifier = Modifier.padding(18.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            Column {
-                                Text("Gözləyən", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${stats.pendingOrdersCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Gold500)
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Gold500),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Campaign,
+                                    contentDescription = null,
+                                    tint = Navy900,
+                                    modifier = Modifier.size(28.dp)
+                                )
                             }
-                            Column {
-                                Text("Ümumi Sifariş", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${stats.totalOrdersCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            }
-                            Column {
-                                Text("Müştəri Çatı", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${stats.waitingSupportMessagesCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
-                            }
-                            Column {
-                                Text("Müştərilər", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${stats.totalCustomersCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Payız Akademik Kampaniyası",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Magistr və doktorantura işlərinə 15% endirim və rəsmi Turnitin anti-plagiat hesabatı hədiyyə!",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFFE2E8F0),
+                                    lineHeight = 18.sp
+                                )
                             }
                         }
                     }
                 }
             }
-        }
 
-        // 3. Service Categories Grid/Carousel
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 24.dp)
-            ) {
-                Row(
+            // 5. BestGroup Trust & Quality Guarantees
+            item {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 20.dp)
                 ) {
                     Text(
-                        text = localizedString(StringKey.HOME_SERVICES_TITLE),
+                        text = localizedString(StringKey.HOME_GUARANTEE_TITLE),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
                     )
-                    TextButton(
-                        onClick = {
-                            if (!isStaff) viewModel.navigateTo(AppDestination.ORDER_WIZARD)
-                            else viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD)
-                        }
-                    ) {
-                        Text(
-                            text = localizedString(StringKey.BTN_VIEW_ALL),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Gold500,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(catalogServices.take(8), key = { it.serviceId }) { cat ->
-                        ServiceMiniCard(
-                            item = cat,
-                            language = currentLanguage,
-                            onClick = {
-                                if (!isStaff) viewModel.startNewOrder(preselectedCatalogService = cat)
-                                else viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD)
-                            }
-                        )
-                    }
-                }
-            }
-        }
-
-        // 4. Featured Campaign / Announcement Banner
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp)
-            ) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            Brush.horizontalGradient(listOf(Navy800, TechBlue600))
-                        )
-                        .border(
-                            1.dp,
-                            Gold500.copy(alpha = 0.5f),
-                            RoundedCornerShape(16.dp)
-                        ),
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-                ) {
                     Row(
-                        modifier = Modifier.padding(18.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Gold500),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Campaign,
-                                contentDescription = null,
-                                tint = Navy900,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Payız Akademik Kampaniyası",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Magistr və doktorantura işlərinə 15% endirim və rəsmi Turnitin anti-plagiat hesabatı hədiyyə!",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFFE2E8F0),
-                                lineHeight = 18.sp
-                            )
-                        }
+                        TrustBadgeItem(
+                            icon = Icons.Default.VerifiedUser,
+                            title = "100% Orijinallıq",
+                            subtitle = "Turnitin hesabatı",
+                            modifier = Modifier.weight(1f)
+                        )
+                        TrustBadgeItem(
+                            icon = Icons.Default.Lock,
+                            title = "Tam Məxfilik",
+                            subtitle = "Şəxsi məlumatlar qorunur",
+                            modifier = Modifier.weight(1f)
+                        )
+                        TrustBadgeItem(
+                            icon = Icons.Default.SupportAgent,
+                            title = "24/7 Dəstək",
+                            subtitle = "Canlı kurator əlaqəsi",
+                            modifier = Modifier.weight(1f)
+                        )
                     }
-                }
-            }
-        }
-
-        // 5. BestGroup Trust & Quality Guarantees
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-            ) {
-                Text(
-                    text = localizedString(StringKey.HOME_GUARANTEE_TITLE),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    TrustBadgeItem(
-                        icon = Icons.Default.VerifiedUser,
-                        title = "100% Orijinallıq",
-                        subtitle = "Turnitin hesabatı",
-                        modifier = Modifier.weight(1f)
-                    )
-                    TrustBadgeItem(
-                        icon = Icons.Default.Lock,
-                        title = "Tam Məxfilik",
-                        subtitle = "Şəxsi məlumatlar qorunur",
-                        modifier = Modifier.weight(1f)
-                    )
-                    TrustBadgeItem(
-                        icon = Icons.Default.SupportAgent,
-                        title = "24/7 Dəstək",
-                        subtitle = "Canlı kurator əlaqəsi",
-                        modifier = Modifier.weight(1f)
-                    )
                 }
             }
         }

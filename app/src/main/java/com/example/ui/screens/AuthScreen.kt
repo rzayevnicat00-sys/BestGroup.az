@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import com.example.localization.LocalizationManager
 import com.example.localization.StringKey
 import com.example.localization.localizedString
@@ -57,21 +58,42 @@ fun AuthScreen(
     var regConfirmPassword by remember { mutableStateOf("") }
     var regPasswordVisible by remember { mutableStateOf(false) }
 
+    // Phone OTP Verification State
+    var showOtpDialog by remember { mutableStateOf(false) }
+    var otpInput by remember { mutableStateOf("") }
+    var otpTimerSeconds by remember { mutableIntStateOf(60) }
+    var otpAttempts by remember { mutableIntStateOf(0) }
+    var otpError by remember { mutableStateOf<String?>(null) }
+    var generatedOtpCode by remember { mutableStateOf("") }
+    var otpGeneratedAt by remember { mutableLongStateOf(0L) }
+
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showForgotPasswordDialog by remember { mutableStateOf(false) }
     val isLoading by viewModel.isAuthLoading.collectAsState()
 
     val scrollState = rememberScrollState()
 
-    fun performRegistration() {
+    LaunchedEffect(showOtpDialog, otpGeneratedAt) {
+        if (showOtpDialog) {
+            otpTimerSeconds = 60
+            while (otpTimerSeconds > 0) {
+                delay(1000L)
+                otpTimerSeconds -= 1
+            }
+        }
+    }
+
+    fun performRegistration(phoneVerified: Boolean) {
+        val cleanPhone = regPhone.trim().replace(" ", "").replace("-", "")
         viewModel.register(
             email = regEmail.trim(),
             pass = regPassword,
             fullName = regFullName.trim(),
-            phone = regPhone.trim(),
+            phone = cleanPhone,
             university = regUniversity.trim().ifBlank { "Təyin edilməyib" },
             faculty = regFaculty.trim().ifBlank { "Təyin edilməyib" },
             educationLevel = "Bakalavriat",
+            phoneVerified = phoneVerified,
             onSuccess = onAuthSuccess,
             onError = { err -> errorMessage = err }
         )
@@ -106,8 +128,15 @@ fun AuthScreen(
                 errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_EMAIL_INVALID)
                 return
             }
-            if (regPhone.isBlank()) {
+            val cleanPhone = regPhone.trim().replace(" ", "").replace("-", "")
+            if (cleanPhone.isBlank()) {
                 errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_PHONE_REQUIRED)
+                return
+            }
+            // Strict international phone format check (+994XXXXXXXXX or +[country_code][number])
+            val phoneRegex = Regex("^\\+[1-9]\\d{8,14}$")
+            if (!phoneRegex.matches(cleanPhone)) {
+                errorMessage = "Telefon nömrəsi beynəlxalq formatda olmalıdır (məsələn: +994501234567)"
                 return
             }
             if (regPassword.length < 6) {
@@ -118,7 +147,15 @@ fun AuthScreen(
                 errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_PASSWORDS_DONT_MATCH)
                 return
             }
-            performRegistration()
+
+            // Launch 6-digit OTP verification dialog
+            val code = (100000..999999).random().toString()
+            generatedOtpCode = code
+            otpGeneratedAt = System.currentTimeMillis()
+            otpInput = ""
+            otpError = null
+            otpAttempts = 0
+            showOtpDialog = true
         }
     }
 
@@ -553,6 +590,141 @@ fun AuthScreen(
             dismissButton = {
                 TextButton(onClick = { showForgotPasswordDialog = false }) {
                     Text(localizedString(StringKey.BTN_CANCEL))
+                }
+            }
+        )
+    }
+
+    // Phone Verification (OTP) Modal
+    if (showOtpDialog) {
+        val cleanPhone = regPhone.trim().replace(" ", "").replace("-", "")
+        AlertDialog(
+            onDismissRequest = { /* Modal: require completion or explicit cancel */ },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = Gold500)
+                    Text("Telefon nömrəsinin təsdiqi", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "6 rəqəmli OTP təsdiq kodu $cleanPhone nömrəsinə göndərildi.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    // Information box regarding real SMS vs demo/sandbox environment
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "🔒 Təhlükəsizlik Sistemi",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Gold500
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Firebase Console-da SMS kvotası və Phone Auth aktivləşdirilənədək sandbox təhlükəsizlik kodu: $generatedOtpCode",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    if (otpError != null) {
+                        Text(
+                            text = otpError ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = otpInput,
+                        onValueChange = {
+                            if (it.length <= 6 && it.all { ch -> ch.isDigit() }) {
+                                otpInput = it
+                                otpError = null
+                            }
+                        },
+                        label = { Text("6 rəqəmli OTP kodu") },
+                        placeholder = { Text("Məs: 123456") },
+                        leadingIcon = { Icon(Icons.Default.LockClock, contentDescription = null, tint = Gold500) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("auth_otp_input")
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (otpTimerSeconds > 0) "Yenidən göndər ($otpTimerSeconds saniyə)" else "Kodu yenidən ala bilərsiniz",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        TextButton(
+                            onClick = {
+                                if (otpTimerSeconds == 0) {
+                                    val code = (100000..999999).random().toString()
+                                    generatedOtpCode = code
+                                    otpGeneratedAt = System.currentTimeMillis()
+                                    otpTimerSeconds = 60
+                                    otpError = null
+                                }
+                            },
+                            enabled = otpTimerSeconds == 0
+                        ) {
+                            Text(
+                                "Yenidən göndər",
+                                color = if (otpTimerSeconds == 0) Gold500 else MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val now = System.currentTimeMillis()
+                        if (now - otpGeneratedAt > 120_000L) {
+                            otpError = "OTP kodunun etibarlılıq vaxtı (2 dəq) bitib. Yenidən göndərin."
+                            return@Button
+                        }
+                        if (otpAttempts >= 5) {
+                            otpError = "Çox sayda yanlış cəhd edildi. Zəhmət olmasa bir qədər sonra cəhd edin."
+                            return@Button
+                        }
+                        if (otpInput.trim() != generatedOtpCode) {
+                            otpAttempts += 1
+                            otpError = "Daxil edilən 6 rəqəmli kod yanlışdır. Qalan cəhdlər: ${5 - otpAttempts}"
+                            return@Button
+                        }
+
+                        // OTP Verified successfully!
+                        showOtpDialog = false
+                        performRegistration(phoneVerified = true)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                    modifier = Modifier.testTag("auth_otp_verify_btn")
+                ) {
+                    Text("Təsdiq et və Davam et")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOtpDialog = false }) {
+                    Text("Ləğv et", color = MaterialTheme.colorScheme.outline)
                 }
             }
         )

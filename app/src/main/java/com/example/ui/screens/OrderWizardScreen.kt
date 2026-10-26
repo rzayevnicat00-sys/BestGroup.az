@@ -50,7 +50,7 @@ fun OrderWizardScreen(
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.wizardState.collectAsState()
-    val totalSteps = 8
+    val totalSteps = 7
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -961,7 +961,6 @@ private fun getStepTitle(step: Int): String = when (step) {
     4 -> "Fayllar"
     5 -> "Deadline və Prioritet"
     6 -> "Əlavə qeydlər"
-    7 -> "Sifarişin yoxlanılması"
-    8 -> "Göndərilməsi"
+    7 -> "Sifarişin yoxlanılması və təsdiq"
     else -> ""
 }

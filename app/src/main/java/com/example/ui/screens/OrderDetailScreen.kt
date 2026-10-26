@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,6 +28,7 @@ import com.example.localization.StringKey
 import com.example.localization.localizedString
 import com.example.model.FileUploadState
 import com.example.model.Order
+import com.example.model.OrderAttachedFile
 import com.example.model.OrderStatus
 import com.example.model.UserRole
 import kotlinx.coroutines.launch
@@ -46,18 +50,57 @@ fun OrderDetailScreen(
     modifier: Modifier = Modifier
 ) {
     val currentUser by viewModel.currentUser.collectAsState()
+    val isStaff = currentUser?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
+                  com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(currentUser?.email)
     val conversations by viewModel.conversations.collectAsState()
     val orderConv = conversations.find { it.orderId == order.id || it.id == "order_${order.id}" }
     var showReviewDialog by remember { mutableStateOf(false) }
     var ratingStars by remember { mutableStateOf(5) }
     var reviewComment by remember { mutableStateOf("") }
 
-    // Admin status edit sheet
+    // Admin status edit sheet & cancel reason dialog
     var showAdminStatusSheet by remember { mutableStateOf(false) }
+    var showCancelReasonDialog by remember { mutableStateOf(false) }
+    var cancelReasonText by remember { mutableStateOf("") }
+    var fileToDelete by remember { mutableStateOf<OrderAttachedFile?>(null) }
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (!uris.isNullOrEmpty()) {
+            uris.forEach { uri ->
+                val cursor = context.contentResolver.query(uri, null, null, null, null)
+                var name = "material_${System.currentTimeMillis()}"
+                var size = 0L
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val nameIdx = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        val sizeIdx = it.getColumnIndex(OpenableColumns.SIZE)
+                        if (nameIdx != -1) name = it.getString(nameIdx)
+                        if (sizeIdx != -1) size = it.getLong(sizeIdx)
+                    }
+                }
+                val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
+                viewModel.adminAttachFileToOrder(
+                    orderId = order.id,
+                    uriString = uri.toString(),
+                    fileName = name,
+                    sizeBytes = size,
+                    mimeType = mime,
+                    onSuccess = {
+                        coroutineScope.launch { snackbarHostState.showSnackbar("Fayl uğurla əlavə edildi: $name") }
+                    },
+                    onError = { err ->
+                        coroutineScope.launch { snackbarHostState.showSnackbar("Xəta: $err") }
+                    }
+                )
+            }
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -80,7 +123,7 @@ fun OrderDetailScreen(
                     }
                 },
                 actions = {
-                    if (currentUser?.role == UserRole.ADMIN) {
+                    if (isStaff) {
                         IconButton(onClick = { showAdminStatusSheet = true }) {
                             Icon(Icons.Default.Edit, contentDescription = "Statusu dəyiş", tint = Gold500)
                         }
@@ -365,7 +408,56 @@ fun OrderDetailScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
+
+                            if (isStaff) {
+                                Button(
+                                    onClick = {
+                                        filePickerLauncher.launch(
+                                            arrayOf(
+                                                "application/pdf",
+                                                "application/msword",
+                                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                                "application/vnd.ms-powerpoint",
+                                                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                                                "image/*",
+                                                "video/mp4",
+                                                "*/*"
+                                            )
+                                        )
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .height(36.dp)
+                                        .testTag("admin_attach_file_btn")
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Fayl əlavə et", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
+
+                        if (viewModel.isAttachingFile.value) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            val pct = (viewModel.attachFileProgress.value * 100).toInt()
+                            LinearProgressIndicator(
+                                progress = { viewModel.attachFileProgress.value },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .clip(CircleShape),
+                                color = Gold500
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = if (pct > 0) "Fayl yüklənir... $pct%" else "Fayl Firebase Storage-a yüklənir...",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Gold500,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
                         Spacer(modifier = Modifier.height(12.dp))
 
                         if (order.files.isEmpty()) {
@@ -376,6 +468,10 @@ fun OrderDetailScreen(
                             )
                         } else {
                             order.files.forEach { file ->
+                                val isUploadedByAdmin = file.uploadedBy.equals("Admin", ignoreCase = true) ||
+                                        file.name.contains("admin", ignoreCase = true) ||
+                                        file.name.contains("material", ignoreCase = true)
+
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -394,7 +490,16 @@ fun OrderDetailScreen(
                                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                                 modifier = Modifier.weight(1f)
                                             ) {
-                                                Icon(Icons.Default.InsertDriveFile, contentDescription = null, tint = Gold500)
+                                                Icon(
+                                                    imageVector = when {
+                                                        file.extension.equals("mp4", ignoreCase = true) -> Icons.Default.VideoFile
+                                                        file.extension.equals("pdf", ignoreCase = true) -> Icons.Default.PictureAsPdf
+                                                        listOf("jpg", "jpeg", "png").contains(file.extension.lowercase()) -> Icons.Default.Image
+                                                        else -> Icons.Default.InsertDriveFile
+                                                    },
+                                                    contentDescription = null,
+                                                    tint = Gold500
+                                                )
                                                 Column {
                                                     Text(
                                                         text = file.originalFileName.ifBlank { file.name },
@@ -412,19 +517,18 @@ fun OrderDetailScreen(
                                                             style = MaterialTheme.typography.labelSmall,
                                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                                         )
-                                                        val (statusText, statusColor) = when (file.state) {
-                                                            FileUploadState.PENDING -> "Gözləyir" to MaterialTheme.colorScheme.onSurfaceVariant
-                                                            FileUploadState.UPLOADING -> "Yüklənir..." to Gold500
-                                                            FileUploadState.UPLOADED, FileUploadState.SUCCESS -> "Yükləndi" to Color(0xFF2E7D32)
-                                                            FileUploadState.FAILED, FileUploadState.ERROR -> "Uğursuz oldu" to MaterialTheme.colorScheme.error
-                                                            FileUploadState.CANCELLED -> "Ləğv edildi" to MaterialTheme.colorScheme.error
+                                                        Surface(
+                                                            shape = RoundedCornerShape(4.dp),
+                                                            color = if (isUploadedByAdmin) Gold500.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
+                                                        ) {
+                                                            Text(
+                                                                text = if (isUploadedByAdmin) "👑 Admin materialı" else "Müştəri faylı",
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                color = if (isUploadedByAdmin) Gold500 else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                fontSize = 10.sp,
+                                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                            )
                                                         }
-                                                        Text(
-                                                            text = "• $statusText",
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = statusColor,
-                                                            fontWeight = FontWeight.SemiBold
-                                                        )
                                                     }
                                                 }
                                             }
@@ -459,6 +563,20 @@ fun OrderDetailScreen(
                                                         }
                                                     ) {
                                                         Icon(Icons.Default.Download, contentDescription = "Yüklə", tint = Gold500)
+                                                    }
+                                                }
+
+                                                if (isStaff) {
+                                                    IconButton(
+                                                        onClick = { fileToDelete = file },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(
+                                                            Icons.Default.DeleteOutline,
+                                                            contentDescription = "Faylı sil",
+                                                            tint = MaterialTheme.colorScheme.error,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
                                                     }
                                                 }
                                             }
@@ -571,31 +689,219 @@ fun OrderDetailScreen(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
+                Text(
+                    text = "Status dəyişdikdə bildiriş yalnız bu sifarişin sahibinə göndəriləcək.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                OrderStatus.values().forEach { st ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .clickable {
-                                viewModel.adminUpdateOrderStatus(order.id, st, "Admin tərəfindən status yeniləndi.")
-                                showAdminStatusSheet = false
-                            },
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                // 1. Qəbul edildi (Accepted)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable {
+                            viewModel.adminUpdateOrderStatus(
+                                order.id,
+                                OrderStatus.ACCEPTED,
+                                "Sifarişiniz inzibatçı tərəfindən qəbul edildi və icraya yönləndirildi."
+                            )
+                            showAdminStatusSheet = false
+                        },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(text = localizedString(st.labelKey), fontWeight = FontWeight.Bold)
-                            StatusBadge(status = st)
+                        Column {
+                            Text("Qəbul edildi", fontWeight = FontWeight.Bold)
+                            Text("Sifarişi təsdiq et və kurator təyin et", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                        StatusBadge(status = OrderStatus.ACCEPTED)
+                    }
+                }
+
+                // 2. Hazırlanır (In Progress)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable {
+                            viewModel.adminUpdateOrderStatus(
+                                order.id,
+                                OrderStatus.IN_PROGRESS,
+                                "Sifarişinizin icrasına başlanıldı və hazırda mütəxəssis tərəfindən hazırlanır."
+                            )
+                            showAdminStatusSheet = false
+                        },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("Hazırlanır", fontWeight = FontWeight.Bold)
+                            Text("İş icra prosesindədir", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        StatusBadge(status = OrderStatus.IN_PROGRESS)
+                    }
+                }
+
+                // 3. Hazırdır (Ready)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable {
+                            viewModel.adminUpdateOrderStatus(
+                                order.id,
+                                OrderStatus.READY,
+                                "Sifarişiniz tam hazırlandı. Əlavə edilmiş sənədləri yoxlaya və yükləyə bilərsiniz."
+                            )
+                            showAdminStatusSheet = false
+                        },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("Hazırdır", fontWeight = FontWeight.Bold)
+                            Text("Sifariş tamamlandı və hazırdır", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        StatusBadge(status = OrderStatus.READY)
+                    }
+                }
+
+                // 4. Ləğv edildi (Cancelled - prompts reason dialog)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable {
+                            showAdminStatusSheet = false
+                            cancelReasonText = ""
+                            showCancelReasonDialog = true
+                        },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("Ləğv edildi", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                            Text("Səbəb qeyd edərək sifarişi ləğv et", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f))
+                        }
+                        StatusBadge(status = OrderStatus.CANCELLED)
                     }
                 }
             }
         }
+    }
+
+    // Cancellation Reason Dialog
+    if (showCancelReasonDialog) {
+        AlertDialog(
+            onDismissRequest = { showCancelReasonDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.Cancel, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Text("Sifarişin ləğv edilməsi", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Zəhmət olmasa ləğv edilmə səbəbini qeyd edin. Bu səbəb müştəriyə bildiriş və status qeydi kimi çatdırılacaq:",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedTextField(
+                        value = cancelReasonText,
+                        onValueChange = { cancelReasonText = it },
+                        placeholder = { Text("Məsələn: Tələb olunan mövzu ixtisas profilinə uyğun deyil...") },
+                        modifier = Modifier.fillMaxWidth().height(100.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        maxLines = 4
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val reason = cancelReasonText.trim().ifBlank { "İnzibatçı tərəfindən ləğv edildi." }
+                        viewModel.adminUpdateOrderStatus(
+                            order.id,
+                            OrderStatus.CANCELLED,
+                            "Sifariş ləğv edildi. Səbəb: $reason"
+                        )
+                        showCancelReasonDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Ləğvi təsdiqlə", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelReasonDialog = false }) {
+                    Text(localizedString(StringKey.BTN_CANCEL))
+                }
+            }
+        )
+    }
+
+    // File Deletion Confirmation Dialog
+    if (fileToDelete != null) {
+        val f = fileToDelete!!
+        AlertDialog(
+            onDismissRequest = { fileToDelete = null },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Text("Faylı silmək istəyirsiniz?", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Text(
+                    text = "'${f.originalFileName.ifBlank { f.name }}' adlı fayl sifarişdən və Firebase Storage-dan silinəcək.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val toDeleteId = f.id
+                        fileToDelete = null
+                        viewModel.adminDeleteOrderFile(
+                            orderId = order.id,
+                            fileId = toDeleteId,
+                            onSuccess = {
+                                coroutineScope.launch { snackbarHostState.showSnackbar("Fayl uğurla silindi.") }
+                            },
+                            onError = { err ->
+                                coroutineScope.launch { snackbarHostState.showSnackbar("Xəta: $err") }
+                            }
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Bəli, sil", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { fileToDelete = null }) {
+                    Text(localizedString(StringKey.BTN_CANCEL))
+                }
+            }
+        )
     }
 }
 

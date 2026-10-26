@@ -24,11 +24,11 @@ class FirebaseStorageService(
     private val activeUploads = ConcurrentHashMap<String, UploadTask>()
 
     companion object {
-        const val MAX_FILE_SIZE_BYTES: Long = 20L * 1024L * 1024L // 20 MB
-        const val MAX_FILES_PER_ORDER: Int = 10
+        const val MAX_FILE_SIZE_BYTES: Long = 50L * 1024L * 1024L // 50 MB
+        const val MAX_FILES_PER_ORDER: Int = 15
 
         val SUPPORTED_EXTENSIONS = setOf(
-            "pdf", "doc", "docx", "ppt", "pptx", "jpg", "jpeg", "png"
+            "pdf", "doc", "docx", "ppt", "pptx", "jpg", "jpeg", "png", "mp4"
         )
 
         val SUPPORTED_MIME_TYPES = setOf(
@@ -38,7 +38,8 @@ class FirebaseStorageService(
             "application/vnd.ms-powerpoint",
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             "image/jpeg",
-            "image/png"
+            "image/png",
+            "video/mp4"
         )
 
         fun sanitizeFileName(fileName: String): String {
@@ -53,7 +54,7 @@ class FirebaseStorageService(
 
         fun validateFile(fileName: String, sizeBytes: Long, mimeType: String? = null) {
             if (sizeBytes > MAX_FILE_SIZE_BYTES) {
-                throw IllegalArgumentException("Fayl ölçüsü 20 MB-dan çox ola bilməz.")
+                throw IllegalArgumentException("Fayl ölçüsü 50 MB-dan çox ola bilməz.")
             }
             if (sizeBytes <= 0) {
                 throw IllegalArgumentException("Fayl boş ola bilməz.")
@@ -61,7 +62,7 @@ class FirebaseStorageService(
 
             val ext = extractExtension(fileName)
             if (ext.isBlank() || !SUPPORTED_EXTENSIONS.contains(ext)) {
-                throw IllegalArgumentException("Dəstəklənməyən fayl formatı. Yalnız PDF, DOC, DOCX, PPT, PPTX, JPG, PNG qəbul edilir.")
+                throw IllegalArgumentException("Dəstəklənməyən fayl formatı. Yalnız PDF, DOC, DOCX, PPT, PPTX, JPG, PNG, MP4 qəbul edilir.")
             }
 
             if (!mimeType.isNullOrBlank() && !mimeType.equals("application/octet-stream", ignoreCase = true)) {

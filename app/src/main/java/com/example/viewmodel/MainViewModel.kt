@@ -405,11 +405,12 @@ class MainViewModel @JvmOverloads constructor(
         university: String,
         faculty: String,
         educationLevel: String,
+        phoneVerified: Boolean = false,
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
         viewModelScope.launch {
-            val result = repository.signUp(email, pass, fullName, phone, university, faculty, educationLevel)
+            val result = repository.signUp(email, pass, fullName, phone, university, faculty, educationLevel, phoneVerified)
             when (result) {
                 is AuthResult.Success -> {
                     authError.value = null
@@ -529,10 +530,10 @@ class MainViewModel @JvmOverloads constructor(
 
     fun wizardNextStep() {
         val current = _wizardState.value
-        if (current.currentStep < 8) {
-            _wizardState.value = current.copy(currentStep = current.currentStep + 1, error = null)
-        } else {
+        if (current.currentStep >= 7) {
             submitWizardOrder()
+        } else {
+            _wizardState.value = current.copy(currentStep = current.currentStep + 1, error = null)
         }
     }
 
@@ -801,6 +802,119 @@ class MainViewModel @JvmOverloads constructor(
         viewModelScope.launch {
             repository.updateOrderPriority(orderId, priority)
             _selectedOrder.value = repository.orders.value.find { it.id == orderId }
+        }
+    }
+
+    val isAttachingFile = mutableStateOf(false)
+    val attachFileProgress = mutableStateOf(0f)
+
+    fun adminAttachFileToOrder(
+        orderId: String,
+        uriString: String,
+        fileName: String,
+        sizeBytes: Long,
+        mimeType: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            isAttachingFile.value = true
+            attachFileProgress.value = 0f
+            try {
+                val ext = FirebaseStorageService.extractExtension(fileName).ifBlank { "pdf" }
+                val fileId = "f_${UUID.randomUUID()}"
+                val targetOrder = repository.orders.value.find { it.id == orderId }
+                    ?: repository.orderService?.getOrderById(orderId)
+                    ?: throw IllegalStateException("Sifariş tapılmadı.")
+
+                val uploadedFile = if (repository.storageService != null) {
+                    repository.storageService.uploadOrderFileWithUri(
+                        userId = targetOrder.userId,
+                        orderId = orderId,
+                        uri = android.net.Uri.parse(uriString),
+                        originalFileName = fileName,
+                        sizeBytes = sizeBytes,
+                        mimeType = mimeType,
+                        fileId = fileId,
+                        onProgress = { p -> attachFileProgress.value = p }
+                    )
+                } else {
+                    OrderAttachedFile(
+                        id = fileId,
+                        name = fileName,
+                        originalFileName = fileName,
+                        sizeBytes = sizeBytes,
+                        extension = ext,
+                        state = FileUploadState.UPLOADED,
+                        progress = 1f,
+                        mimeType = mimeType,
+                        storagePath = "users/${targetOrder.userId}/orders/$orderId/files/$fileId.$ext",
+                        uploadedBy = "Admin"
+                    )
+                }
+
+                val updatedFiles = targetOrder.files + uploadedFile
+                repository.orderService?.updateOrderFiles(orderId, updatedFiles)
+
+                // Update in-memory state
+                val updatedOrder = targetOrder.copy(files = updatedFiles)
+                repository.setOrdersDirectly(repository.orders.value.map { if (it.id == orderId) updatedOrder else it })
+                if (_selectedOrder.value?.id == orderId) {
+                    _selectedOrder.value = updatedOrder
+                }
+
+                // Send notification strictly to the customer
+                repository.addNotification(
+                    NotificationItem(
+                        id = "notif_${UUID.randomUUID()}",
+                        title = "Sifarişinizə yeni fayl əlavə edildi (${targetOrder.orderNumber})",
+                        body = "Admin/Kurator tərəfindən material əlavə olundu: $fileName",
+                        category = NotificationCategory.ORDERS,
+                        timestamp = "İndicə",
+                        targetOrderId = orderId,
+                        forAdmin = false,
+                        targetUserId = targetOrder.userId
+                    )
+                )
+
+                onSuccess()
+            } catch (e: Exception) {
+                onError(e.localizedMessage ?: "Fayl yüklənərkən xəta baş verdi.")
+            } finally {
+                isAttachingFile.value = false
+            }
+        }
+    }
+
+    fun adminDeleteOrderFile(
+        orderId: String,
+        fileId: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                val targetOrder = repository.orders.value.find { it.id == orderId }
+                    ?: repository.orderService?.getOrderById(orderId)
+                    ?: throw IllegalStateException("Sifariş tapılmadı.")
+
+                val fileToDelete = targetOrder.files.find { it.id == fileId }
+                if (fileToDelete?.storagePath?.isNotBlank() == true) {
+                    repository.storageService?.deleteOrderFile(fileToDelete.storagePath)
+                }
+
+                val updatedFiles = targetOrder.files.filter { it.id != fileId }
+                repository.orderService?.updateOrderFiles(orderId, updatedFiles)
+
+                val updatedOrder = targetOrder.copy(files = updatedFiles)
+                repository.setOrdersDirectly(repository.orders.value.map { if (it.id == orderId) updatedOrder else it })
+                if (_selectedOrder.value?.id == orderId) {
+                    _selectedOrder.value = updatedOrder
+                }
+                onSuccess()
+            } catch (e: Exception) {
+                onError(e.localizedMessage ?: "Fayl silinərkən xəta baş verdi.")
+            }
         }
     }
 

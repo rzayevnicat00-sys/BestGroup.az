@@ -52,7 +52,8 @@ class FirebaseAuthService(
         phone: String,
         university: String,
         faculty: String,
-        educationLevel: String
+        educationLevel: String,
+        phoneVerified: Boolean = false
     ): AuthResult<User> {
         return try {
             val authResult = auth.createUserWithEmailAndPassword(email.trim(), pass).await()
@@ -79,7 +80,8 @@ class FirebaseAuthService(
                 university = university.trim(),
                 faculty = faculty.trim(),
                 degreeLevel = educationLevel.trim(),
-                role = initialRole
+                role = initialRole,
+                phoneVerified = phoneVerified
             )
 
             val profileMap = hashMapOf(
@@ -87,6 +89,7 @@ class FirebaseAuthService(
                 "fullName" to userProfile.fullName,
                 "email" to userProfile.email,
                 "phone" to userProfile.phone,
+                "phoneVerified" to phoneVerified,
                 "university" to userProfile.university,
                 "faculty" to userProfile.faculty,
                 "educationLevel" to userProfile.degreeLevel,
@@ -152,7 +155,8 @@ class FirebaseAuthService(
                 university = userDoc.getString("university") ?: "",
                 faculty = userDoc.getString("faculty") ?: "",
                 degreeLevel = userDoc.getString("educationLevel") ?: "Bakalavriat",
-                role = role
+                role = role,
+                phoneVerified = userDoc.getBoolean("phoneVerified") ?: false
             )
 
             AuthResult.Success(user)
@@ -207,7 +211,8 @@ class FirebaseAuthService(
                     university = doc.getString("university") ?: "",
                     faculty = doc.getString("faculty") ?: "",
                     degreeLevel = doc.getString("educationLevel") ?: "Bakalavriat",
-                    role = role
+                    role = role,
+                    phoneVerified = doc.getBoolean("phoneVerified") ?: false
                 )
             } else null
         } catch (e: Exception) {
