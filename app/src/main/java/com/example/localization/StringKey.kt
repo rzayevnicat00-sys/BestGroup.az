@@ -8,6 +8,7 @@ enum class StringKey {
 
     // Navigation
     NAV_HOME,
+    NAV_SERVICES,
     NAV_ORDERS,
     NAV_CHAT,
     NAV_NOTIFICATIONS,

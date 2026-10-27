@@ -34,6 +34,7 @@ enum class AppDestination {
 
 enum class BottomTab {
     HOME,
+    SERVICES,
     ORDERS,
     CHAT,
     NOTIFICATIONS,

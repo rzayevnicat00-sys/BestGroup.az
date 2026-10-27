@@ -7,8 +7,9 @@ val LocaleEn: Map<StringKey, String> = mapOf(
 
     // Nav
     StringKey.NAV_HOME to "Home",
+    StringKey.NAV_SERVICES to "Services",
     StringKey.NAV_ORDERS to "Orders",
-    StringKey.NAV_CHAT to "Chat",
+    StringKey.NAV_CHAT to "Messages",
     StringKey.NAV_NOTIFICATIONS to "Notifications",
     StringKey.NAV_PROFILE to "Profile",
 

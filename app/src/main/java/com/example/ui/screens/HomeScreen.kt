@@ -17,24 +17,31 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.localization.Language
 import com.example.localization.StringKey
 import com.example.localization.localizedString
 import com.example.model.Order
 import com.example.model.OrderStatus
+import com.example.model.ServiceCatalogItem
 import com.example.model.ServiceType
 import com.example.model.UserRole
 import com.example.ui.components.BestGroupLogoBadge
@@ -44,6 +51,12 @@ import com.example.ui.theme.*
 import com.example.viewmodel.AppDestination
 import com.example.viewmodel.BottomTab
 import com.example.viewmodel.MainViewModel
+
+private data class CircularServiceCategory(
+    val title: String,
+    val icon: ImageVector,
+    val serviceType: ServiceType? = null
+)
 
 @Composable
 fun HomeScreen(
@@ -56,9 +69,17 @@ fun HomeScreen(
     val orders by viewModel.orders.collectAsState()
     val catalogServices by viewModel.catalogServices.collectAsState()
     val currentLanguage by viewModel.currentLanguage.collectAsState()
+    val conversations by viewModel.conversations.collectAsState()
+    val notifications by viewModel.notifications.collectAsState()
+
+    val unreadChatCount = remember(conversations) { conversations.sumOf { it.unreadCount } }
+    val unreadNotifsCount = remember(notifications) { notifications.count { !it.isRead } }
+
     val activeOrders = remember(orders) {
         orders.filter { it.status == OrderStatus.IN_PROGRESS || it.status == OrderStatus.ACCEPTED || it.status == OrderStatus.PENDING }
     }
+
+    var searchQuery by remember { mutableStateOf("") }
 
     val context = LocalContext.current
     var hasNotificationPermission by remember {
@@ -81,345 +102,241 @@ fun HomeScreen(
         }
     }
 
+    // 8 Required Circular Categories matching user prompt and Birbank circular stories
+    val circularCategories = remember {
+        listOf(
+            CircularServiceCategory("Diplom işi", Icons.Default.School, ServiceType.DIPLOMA),
+            CircularServiceCategory("Magistr dissertasiyası", Icons.Default.WorkspacePremium, ServiceType.MASTER),
+            CircularServiceCategory("Kurs və layihə işi", Icons.Default.FolderSpecial, ServiceType.COURSE_WORK),
+            CircularServiceCategory("Sərbəst iş, referat və esse", Icons.Default.Description, ServiceType.ESSAY),
+            CircularServiceCategory("Təqdimat və slayd", Icons.Default.CoPresent, ServiceType.PRESENTATION),
+            CircularServiceCategory("Elmi məqalə", Icons.AutoMirrored.Filled.MenuBook, ServiceType.ARTICLE),
+            CircularServiceCategory("Statistik təhlil", Icons.Default.Analytics, ServiceType.STATISTICAL_ANALYSIS),
+            CircularServiceCategory("Redaktə və formatlaşdırma", Icons.Default.Spellcheck, ServiceType.EDITING)
+        )
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
+            .background(BirbankBgLight)
             .testTag("home_screen_lazy_column"),
         contentPadding = PaddingValues(bottom = 96.dp)
     ) {
-        // 1. Top Header & Greeting
+        // ========================================================
+        // 1. TOP HEADER (Birbank Style: Logo, Search pill, Chat, Notif, Profile)
+        // ========================================================
+        item {
+            Surface(
+                color = Color.White,
+                tonalElevation = 1.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Left: Birbank-styled Brand Bar / Emblem
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.clickable {
+                                if (isStaff) {
+                                    viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD)
+                                }
+                            }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(6.dp)
+                                    .height(26.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(BirbankRed)
+                            )
+                            BestGroupLogoBadge(size = 32)
+                        }
+
+                        // Center: Search Pill ("Axtar" capsule)
+                        Surface(
+                            shape = RoundedCornerShape(22.dp),
+                            color = BirbankSearchBg,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .clickable {
+                                    viewModel.selectBottomTab(BottomTab.SERVICES)
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Axtar",
+                                    tint = BirbankTextSecondary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = if (searchQuery.isBlank()) "Axtar" else searchQuery,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (searchQuery.isBlank()) BirbankTextSecondary else BirbankTextPrimary,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+
+                        // Right: Messages, Notifications, Profile Icons
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            // Chat icon with badge
+                            IconButton(
+                                onClick = { viewModel.selectBottomTab(BottomTab.CHAT) },
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                BadgedBox(
+                                    badge = {
+                                        if (unreadChatCount > 0) {
+                                            Badge(containerColor = BirbankRed, contentColor = Color.White) {
+                                                Text("$unreadChatCount")
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ChatBubbleOutline,
+                                        contentDescription = "Mesajlar",
+                                        tint = BirbankTextPrimary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+
+                            // Notification icon with badge
+                            IconButton(
+                                onClick = { viewModel.selectBottomTab(BottomTab.NOTIFICATIONS) },
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                BadgedBox(
+                                    badge = {
+                                        if (unreadNotifsCount > 0) {
+                                            Badge(containerColor = BirbankRed, contentColor = Color.White) {
+                                                Text("$unreadNotifsCount")
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Notifications,
+                                        contentDescription = "Bildirişlər",
+                                        tint = BirbankTextPrimary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+
+                            // Profile Avatar
+                            IconButton(
+                                onClick = { viewModel.selectBottomTab(BottomTab.PROFILE) },
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(CircleShape)
+                                        .background(BirbankRedLight),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Person,
+                                        contentDescription = "Profil",
+                                        tint = BirbankRed,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ========================================================
+        // 2. CIRCULAR SERVICE CATEGORIES (Birbank Circular Stories)
+        // ========================================================
         item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Navy900, Navy800)
-                        )
-                    )
-                    .statusBarsPadding()
-                    .padding(20.dp)
+                    .background(Color.White)
+                    .padding(vertical = 14.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        BestGroupLogoBadge(size = 44)
-                        Column {
-                            Text(
-                                text = "BestGroup.az",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Text(
-                                text = localizedString(StringKey.APP_SLOGAN),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Gold400,
-                                maxLines = 1
-                            )
-                        }
-                    }
-
-                    // Role indicator badge (authoritative from Firebase account, non-switchable)
-                    Surface(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .testTag("home_role_badge"),
-                        color = if (user?.role == UserRole.ADMIN) Gold500 else Navy700
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    items(circularCategories) { cat ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .width(78.dp)
+                                .clickable {
+                                    val matched = catalogServices.find {
+                                        it.serviceId.contains(cat.serviceType?.name?.lowercase() ?: "", ignoreCase = true) ||
+                                        it.nameAz.contains(cat.title, ignoreCase = true)
+                                    }
+                                    viewModel.startNewOrder(preselectedService = cat.serviceType, preselectedCatalogService = matched)
+                                }
                         ) {
-                            Icon(
-                                imageVector = if (user?.role == UserRole.ADMIN) Icons.Default.AdminPanelSettings else Icons.Default.Person,
-                                contentDescription = null,
-                                tint = if (user?.role == UserRole.ADMIN) Navy900 else Color.White,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Text(
-                                text = user?.role?.title ?: "Müştəri",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (user?.role == UserRole.ADMIN) Navy900 else Color.White
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Personalized Greeting
-                Text(
-                    text = "${localizedString(StringKey.HOME_GREETING_PREFIX)}, ${user?.fullName?.split(" ")?.firstOrNull() ?: "İstifadəçi"} 👋",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = localizedString(StringKey.HOME_SUBTITLE),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFFCBD5E1)
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Email verification notice banner if not verified
-                val showVerifyBanner by viewModel.showEmailVerificationBanner.collectAsState()
-                if (showVerifyBanner) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Navy700),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Gold500),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            // Circular Ring Border (Red outer ring + inner badge)
+                            Box(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clip(CircleShape)
+                                    .border(1.5.dp, BirbankRed.copy(alpha = 0.85f), CircleShape)
+                                    .padding(3.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.MarkEmailUnread, contentDescription = null, tint = Gold500)
-                                Text(
-                                    text = localizedString(StringKey.AUTH_VERIFY_EMAIL_TITLE),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                        .background(BirbankRedLight),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = cat.icon,
+                                        contentDescription = cat.title,
+                                        tint = BirbankRed,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
                             }
+
                             Spacer(modifier = Modifier.height(6.dp))
+
                             Text(
-                                text = "Hesabınızın təhlükəsizliyi üçün göndərilmiş e-mail təsdiq linkinə keçid edin.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFFCBD5E1)
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = { viewModel.resendVerificationEmail({}, {}) },
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(
-                                        text = localizedString(StringKey.AUTH_RESEND_CODE),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Gold500
-                                    )
-                                }
-                                Button(
-                                    onClick = { viewModel.checkEmailVerificationStatus() },
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Gold500, contentColor = Navy900),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(
-                                        text = "Yoxla",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (isStaff) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .clickable { viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD) }
-                            .border(
-                                1.5.dp,
-                                Brush.horizontalGradient(listOf(Gold500, Color(0xFFF3E5AB), Gold500)),
-                                RoundedCornerShape(16.dp)
-                            )
-                            .testTag("home_hero_admin_dashboard_button"),
-                        colors = CardDefaults.cardColors(containerColor = Navy700)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(18.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(46.dp)
-                                        .clip(CircleShape)
-                                        .background(Gold500),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.AdminPanelSettings,
-                                        contentDescription = null,
-                                        tint = Navy900,
-                                        modifier = Modifier.size(28.dp)
-                                    )
-                                }
-                                Column {
-                                    Text(
-                                        text = "Admin İdarəetmə Paneli",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                    Text(
-                                        text = "Sifarişlər, Müştəri xidmətləri və Statistika",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Gold400
-                                    )
-                                }
-                            }
-
-                            Icon(
-                                imageVector = Icons.Default.ArrowForwardIos,
-                                contentDescription = null,
-                                tint = Gold500,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                } else {
-                    // Big Primary Hero Button: “Yeni sifariş”
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .clickable { viewModel.startNewOrder() }
-                            .border(
-                                1.5.dp,
-                                Brush.horizontalGradient(listOf(Gold500, Color(0xFFF3E5AB), Gold500)),
-                                RoundedCornerShape(16.dp)
-                            )
-                            .testTag("home_hero_new_order_button"),
-                        colors = CardDefaults.cardColors(containerColor = Navy700)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(18.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(46.dp)
-                                        .clip(CircleShape)
-                                        .background(Gold500),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = null,
-                                        tint = Navy900,
-                                        modifier = Modifier.size(28.dp)
-                                    )
-                                }
-                                Column {
-                                    Text(
-                                        text = localizedString(StringKey.BTN_NEW_ORDER),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                    Text(
-                                        text = "8 addımlı rahat sifariş sistemi",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Gold400
-                                    )
-                                }
-                            }
-
-                            Icon(
-                                imageVector = Icons.Default.ArrowForwardIos,
-                                contentDescription = null,
-                                tint = Gold500,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-
-                if (!isStaff) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    // Pre-order consultation / inquiry button for customers
-                    OutlinedCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .clickable { viewModel.openSupportInquiryChat() }
-                            .testTag("home_pre_order_chat_shortcut"),
-                        colors = CardDefaults.outlinedCardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Gold500.copy(alpha = 0.5f))
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(Gold500.copy(alpha = 0.15f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ChatBubbleOutline,
-                                        contentDescription = null,
-                                        tint = Gold500,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                Column {
-                                    Text(
-                                        text = "Sualınız var? Öncədən soruşun",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "Sifariş vermədən öncə limitsiz canlı dəstək",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                            Icon(
-                                imageVector = Icons.Default.ChevronRight,
-                                contentDescription = null,
-                                tint = Gold500,
-                                modifier = Modifier.size(18.dp)
+                                text = cat.title,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = BirbankTextPrimary,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                lineHeight = 13.sp
                             )
                         }
                     }
@@ -427,22 +344,103 @@ fun HomeScreen(
             }
         }
 
+        // ========================================================
+        // 3. QUICK METRIC / STATUS PILLS (Birbank Balance Chips)
+        // ========================================================
+        item {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    MetricChip(
+                        icon = Icons.Default.VerifiedUser,
+                        label = "Turnitin 100%",
+                        badgeColor = Color(0xFF10B981)
+                    )
+                }
+                item {
+                    MetricChip(
+                        icon = Icons.Default.Bolt,
+                        label = "24-48 Saat Təhvil",
+                        badgeColor = BirbankRed
+                    )
+                }
+                item {
+                    MetricChip(
+                        icon = Icons.Default.SupportAgent,
+                        label = "24/7 Canlı Kurator",
+                        badgeColor = Color(0xFF3B82F6)
+                    )
+                }
+                item {
+                    MetricChip(
+                        icon = Icons.Default.Lock,
+                        label = "Tam Məxfilik",
+                        badgeColor = Color(0xFF8B5CF6)
+                    )
+                }
+            }
+        }
+
+        // ========================================================
+        // 4. THREE QUICK ACTION CARDS (Sifarişlərim, Mesajlar, Tarixçə)
+        // ========================================================
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Card 1: Sifarişlərim
+                QuickActionCard(
+                    title = "Sifarişlərim",
+                    icon = Icons.Outlined.Assignment,
+                    modifier = Modifier.weight(1f),
+                    onClick = { viewModel.selectBottomTab(BottomTab.ORDERS) },
+                    testTag = "quick_card_orders"
+                )
+
+                // Card 2: Mesajlar
+                QuickActionCard(
+                    title = "Mesajlar",
+                    icon = Icons.Outlined.Chat,
+                    modifier = Modifier.weight(1f),
+                    onClick = { viewModel.selectBottomTab(BottomTab.CHAT) },
+                    badgeCount = unreadChatCount,
+                    testTag = "quick_card_messages"
+                )
+
+                // Card 3: Tarixçə
+                QuickActionCard(
+                    title = "Tarixçə",
+                    icon = Icons.Outlined.History,
+                    modifier = Modifier.weight(1f),
+                    onClick = { viewModel.selectBottomTab(BottomTab.ORDERS) },
+                    testTag = "quick_card_history"
+                )
+            }
+        }
+
+        // ========================================================
+        // 5. IF STAFF: ADMIN DASHBOARD METRICS & SHORTCUTS
+        // ========================================================
         if (isStaff) {
-            // ==========================================
-            // ADMIN HOME EXPERIENCE
-            // ==========================================
             item {
                 val stats by viewModel.adminStats.collectAsState()
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 20.dp, start = 20.dp, end = 20.dp)
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .clickable { viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD) }
-                        .border(1.dp, Gold500.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        .border(1.dp, BirbankRed.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                        .testTag("home_hero_admin_dashboard_button"),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -452,203 +450,49 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Default.Insights, contentDescription = null, tint = Gold500)
-                                Text(
-                                    text = "Sistem Göstəriciləri (Admin)",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                            Text(
-                                text = "Admin Paneli →",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Gold500,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Gözləyən", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${stats.pendingOrdersCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Gold500)
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("İcrada", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${stats.inProgressOrdersCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF8B5CF6))
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Hazır", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${stats.readyOrdersCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Ümumi", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${stats.totalOrdersCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Çat", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${stats.waitingSupportMessagesCount}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF3B82F6))
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Admin Quick Actions
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 20.dp, start = 20.dp, end = 20.dp)
-                ) {
-                    Text(
-                        text = "İdarəetmə Qısayolları",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Card(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { viewModel.selectBottomTab(BottomTab.ORDERS) },
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.Assignment, contentDescription = null, tint = Gold500)
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text("Sifarişlər", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            }
-                        }
-
-                        Card(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { viewModel.selectBottomTab(BottomTab.CHAT) },
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.SupportAgent, contentDescription = null, tint = Gold500)
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text("Müştəri Çatı", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            }
-                        }
-
-                        Card(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD) },
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.People, contentDescription = null, tint = Gold500)
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text("Müştərilər", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Son Daxil Olmuş Sifarişlər (Admin View)
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 24.dp, start = 20.dp, end = 20.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Son Daxil Olmuş Sifarişlər",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        TextButton(
-                            onClick = { viewModel.selectBottomTab(BottomTab.ORDERS) }
-                        ) {
-                            Text("Hamısına bax (${orders.size})", color = Gold500, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    if (orders.isEmpty()) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(Icons.Default.Inbox, contentDescription = null, tint = Gold500, modifier = Modifier.size(32.dp))
-                                Text("Daxil olmuş sifariş yoxdur", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                Text("Müştərilər yeni sifariş verdikdə burada avtomatik əks olunacaq.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    } else {
-                        orders.take(4).forEach { ord ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable { viewModel.viewOrderDetail(ord) }
-                                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Column(modifier = Modifier.padding(14.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(ord.orderNumber, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Gold500)
-                                        StatusBadge(status = ord.status)
-                                    }
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(ord.topic, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(ord.customerName.ifBlank { "Müştəri" }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text("${ord.estimatedPriceAzn} AZN", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Gold500)
-                                    }
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(BirbankRedLight),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(20.dp))
+                                }
+                                Column {
+                                    Text("İdarəçi Paneli", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = BirbankTextPrimary)
+                                    Text("Sistem statistikası və sifariş axını", style = MaterialTheme.typography.labelSmall, color = BirbankTextSecondary)
                                 }
                             }
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(18.dp))
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            AdminMiniMetricCard("Gözləyən", "${stats.pendingOrdersCount}", BirbankRed, Modifier.weight(1f))
+                            AdminMiniMetricCard("Hazırlanan", "${stats.inProgressOrdersCount}", Color(0xFF3B82F6), Modifier.weight(1f))
+                            AdminMiniMetricCard("Hazır", "${stats.readyOrdersCount}", Color(0xFF10B981), Modifier.weight(1f))
+                            AdminMiniMetricCard("Ümumi", "${stats.totalOrdersCount}", BirbankTextPrimary, Modifier.weight(1f))
                         }
                     }
                 }
             }
-        } else {
-            // ==========================================
-            // CUSTOMER HOME EXPERIENCE
-            // ==========================================
-            // 2. Active Orders Section
+        }
+
+        // ========================================================
+        // 6. AKTİV SİFARİŞLƏR ("Kartlar və hesablar" Style Section)
+        // Yalnız müştərilər üçün göstərilir. Admin üçün tamamilə çıxarılıb.
+        // ========================================================
+        if (!isStaff) {
             item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 20.dp, start = 20.dp, end = 20.dp)
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -656,47 +500,69 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = localizedString(StringKey.HOME_ACTIVE_ORDERS_TITLE),
+                            text = "Aktiv Sifarişlər",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
+                            color = BirbankTextPrimary
                         )
                         TextButton(
-                            onClick = { viewModel.selectBottomTab(BottomTab.ORDERS) },
-                            modifier = Modifier.testTag("home_view_all_orders_button")
+                            onClick = { viewModel.navigateTo(AppDestination.ORDER_WIZARD) },
+                            modifier = Modifier.testTag("home_create_order_btn")
                         ) {
                             Text(
-                                text = localizedString(StringKey.BTN_VIEW_ALL),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Gold500,
-                                fontWeight = FontWeight.SemiBold
+                                text = "+ Yeni sifariş",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = BirbankRed
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     if (activeOrders.isEmpty()) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                            shape = RoundedCornerShape(12.dp)
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            shape = RoundedCornerShape(16.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BirbankBorder),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                         ) {
                             Row(
                                 modifier = Modifier.padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = null,
-                                    tint = Gold500
-                                )
-                                Text(
-                                    text = localizedString(StringKey.EMPTY_ORDERS_TITLE),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(BirbankRedLight),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Outlined.Assignment, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(24.dp))
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Aktiv sifarişiniz yoxdur",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BirbankTextPrimary
+                                    )
+                                    Text(
+                                        text = "Dissertasiya, diplom və ya kurs işi üçün dərhal müraciət edin",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = BirbankTextSecondary
+                                    )
+                                }
+                                Button(
+                                    onClick = { viewModel.navigateTo(AppDestination.ORDER_WIZARD) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text("Sifariş et", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     } else {
@@ -710,79 +576,95 @@ fun HomeScreen(
                     }
                 }
             }
+        }
 
-            // 3. Service Categories Grid/Carousel
-            item {
-                Column(
+        // ========================================================
+        // 7. AKADEMİK XİDMƏTLƏR KARTLARI (Firestore-dan Yüklənən)
+        // ========================================================
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)
+            ) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 24.dp)
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Column {
                         Text(
-                            text = localizedString(StringKey.HOME_SERVICES_TITLE),
+                            text = "Akademik Xidmətlər",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
+                            color = BirbankTextPrimary
                         )
-                        TextButton(
-                            onClick = { viewModel.navigateTo(AppDestination.ORDER_WIZARD) }
-                        ) {
-                            Text(
-                                text = localizedString(StringKey.BTN_VIEW_ALL),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Gold500,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
+                        Text(
+                            text = "Peşəkar elmi və tədqiqat xidmətləri",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = BirbankTextSecondary
+                        )
                     }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    TextButton(
+                        onClick = { viewModel.selectBottomTab(BottomTab.SERVICES) }
                     ) {
-                        items(catalogServices.take(8), key = { it.serviceId }) { cat ->
-                            ServiceMiniCard(
-                                item = cat,
-                                language = currentLanguage,
-                                onClick = {
-                                    viewModel.startNewOrder(preselectedCatalogService = cat)
-                                }
-                            )
-                        }
+                        Text(
+                            text = "Hamısına bax",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = BirbankRed,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(catalogServices.take(8), key = { it.serviceId }) { cat ->
+                        BirbankServiceCard(
+                            item = cat,
+                            language = currentLanguage,
+                            onClick = {
+                                viewModel.startNewOrder(preselectedCatalogService = cat)
+                            }
+                        )
                     }
                 }
             }
+        }
 
-            // 4. Featured Campaign / Announcement Banner
-            item {
-                Column(
+        // ========================================================
+        // 8. İDARƏÇİ ELANLARI VƏ KAMPANİYALAR (Birbank Promo Banner)
+        // ========================================================
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
+            ) {
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .clickable { viewModel.navigateTo(AppDestination.ORDER_WIZARD) }
+                        .shadow(4.dp, RoundedCornerShape(18.dp)),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BirbankRedBorder)
                 ) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(
-                                Brush.horizontalGradient(listOf(Navy800, TechBlue600))
-                            )
-                            .border(
-                                1.dp,
-                                Gold500.copy(alpha = 0.5f),
-                                RoundedCornerShape(16.dp)
-                            ),
-                        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-                    ) {
+                    Column {
+                        // Top decorative accent strip
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .background(Brush.horizontalGradient(listOf(BirbankRed, BirbankRedDark)))
+                        )
+
                         Row(
                             modifier = Modifier.padding(18.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -790,214 +672,178 @@ fun HomeScreen(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Gold500),
+                                    .size(50.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(BirbankRedLight),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Campaign,
                                     contentDescription = null,
-                                    tint = Navy900,
+                                    tint = BirbankRed,
                                     modifier = Modifier.size(28.dp)
                                 )
                             }
 
                             Column(modifier = Modifier.weight(1f)) {
+                                Surface(
+                                    color = BirbankRed,
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = "XÜSUSİ TƏKLİF",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = "Payız Akademik Kampaniyası",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = BirbankTextPrimary
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Magistr və doktorantura işlərinə 15% endirim və rəsmi Turnitin anti-plagiat hesabatı hədiyyə!",
+                                    text = "Bütün magistr və dissertasiya işlərinə 15% endirim və rəsmi Turnitin anti-plagiat hesabatı hədiyyə!",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFFE2E8F0),
-                                    lineHeight = 18.sp
+                                    color = BirbankTextSecondary,
+                                    lineHeight = 16.sp
                                 )
                             }
+
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                tint = BirbankRed,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
                 }
             }
-
-            // 5. BestGroup Trust & Quality Guarantees
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
-                ) {
-                    Text(
-                        text = localizedString(StringKey.HOME_GUARANTEE_TITLE),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        TrustBadgeItem(
-                            icon = Icons.Default.VerifiedUser,
-                            title = "100% Orijinallıq",
-                            subtitle = "Turnitin hesabatı",
-                            modifier = Modifier.weight(1f)
-                        )
-                        TrustBadgeItem(
-                            icon = Icons.Default.Lock,
-                            title = "Tam Məxfilik",
-                            subtitle = "Şəxsi məlumatlar qorunur",
-                            modifier = Modifier.weight(1f)
-                        )
-                        TrustBadgeItem(
-                            icon = Icons.Default.SupportAgent,
-                            title = "24/7 Dəstək",
-                            subtitle = "Canlı kurator əlaqəsi",
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
         }
     }
 }
 
 @Composable
-private fun HomeActiveOrderCard(
-    order: Order,
-    onClick: () -> Unit
+private fun MetricChip(
+    icon: ImageVector,
+    label: String,
+    badgeColor: Color
+) {
+    Surface(
+        color = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BirbankBorder),
+        shadowElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = badgeColor,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = BirbankTextPrimary,
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickActionCard(
+    title: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    badgeCount: Int = 0,
+    testTag: String = ""
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .border(
-                1.dp,
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                RoundedCornerShape(14.dp)
-            )
-            .testTag("order_card_${order.id}"),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, BirbankBorder, RoundedCornerShape(16.dp))
+            .testTag(testTag),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp, horizontal = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = order.orderNumber,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Gold500
-                )
-                StatusBadge(status = order.status)
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = order.topic,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Progress bar
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "İcra faizi",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "${order.progressPercent}%",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            LinearProgressIndicator(
-                progress = { order.progressPercent / 100f },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(CircleShape),
-                color = Gold500,
-                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                BadgedBox(
+                    badge = {
+                        if (badgeCount > 0) {
+                            Badge(containerColor = BirbankRed, contentColor = Color.White) {
+                                Text("$badgeCount")
+                            }
+                        }
+                    }
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Event,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = order.deadline,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = BirbankRed,
+                        modifier = Modifier.size(26.dp)
                     )
                 }
-
-                PriorityBadge(priority = order.priority)
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = BirbankTextPrimary,
+                    fontSize = 12.sp,
+                    maxLines = 1
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ServiceMiniCard(
-    item: com.example.model.ServiceCatalogItem,
-    language: com.example.localization.Language,
+private fun BirbankServiceCard(
+    item: ServiceCatalogItem,
+    language: Language,
     onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
-            .width(140.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .width(180.dp)
+            .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .border(
-                1.dp,
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                RoundedCornerShape(14.dp)
-            )
+            .border(1.dp, BirbankBorder, RoundedCornerShape(16.dp))
             .testTag("service_mini_card_${item.serviceId}"),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier.padding(14.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Navy800),
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(BirbankRedLight),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -1017,70 +863,208 @@ private fun ServiceMiniCard(
                         else -> Icons.Default.MoreHoriz
                     },
                     contentDescription = null,
-                    tint = Gold500,
+                    tint = BirbankRed,
                     modifier = Modifier.size(22.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Text(
                 text = item.getLocalizedName(language),
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
+                color = BirbankTextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
             Spacer(modifier = Modifier.height(4.dp))
 
+            val priceFormatted = item.getFormattedPrice(language)
+            val priceText = if (priceFormatted.isNotBlank() && item.startingPriceAzn > 0) {
+                "$priceFormatted-dən başlayaraq"
+            } else {
+                "Qiymət işin tələblərinə əsasən müəyyən edilir"
+            }
+
             Text(
-                text = item.getFormattedPrice(language),
+                text = priceText,
                 style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = Gold500,
-                maxLines = 1
+                fontWeight = FontWeight.Bold,
+                color = BirbankRed,
+                fontSize = 11.sp,
+                maxLines = 2,
+                lineHeight = 14.sp
             )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = item.getLocalizedDescription(language),
+                style = MaterialTheme.typography.bodySmall,
+                color = BirbankTextSecondary,
+                fontSize = 10.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 13.sp
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End
+            ) {
+                Text(
+                    text = "Ətraflı",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = BirbankRed,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Ətraflı",
+                    tint = BirbankRed,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun TrustBadgeItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    modifier: Modifier = Modifier
+private fun HomeActiveOrderCard(
+    order: Order,
+    onClick: () -> Unit
 ) {
     Card(
-        modifier = modifier
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(12.dp)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(12.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .border(1.dp, BirbankBorder, RoundedCornerShape(16.dp))
+            .testTag("order_card_${order.id}"),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = order.orderNumber,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = BirbankRed
+                )
+                StatusBadge(status = order.status)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = order.topic,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = BirbankTextPrimary,
+                maxLines = 2
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Progress bar
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "İcra faizi",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = BirbankTextSecondary
+                )
+                Text(
+                    text = "${order.progressPercent}%",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = BirbankRed
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = { order.progressPercent / 100f },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(CircleShape),
+                color = BirbankRed,
+                trackColor = BirbankBorder
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Event,
+                        contentDescription = null,
+                        tint = BirbankTextSecondary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = order.deadline,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BirbankTextSecondary,
+                        fontSize = 11.sp
+                    )
+                }
+
+                PriorityBadge(priority = order.priority)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdminMiniMetricCard(
+    title: String,
+    count: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        color = color.copy(alpha = 0.08f),
+        shape = RoundedCornerShape(10.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.2f))
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = Gold500,
-                modifier = Modifier.size(24.dp)
+            Text(
+                text = count,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = color
             )
-            Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
                 fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = BirbankTextSecondary,
                 maxLines = 1
             )
         }

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -336,6 +337,21 @@ class BestGroupRepository(
                     } catch (_: Throwable) {
                         // Safe non-blocking fallback
                     }
+                    // Restore user's persisted theme preference if saved on account
+                    try {
+                        val remoteDoc = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                            .collection("users").document(fbUser.uid).get().await()
+                        val remoteTheme = remoteDoc.getString("theme")
+                        if (!remoteTheme.isNullOrBlank()) {
+                            val targetMode = when (remoteTheme.lowercase()) {
+                                "dark" -> ThemeMode.DARK
+                                "light" -> ThemeMode.LIGHT
+                                else -> ThemeMode.SYSTEM
+                            }
+                            sharedPrefs?.edit()?.putString("theme_mode", targetMode.name)?.commit()
+                            _themeMode.value = targetMode
+                        }
+                    } catch (_: Exception) {}
                     observeFirestoreData(scope, fbUser.uid)
                 } else {
                     dataObservationJob?.cancel()
@@ -693,7 +709,7 @@ class BestGroupRepository(
         serviceName: String = "",
         serviceCatalogItem: ServiceCatalogItem? = null
     ): Order {
-        val currentUid = _currentUser.value?.id ?: authService?.currentUserId ?: ""
+        val currentUid = authService?.currentUserId ?: _currentUser.value?.id ?: ""
         if (currentUid.isBlank()) {
             throw IllegalStateException("Sifariş yaratmaq üçün zəhmət olmasa daxil olun.")
         }

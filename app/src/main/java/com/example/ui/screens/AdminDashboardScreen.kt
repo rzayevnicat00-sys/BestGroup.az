@@ -907,6 +907,7 @@ private fun AdminSupportContent(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AdminSupportChatDetailView(
     conversation: ChatConversation,
@@ -943,6 +944,13 @@ fun AdminSupportChatDetailView(
 
     LaunchedEffect(chatMessages.size) {
         if (chatMessages.isNotEmpty()) {
+            listState.animateScrollToItem(chatMessages.size - 1)
+        }
+    }
+
+    val isImeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(isImeVisible) {
+        if (isImeVisible && chatMessages.isNotEmpty()) {
             listState.animateScrollToItem(chatMessages.size - 1)
         }
     }

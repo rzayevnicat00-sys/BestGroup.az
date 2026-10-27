@@ -7,8 +7,9 @@ val LocaleAz: Map<StringKey, String> = mapOf(
 
     // Nav
     StringKey.NAV_HOME to "Ana səhifə",
-    StringKey.NAV_ORDERS to "Sifarişlər",
-    StringKey.NAV_CHAT to "Çat",
+    StringKey.NAV_SERVICES to "Xidmətlər",
+    StringKey.NAV_ORDERS to "Sifarişlərim",
+    StringKey.NAV_CHAT to "Mesajlar",
     StringKey.NAV_NOTIFICATIONS to "Bildirişlər",
     StringKey.NAV_PROFILE to "Profil",
 

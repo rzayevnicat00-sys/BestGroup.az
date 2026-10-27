@@ -34,7 +34,9 @@ class FirestoreOrderService(
             if (snapshot != null) {
                 val ordersList = snapshot.documents.mapNotNull { doc ->
                     mapDocumentToOrder(doc.id, doc.data ?: emptyMap())
-                }.sortedByDescending { it.createdAt }
+                }.sortedWith(
+                    compareByDescending<Order> { it.createdAtEpoch }.thenByDescending { it.createdAt }
+                )
                 trySend(ordersList)
             }
         }
@@ -151,10 +153,12 @@ class FirestoreOrderService(
 
         val resolvedServiceName = serviceCatalogItem?.nameAz?.ifBlank { serviceName } ?: serviceName
 
+        val epochNow = System.currentTimeMillis()
         val orderDoc = hashMapOf(
             "orderId" to orderId,
             "orderNumber" to orderNum,
             "userId" to userId,
+            "customerId" to userId,
             "serviceId" to serviceId.ifBlank { serviceType.name.lowercase() },
             "serviceName" to resolvedServiceName,
             "serviceType" to serviceType.name,
@@ -180,7 +184,8 @@ class FirestoreOrderService(
             "files" to filesData,
             "statusHistory" to initialHistory,
             "createdAt" to isoNow,
-            "updatedAt" to isoNow
+            "updatedAt" to isoNow,
+            "createdAtMillis" to epochNow
         )
 
         docRef.set(orderDoc).await()
@@ -208,6 +213,7 @@ class FirestoreOrderService(
             progressPercent = 15,
             createdAt = now,
             updatedAt = now,
+            createdAtEpoch = epochNow,
             files = files,
             statusHistory = listOf(
                 OrderStatusHistoryItem(
@@ -443,10 +449,23 @@ class FirestoreOrderService(
                 else -> ""
             }
 
+            val epochRaw = (data["createdAtMillis"] as? Number)?.toLong() ?: run {
+                when (createdAtRaw) {
+                    is com.google.firebase.Timestamp -> createdAtRaw.toDate().time
+                    is Date -> createdAtRaw.time
+                    is String -> {
+                        try {
+                            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).parse(createdAtRaw)?.time ?: 0L
+                        } catch (_: Exception) { 0L }
+                    }
+                    else -> 0L
+                }
+            }
+
             Order(
                 id = docId,
                 orderNumber = data["orderNumber"] as? String ?: "#BG-2026",
-                userId = data["userId"] as? String ?: "",
+                userId = (data["userId"] as? String) ?: (data["customerId"] as? String ?: ""),
                 serviceId = serviceIdStr,
                 serviceName = data["serviceName"] as? String ?: "Diplom işi",
                 serviceType = serviceType,
@@ -466,6 +485,7 @@ class FirestoreOrderService(
                 progressPercent = (data["progressPercent"] as? Number)?.toInt() ?: 15,
                 createdAt = createdAtStr,
                 updatedAt = updatedAtStr,
+                createdAtEpoch = epochRaw,
                 files = files,
                 statusHistory = history,
                 review = review,

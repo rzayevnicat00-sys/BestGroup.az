@@ -7,8 +7,9 @@ val LocaleRu: Map<StringKey, String> = mapOf(
 
     // Nav
     StringKey.NAV_HOME to "Главная",
+    StringKey.NAV_SERVICES to "Услуги",
     StringKey.NAV_ORDERS to "Заказы",
-    StringKey.NAV_CHAT to "Чат",
+    StringKey.NAV_CHAT to "Сообщения",
     StringKey.NAV_NOTIFICATIONS to "Уведомления",
     StringKey.NAV_PROFILE to "Профиль",
 

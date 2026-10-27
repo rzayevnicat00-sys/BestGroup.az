@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.localization.StringKey
@@ -118,112 +119,135 @@ fun MainApp(viewModel: MainViewModel) {
                 AppDestination.MAIN -> {
                     Scaffold(
                         bottomBar = {
-                            NavigationBar(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                tonalElevation = 6.dp,
+                            Surface(
+                                color = MaterialTheme.colorScheme.surface,
+                                tonalElevation = 3.dp,
                                 modifier = Modifier
+                                    .fillMaxWidth()
                                     .navigationBarsPadding()
-                                    .testTag("main_bottom_nav_bar")
                             ) {
-                                NavigationBarItem(
-                                    selected = selectedTab == BottomTab.HOME,
-                                    onClick = { viewModel.selectBottomTab(BottomTab.HOME) },
-                                    icon = {
-                                        Icon(
-                                            imageVector = if (selectedTab == BottomTab.HOME) Icons.Filled.Home else Icons.Outlined.Home,
-                                            contentDescription = localizedString(StringKey.NAV_HOME)
-                                        )
-                                    },
-                                    label = { Text(localizedString(StringKey.NAV_HOME), fontSize = 11.sp) },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = Navy900,
-                                        indicatorColor = Gold500,
-                                        selectedTextColor = Gold500
-                                    ),
-                                    modifier = Modifier.testTag("nav_item_home")
-                                )
+                                NavigationBar(
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                    tonalElevation = 0.dp,
+                                    modifier = Modifier.testTag("main_bottom_nav_bar")
+                                ) {
+                                    // 1. Ana səhifə
+                                    NavigationBarItem(
+                                        selected = selectedTab == BottomTab.HOME,
+                                        onClick = { viewModel.selectBottomTab(BottomTab.HOME) },
+                                        icon = {
+                                            Icon(
+                                                imageVector = if (selectedTab == BottomTab.HOME) Icons.Filled.Home else Icons.Outlined.Home,
+                                                contentDescription = localizedString(StringKey.NAV_HOME)
+                                            )
+                                        },
+                                        label = { Text(localizedString(StringKey.NAV_HOME), fontSize = 11.sp, fontWeight = if (selectedTab == BottomTab.HOME) FontWeight.Bold else FontWeight.Normal) },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            selectedIconColor = com.example.ui.theme.BirbankRed,
+                                            selectedTextColor = com.example.ui.theme.BirbankRed,
+                                            indicatorColor = com.example.ui.theme.BirbankRedLight,
+                                            unselectedIconColor = com.example.ui.theme.BirbankTextSecondary,
+                                            unselectedTextColor = com.example.ui.theme.BirbankTextSecondary
+                                        ),
+                                        modifier = Modifier.testTag("nav_item_home")
+                                    )
 
-                                NavigationBarItem(
-                                    selected = selectedTab == BottomTab.ORDERS,
-                                    onClick = { viewModel.selectBottomTab(BottomTab.ORDERS) },
-                                    icon = {
-                                        Icon(
-                                            imageVector = if (selectedTab == BottomTab.ORDERS) Icons.Filled.Assignment else Icons.Outlined.Assignment,
-                                            contentDescription = localizedString(StringKey.NAV_ORDERS)
-                                        )
-                                    },
-                                    label = { Text(localizedString(StringKey.NAV_ORDERS), fontSize = 11.sp) },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = Navy900,
-                                        indicatorColor = Gold500,
-                                        selectedTextColor = Gold500
-                                    ),
-                                    modifier = Modifier.testTag("nav_item_orders")
-                                )
+                                    // 2. Xidmətlər
+                                    NavigationBarItem(
+                                        selected = selectedTab == BottomTab.SERVICES,
+                                        onClick = { viewModel.selectBottomTab(BottomTab.SERVICES) },
+                                        icon = {
+                                            Icon(
+                                                imageVector = if (selectedTab == BottomTab.SERVICES) Icons.Filled.GridView else Icons.Outlined.GridView,
+                                                contentDescription = localizedString(StringKey.NAV_SERVICES)
+                                            )
+                                        },
+                                        label = { Text(localizedString(StringKey.NAV_SERVICES), fontSize = 11.sp, fontWeight = if (selectedTab == BottomTab.SERVICES) FontWeight.Bold else FontWeight.Normal) },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            selectedIconColor = com.example.ui.theme.BirbankRed,
+                                            selectedTextColor = com.example.ui.theme.BirbankRed,
+                                            indicatorColor = com.example.ui.theme.BirbankRedLight,
+                                            unselectedIconColor = com.example.ui.theme.BirbankTextSecondary,
+                                            unselectedTextColor = com.example.ui.theme.BirbankTextSecondary
+                                        ),
+                                        modifier = Modifier.testTag("nav_item_services")
+                                    )
 
-                                NavigationBarItem(
-                                    selected = selectedTab == BottomTab.CHAT,
-                                    onClick = { viewModel.selectBottomTab(BottomTab.CHAT) },
-                                    icon = {
-                                        Icon(
-                                            imageVector = if (selectedTab == BottomTab.CHAT) Icons.Filled.Chat else Icons.Outlined.Chat,
-                                            contentDescription = localizedString(StringKey.NAV_CHAT)
-                                        )
-                                    },
-                                    label = { Text(localizedString(StringKey.NAV_CHAT), fontSize = 11.sp) },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = Navy900,
-                                        indicatorColor = Gold500,
-                                        selectedTextColor = Gold500
-                                    ),
-                                    modifier = Modifier.testTag("nav_item_chat")
-                                )
+                                    // 3. Sifarişlərim
+                                    NavigationBarItem(
+                                        selected = selectedTab == BottomTab.ORDERS,
+                                        onClick = { viewModel.selectBottomTab(BottomTab.ORDERS) },
+                                        icon = {
+                                            Icon(
+                                                imageVector = if (selectedTab == BottomTab.ORDERS) Icons.Filled.Assignment else Icons.Outlined.Assignment,
+                                                contentDescription = localizedString(StringKey.NAV_ORDERS)
+                                            )
+                                        },
+                                        label = { Text(localizedString(StringKey.NAV_ORDERS), fontSize = 11.sp, fontWeight = if (selectedTab == BottomTab.ORDERS) FontWeight.Bold else FontWeight.Normal) },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            selectedIconColor = com.example.ui.theme.BirbankRed,
+                                            selectedTextColor = com.example.ui.theme.BirbankRed,
+                                            indicatorColor = com.example.ui.theme.BirbankRedLight,
+                                            unselectedIconColor = com.example.ui.theme.BirbankTextSecondary,
+                                            unselectedTextColor = com.example.ui.theme.BirbankTextSecondary
+                                        ),
+                                        modifier = Modifier.testTag("nav_item_orders")
+                                    )
 
-                                NavigationBarItem(
-                                    selected = selectedTab == BottomTab.NOTIFICATIONS,
-                                    onClick = { viewModel.selectBottomTab(BottomTab.NOTIFICATIONS) },
-                                    icon = {
-                                        BadgedBox(
-                                            badge = {
-                                                if (unreadNotifsCount > 0) {
-                                                    Badge(containerColor = Gold500, contentColor = Navy900) {
-                                                        Text("$unreadNotifsCount")
+                                    // 4. Mesajlar
+                                    NavigationBarItem(
+                                        selected = selectedTab == BottomTab.CHAT,
+                                        onClick = { viewModel.selectBottomTab(BottomTab.CHAT) },
+                                        icon = {
+                                            val conversations by viewModel.conversations.collectAsState()
+                                            val unreadChatCount = remember(conversations) { conversations.sumOf { it.unreadCount } }
+                                            BadgedBox(
+                                                badge = {
+                                                    if (unreadChatCount > 0) {
+                                                        Badge(containerColor = com.example.ui.theme.BirbankRed, contentColor = Color.White) {
+                                                            Text("$unreadChatCount")
+                                                        }
                                                     }
                                                 }
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (selectedTab == BottomTab.CHAT) Icons.Filled.Chat else Icons.Outlined.Chat,
+                                                    contentDescription = localizedString(StringKey.NAV_CHAT)
+                                                )
                                             }
-                                        ) {
-                                            Icon(
-                                                imageVector = if (selectedTab == BottomTab.NOTIFICATIONS) Icons.Filled.Notifications else Icons.Outlined.Notifications,
-                                                contentDescription = localizedString(StringKey.NAV_NOTIFICATIONS)
-                                            )
-                                        }
-                                    },
-                                    label = { Text(localizedString(StringKey.NAV_NOTIFICATIONS), fontSize = 11.sp) },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = Navy900,
-                                        indicatorColor = Gold500,
-                                        selectedTextColor = Gold500
-                                    ),
-                                    modifier = Modifier.testTag("nav_item_notifications")
-                                )
+                                        },
+                                        label = { Text(localizedString(StringKey.NAV_CHAT), fontSize = 11.sp, fontWeight = if (selectedTab == BottomTab.CHAT) FontWeight.Bold else FontWeight.Normal) },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            selectedIconColor = com.example.ui.theme.BirbankRed,
+                                            selectedTextColor = com.example.ui.theme.BirbankRed,
+                                            indicatorColor = com.example.ui.theme.BirbankRedLight,
+                                            unselectedIconColor = com.example.ui.theme.BirbankTextSecondary,
+                                            unselectedTextColor = com.example.ui.theme.BirbankTextSecondary
+                                        ),
+                                        modifier = Modifier.testTag("nav_item_chat")
+                                    )
 
-                                NavigationBarItem(
-                                    selected = selectedTab == BottomTab.PROFILE,
-                                    onClick = { viewModel.selectBottomTab(BottomTab.PROFILE) },
-                                    icon = {
-                                        Icon(
-                                            imageVector = if (selectedTab == BottomTab.PROFILE) Icons.Filled.Person else Icons.Outlined.Person,
-                                            contentDescription = localizedString(StringKey.NAV_PROFILE)
-                                        )
-                                    },
-                                    label = { Text(localizedString(StringKey.NAV_PROFILE), fontSize = 11.sp) },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = Navy900,
-                                        indicatorColor = Gold500,
-                                        selectedTextColor = Gold500
-                                    ),
-                                    modifier = Modifier.testTag("nav_item_profile")
-                                )
+                                    // 5. Profil
+                                    NavigationBarItem(
+                                        selected = selectedTab == BottomTab.PROFILE,
+                                        onClick = { viewModel.selectBottomTab(BottomTab.PROFILE) },
+                                        icon = {
+                                            Icon(
+                                                imageVector = if (selectedTab == BottomTab.PROFILE) Icons.Filled.Person else Icons.Outlined.Person,
+                                                contentDescription = localizedString(StringKey.NAV_PROFILE)
+                                            )
+                                        },
+                                        label = { Text(localizedString(StringKey.NAV_PROFILE), fontSize = 11.sp, fontWeight = if (selectedTab == BottomTab.PROFILE) FontWeight.Bold else FontWeight.Normal) },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            selectedIconColor = com.example.ui.theme.BirbankRed,
+                                            selectedTextColor = com.example.ui.theme.BirbankRed,
+                                            indicatorColor = com.example.ui.theme.BirbankRedLight,
+                                            unselectedIconColor = com.example.ui.theme.BirbankTextSecondary,
+                                            unselectedTextColor = com.example.ui.theme.BirbankTextSecondary
+                                        ),
+                                        modifier = Modifier.testTag("nav_item_profile")
+                                    )
+                                }
                             }
                         }
                     ) { innerPadding ->
@@ -234,6 +258,7 @@ fun MainApp(viewModel: MainViewModel) {
                         ) {
                             when (selectedTab) {
                                 BottomTab.HOME -> HomeScreen(viewModel = viewModel)
+                                BottomTab.SERVICES -> ServicesScreen(viewModel = viewModel)
                                 BottomTab.ORDERS -> OrdersScreen(viewModel = viewModel)
                                 BottomTab.CHAT -> {
                                     val isStaffUser = currentUser?.role in listOf(

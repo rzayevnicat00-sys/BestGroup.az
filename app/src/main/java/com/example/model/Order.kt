@@ -103,6 +103,7 @@ data class Order(
     val progressPercent: Int = 0,
     val createdAt: String = "",
     val updatedAt: String = "",
+    val createdAtEpoch: Long = 0L,
     val files: List<OrderAttachedFile> = emptyList(),
     val statusHistory: List<OrderStatusHistoryItem> = emptyList(),
     val review: OrderReview? = null,
@@ -112,6 +113,7 @@ data class Order(
     val customerEmail: String = ""
 ) {
     val orderId: String get() = id
+    val customerId: String get() = userId
     val subject: String get() = topic
     val educationLevel: String get() = academicLevel
 }

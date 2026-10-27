@@ -50,3 +50,16 @@ val StatusReady = Color(0xFF10B981) // Emerald Green
 val StatusReadyBg = Color(0xFFD1FAE5)
 val StatusCancelled = Color(0xFFEF4444) // Crimson Red
 val StatusCancelledBg = Color(0xFFFEE2E2)
+
+// Birbank-inspired Premium Modern Palette
+val BirbankRed = Color(0xFFE00034)
+val BirbankRedDark = Color(0xFFC4002D)
+val BirbankRedLight = Color(0xFFFFECEF)
+val BirbankRedBorder = Color(0xFFFFCDD2)
+val BirbankBgLight = Color(0xFFF7F8FA)
+val BirbankSurfaceCard = Color(0xFFFFFFFF)
+val BirbankSearchBg = Color(0xFFF0F2F5)
+val BirbankTextPrimary = Color(0xFF181C20)
+val BirbankTextSecondary = Color(0xFF667085)
+val BirbankBorder = Color(0xFFEAECF0)
+val BirbankIconBg = Color(0xFFFFF0F2)

@@ -40,17 +40,23 @@ service cloud.firestore {
       return isAuthenticated() && (
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.keys().hasAny(['role']) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager', 'operator']
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager', 'operator', 'ADMIN', 'MANAGER', 'OPERATOR'] ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role.matches('(?i)^(admin|manager|operator)$')
+        )
       );
     }
 
-    // Role check: super admin (elmarmmdov1@gmail.com), custom claims, or user document role
+    // Role check: super admin (elmarmmdov1@gmail.com, rzayevnicat00@gmail.com), custom claims, or user document role
     function isAdmin() {
       return isSuperAdmin() || hasAdminClaim() || (
         isAuthenticated() &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.keys().hasAny(['role']) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'ADMIN'] ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role.matches('(?i)^admin$')
+        )
       );
     }
 

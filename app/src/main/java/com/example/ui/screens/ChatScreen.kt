@@ -39,7 +39,7 @@ import com.example.viewmodel.BottomTab
 import com.example.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(
     viewModel: MainViewModel,
@@ -84,6 +84,13 @@ fun ChatScreen(
 
     LaunchedEffect(currentMessages.size) {
         if (currentMessages.isNotEmpty()) {
+            listState.animateScrollToItem(currentMessages.size - 1)
+        }
+    }
+
+    val isImeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(isImeVisible) {
+        if (isImeVisible && currentMessages.isNotEmpty()) {
             listState.animateScrollToItem(currentMessages.size - 1)
         }
     }
