@@ -57,15 +57,7 @@ fun SplashScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Navy900,
-                        Navy800,
-                        Navy900
-                    )
-                )
-            )
+            .background(Color.White)
             .testTag("splash_screen_container"),
         contentAlignment = Alignment.Center
     ) {
@@ -82,16 +74,10 @@ fun SplashScreen(
                 modifier = Modifier
                     .size(160.dp)
                     .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(
-                            listOf(Color.White.copy(alpha = 0.96f), Color.White.copy(alpha = 0.92f))
-                        )
-                    )
+                    .background(Color.White)
                     .border(
                         width = 2.dp,
-                        brush = Brush.linearGradient(
-                            listOf(Gold500, Gold600, Color(0xFFDFBE52))
-                        ),
+                        color = BirbankRed,
                         shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
@@ -114,20 +100,20 @@ fun SplashScreen(
                 text = "BestGroup.az",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White,
+                color = BirbankTextPrimary,
                 letterSpacing = 0.5.sp,
                 fontFamily = FontFamily.SansSerif
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Golden Accent Line
+            // Birbank Red Accent Line
             Box(
                 modifier = Modifier
                     .width(48.dp)
                     .height(3.dp)
                     .clip(CircleShape)
-                    .background(Gold500)
+                    .background(BirbankRed)
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -137,7 +123,7 @@ fun SplashScreen(
                 text = "“${localizedString(StringKey.APP_SLOGAN)}”",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = Gold400,
+                color = BirbankTextSecondary,
                 textAlign = TextAlign.Center,
                 lineHeight = 20.sp,
                 modifier = Modifier.padding(horizontal = 16.dp)

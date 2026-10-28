@@ -27,10 +27,7 @@ import com.example.localization.Language
 import com.example.localization.StringKey
 import com.example.localization.localizedString
 import com.example.model.UserRole
-import com.example.ui.theme.Gold500
-import com.example.ui.theme.Navy800
-import com.example.ui.theme.Navy900
-import com.example.ui.theme.ThemeMode
+import com.example.ui.theme.*
 import com.example.viewmodel.AppDestination
 import com.example.viewmodel.MainViewModel
 
@@ -99,14 +96,14 @@ fun ProfileScreen(
                             modifier = Modifier
                                 .size(74.dp)
                                 .clip(CircleShape)
-                                .background(Navy800)
-                                .border(2.dp, Gold500, CircleShape),
+                                .background(BirbankRedLight)
+                                .border(1.5.dp, BirbankRed, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Person,
                                 contentDescription = null,
-                                tint = Gold500,
+                                tint = BirbankRed,
                                 modifier = Modifier.size(44.dp)
                             )
                         }
@@ -117,13 +114,13 @@ fun ProfileScreen(
                             text = user?.fullName ?: "İstifadəçi",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = BirbankTextPrimary
                         )
 
                         Text(
                             text = user?.email ?: "",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = BirbankTextSecondary
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -131,12 +128,13 @@ fun ProfileScreen(
                         // Role and University Badge
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = Navy800
+                            color = BirbankRedLight
                         ) {
                             Text(
                                 text = "${user?.role?.title} • ${user?.university?.take(28)}...",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Gold500,
+                                color = BirbankRed,
+                                fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
@@ -145,16 +143,16 @@ fun ProfileScreen(
 
                         OutlinedButton(
                             onClick = { showEditProfileDialog = true },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Gold500),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BirbankBorder),
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(44.dp)
                                 .testTag("edit_profile_header_btn")
                         ) {
-                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Edit, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Profili Redaktə Et", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("Profili Redaktə Et", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = BirbankTextPrimary)
                         }
                     }
                 }
@@ -168,7 +166,7 @@ fun ProfileScreen(
                 item {
                     Button(
                         onClick = { viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                        colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -185,27 +183,27 @@ fun ProfileScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Navy800),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Gold500)
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BirbankBorder)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = Gold500)
+                                Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = BirbankRed)
                                 Text(
                                     text = "Görünüş Rejimi (Admin / Müştəri)",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = BirbankTextPrimary
                                 )
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "Admin paneli ilə müştəri interfeysi arasında keçid edərək hər iki görünüşü canlı sınaqdan keçirə bilərsiniz.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFFCBD5E1)
+                                color = BirbankTextSecondary
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Row(
@@ -215,8 +213,8 @@ fun ProfileScreen(
                                 Button(
                                     onClick = { viewModel.switchUserRole(UserRole.ADMIN) },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (user?.role == UserRole.ADMIN) Gold500 else MaterialTheme.colorScheme.surfaceVariant,
-                                        contentColor = if (user?.role == UserRole.ADMIN) Navy900 else MaterialTheme.colorScheme.onSurface
+                                        containerColor = if (user?.role == UserRole.ADMIN) BirbankRed else BirbankSearchBg,
+                                        contentColor = if (user?.role == UserRole.ADMIN) Color.White else BirbankTextPrimary
                                     ),
                                     shape = RoundedCornerShape(10.dp),
                                     modifier = Modifier.weight(1f)
@@ -226,8 +224,8 @@ fun ProfileScreen(
                                 Button(
                                     onClick = { viewModel.switchUserRole(UserRole.CUSTOMER) },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (user?.role == UserRole.CUSTOMER) Gold500 else MaterialTheme.colorScheme.surfaceVariant,
-                                        contentColor = if (user?.role == UserRole.CUSTOMER) Navy900 else MaterialTheme.colorScheme.onSurface
+                                        containerColor = if (user?.role == UserRole.CUSTOMER) BirbankRed else BirbankSearchBg,
+                                        contentColor = if (user?.role == UserRole.CUSTOMER) Color.White else BirbankTextPrimary
                                     ),
                                     shape = RoundedCornerShape(10.dp),
                                     modifier = Modifier.weight(1f)
@@ -360,7 +358,7 @@ fun ProfileScreen(
                                 text = lang.nativeName,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = if (lang == currentLang) FontWeight.Bold else FontWeight.Normal,
-                                color = if (lang == currentLang) Gold500 else MaterialTheme.colorScheme.onSurface
+                                color = if (lang == currentLang) BirbankRed else MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -439,7 +437,7 @@ fun ProfileScreen(
             confirmButton = {
                 Button(
                     onClick = { showTermsDialog = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500)
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White)
                 ) {
                     Text(localizedString(StringKey.BTN_CLOSE))
                 }
@@ -462,7 +460,7 @@ fun ProfileScreen(
             confirmButton = {
                 Button(
                     onClick = { showPrivacyDialog = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500)
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White)
                 ) {
                     Text(localizedString(StringKey.BTN_CLOSE))
                 }
@@ -521,7 +519,7 @@ private fun ProfileMenuItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (titleColor != Color.Unspecified) titleColor else Gold500,
+                tint = if (titleColor != Color.Unspecified) titleColor else BirbankRed,
                 modifier = Modifier.size(22.dp)
             )
             Column {
@@ -576,7 +574,7 @@ private fun EditProfileDialog(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Default.Edit, contentDescription = null, tint = Gold500)
+                Icon(Icons.Default.Edit, contentDescription = null, tint = BirbankRed)
                 Text("Profili Redaktə Et", fontWeight = FontWeight.Bold)
             }
         },
@@ -755,11 +753,11 @@ private fun EditProfileDialog(
                     )
                 },
                 enabled = !isUpdating,
-                colors = ButtonDefaults.buttonColors(containerColor = Gold500, contentColor = Navy900),
+                colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
                 modifier = Modifier.testTag("save_profile_btn")
             ) {
                 if (isUpdating) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Navy900, strokeWidth = 2.dp)
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Saxlanılır...")
                 } else {

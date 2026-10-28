@@ -35,9 +35,7 @@ import kotlinx.coroutines.launch
 import com.example.ui.components.InteractiveRatingBar
 import com.example.ui.components.PriorityBadge
 import com.example.ui.components.StatusBadge
-import com.example.ui.theme.Gold500
-import com.example.ui.theme.Navy800
-import com.example.ui.theme.Navy900
+import com.example.ui.theme.*
 import com.example.viewmodel.AppDestination
 import com.example.viewmodel.BottomTab
 import com.example.viewmodel.MainViewModel
@@ -125,7 +123,7 @@ fun OrderDetailScreen(
                 actions = {
                     if (isStaff) {
                         IconButton(onClick = { showAdminStatusSheet = true }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Statusu dəyiş", tint = Gold500)
+                            Icon(Icons.Default.Edit, contentDescription = "Statusu dəyiş", tint = BirbankRed)
                         }
                     }
                 },
@@ -150,7 +148,7 @@ fun OrderDetailScreen(
                             viewModel.openOrderChat(order)
                         },
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                        colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp)
@@ -166,14 +164,15 @@ fun OrderDetailScreen(
                         OutlinedButton(
                             onClick = { showReviewDialog = true },
                             shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BirbankBorder),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(48.dp)
                                 .testTag("order_detail_rate_btn")
                         ) {
-                            Icon(Icons.Default.Star, contentDescription = null, tint = Gold500, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Star, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(localizedString(StringKey.ORDER_RATE_ACTION), fontWeight = FontWeight.SemiBold)
+                            Text(localizedString(StringKey.ORDER_RATE_ACTION), fontWeight = FontWeight.SemiBold, color = BirbankTextPrimary)
                         }
                     }
                 }
@@ -191,9 +190,11 @@ fun OrderDetailScreen(
             // 1. Topic & Status Header
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, BirbankBorder, RoundedCornerShape(16.dp)),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         Row(
@@ -204,7 +205,7 @@ fun OrderDetailScreen(
                             Text(
                                 text = localizedString(order.serviceType.nameKey),
                                 style = MaterialTheme.typography.labelMedium,
-                                color = Gold500,
+                                color = BirbankRed,
                                 fontWeight = FontWeight.Bold
                             )
                             StatusBadge(status = order.status)
@@ -230,7 +231,7 @@ fun OrderDetailScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Icon(Icons.Default.Event, contentDescription = null, tint = Gold500, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Event, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(16.dp))
                                 Text(
                                     text = "${localizedString(StringKey.ORDER_DEADLINE)}: ${order.deadline}",
                                     style = MaterialTheme.typography.bodySmall,
@@ -250,9 +251,9 @@ fun OrderDetailScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
                         .clickable { viewModel.openOrderChat(order) }
-                        .border(1.dp, Gold500.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                        .border(1.dp, BirbankBorder, RoundedCornerShape(16.dp))
                         .testTag("order_chat_section_card"),
-                    colors = CardDefaults.cardColors(containerColor = Navy800)
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         Row(
@@ -268,13 +269,13 @@ fun OrderDetailScreen(
                                     modifier = Modifier
                                         .size(42.dp)
                                         .clip(CircleShape)
-                                        .background(Gold500.copy(alpha = 0.2f)),
+                                        .background(BirbankRedLight),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.ChatBubbleOutline,
                                         contentDescription = null,
-                                        tint = Gold500,
+                                        tint = BirbankRed,
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
@@ -283,20 +284,20 @@ fun OrderDetailScreen(
                                         text = localizedString(StringKey.ORDER_CHAT_SECTION_TITLE),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = BirbankTextPrimary
                                     )
                                     Text(
                                         text = "${order.orderNumber} • ${orderConv?.curatorName ?: "Akademik Kurator"}",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Gold500
+                                        color = BirbankRed
                                     )
                                 }
                             }
 
                             if ((orderConv?.unreadCount ?: 0) > 0) {
                                 Badge(
-                                    containerColor = Gold500,
-                                    contentColor = Navy900
+                                    containerColor = BirbankRed,
+                                    contentColor = Color.White
                                 ) {
                                     Text("${orderConv?.unreadCount}", fontWeight = FontWeight.Bold)
                                 }
@@ -309,7 +310,7 @@ fun OrderDetailScreen(
                             text = orderConv?.lastMessage?.takeIf { it.isNotBlank() }
                                 ?: "Sifariş üzrə suallarınızı, metodik tələblərinizi və ya əlavələrinizi birbaşa kuratorunuza yaza bilərsiniz.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFCBD5E1),
+                            color = BirbankTextSecondary,
                             maxLines = 2
                         )
 
@@ -323,8 +324,8 @@ fun OrderDetailScreen(
                                 .testTag("order_detail_open_chat_button"),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Gold500,
-                                contentColor = Navy900
+                                containerColor = BirbankRed,
+                                contentColor = Color.White
                             )
                         ) {
                             Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -425,7 +426,7 @@ fun OrderDetailScreen(
                                             )
                                         )
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
                                     shape = RoundedCornerShape(8.dp),
                                     modifier = Modifier
                                         .height(36.dp)
@@ -447,13 +448,13 @@ fun OrderDetailScreen(
                                     .fillMaxWidth()
                                     .height(4.dp)
                                     .clip(CircleShape),
-                                color = Gold500
+                                color = BirbankRed
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = if (pct > 0) "Fayl yüklənir... $pct%" else "Fayl Firebase Storage-a yüklənir...",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Gold500,
+                                color = BirbankRed,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
@@ -498,7 +499,7 @@ fun OrderDetailScreen(
                                                         else -> Icons.Default.InsertDriveFile
                                                     },
                                                     contentDescription = null,
-                                                    tint = Gold500
+                                                    tint = BirbankRed
                                                 )
                                                 Column {
                                                     Text(
@@ -519,12 +520,12 @@ fun OrderDetailScreen(
                                                         )
                                                         Surface(
                                                             shape = RoundedCornerShape(4.dp),
-                                                            color = if (isUploadedByAdmin) Gold500.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
+                                                            color = if (isUploadedByAdmin) BirbankRedLight else MaterialTheme.colorScheme.surfaceVariant
                                                         ) {
                                                             Text(
                                                                 text = if (isUploadedByAdmin) "👑 Admin materialı" else "Müştəri faylı",
                                                                 style = MaterialTheme.typography.labelSmall,
-                                                                color = if (isUploadedByAdmin) Gold500 else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                color = if (isUploadedByAdmin) BirbankRed else MaterialTheme.colorScheme.onSurfaceVariant,
                                                                 fontSize = 10.sp,
                                                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                                                             )
@@ -553,7 +554,7 @@ fun OrderDetailScreen(
                                                         },
                                                         contentPadding = PaddingValues(horizontal = 8.dp)
                                                     ) {
-                                                        Text("Aç", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Gold500)
+                                                        Text("Aç", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = BirbankRed)
                                                     }
                                                     IconButton(
                                                         onClick = {
@@ -562,7 +563,7 @@ fun OrderDetailScreen(
                                                             }
                                                         }
                                                     ) {
-                                                        Icon(Icons.Default.Download, contentDescription = "Yüklə", tint = Gold500)
+                                                        Icon(Icons.Default.Download, contentDescription = "Yüklə", tint = BirbankRed)
                                                     }
                                                 }
 
@@ -607,7 +608,7 @@ fun OrderDetailScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 for (i in 1..order.review.rating) {
-                                    Icon(Icons.Default.Star, contentDescription = null, tint = Gold500, modifier = Modifier.size(20.dp))
+                                    Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFB800), modifier = Modifier.size(20.dp))
                                 }
                             }
                             Spacer(modifier = Modifier.height(6.dp))
@@ -662,7 +663,7 @@ fun OrderDetailScreen(
                         viewModel.submitRating(order.id, ratingStars, reviewComment)
                         showReviewDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500)
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White)
                 ) {
                     Text(localizedString(StringKey.BTN_CONFIRM))
                 }
@@ -919,14 +920,14 @@ private fun TimelineStepItem(
                 modifier = Modifier
                     .size(16.dp)
                     .clip(CircleShape)
-                    .background(Gold500)
+                    .background(BirbankRed)
             )
             if (!isLast) {
                 Box(
                     modifier = Modifier
                         .width(2.dp)
                         .height(54.dp)
-                        .background(Gold500.copy(alpha = 0.5f))
+                        .background(BirbankRedLight)
                 )
             }
         }

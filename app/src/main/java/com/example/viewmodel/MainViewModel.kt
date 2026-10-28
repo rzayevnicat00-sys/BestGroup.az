@@ -972,6 +972,65 @@ class MainViewModel @JvmOverloads constructor(
         }
     }
 
+    // App Updates Management
+    val latestAppUpdate: StateFlow<AppUpdateInfo?> = repository.latestAppUpdate
+    val allAppUpdates: StateFlow<List<AppUpdateInfo>> = repository.allAppUpdates
+    val isUpdateDismissed: StateFlow<Boolean> = repository.isUpdateDismissed
+
+    val isUpdateAvailable: StateFlow<Boolean> = combine(
+        repository.latestAppUpdate,
+        repository.isUpdateDismissed
+    ) { update, dismissed ->
+        if (dismissed && !repository.isMandatoryUpdate(update)) {
+            false
+        } else {
+            repository.isUpdateAvailable(update)
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val isMandatoryUpdate: StateFlow<Boolean> = repository.latestAppUpdate.map { update ->
+        repository.isMandatoryUpdate(update)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun dismissUpdate() {
+        repository.dismissUpdateForNow()
+    }
+
+    fun adminPublishUpdate(
+        versionCode: Int,
+        versionName: String,
+        releaseNotesAz: String,
+        releaseNotesEn: String = "",
+        releaseNotesRu: String = "",
+        downloadUrl: String = FirestoreAppUpdateService.GITHUB_LATEST_RELEASE_URL,
+        githubReleaseUrl: String = FirestoreAppUpdateService.GITHUB_RELEASES_URL,
+        isMandatory: Boolean = false,
+        minSupportedVersionCode: Int = 1,
+        apkSizeMb: Double = 0.0,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val result = repository.publishAppUpdate(
+                versionCode = versionCode,
+                versionName = versionName,
+                releaseNotesAz = releaseNotesAz,
+                releaseNotesEn = releaseNotesEn,
+                releaseNotesRu = releaseNotesRu,
+                downloadUrl = downloadUrl,
+                githubReleaseUrl = githubReleaseUrl,
+                isMandatory = isMandatory,
+                minSupportedVersionCode = minSupportedVersionCode,
+                apkSizeMb = apkSizeMb
+            )
+            if (result.isSuccess) {
+                onSuccess()
+            } else {
+                onError(result.exceptionOrNull()?.message ?: "Yenilənmə dərc edilə bilmədi")
+            }
+        }
+    }
+
     companion object {
         fun createDefaultRepository(application: Application): BestGroupRepository {
             return try {
@@ -981,7 +1040,8 @@ class MainViewModel @JvmOverloads constructor(
                 val chatService = FirestoreChatService(fbService.firestore)
                 val storageService = FirebaseStorageService(fbService.storage)
                 val catalogService = FirestoreServiceCatalogService(fbService.firestore)
-                BestGroupRepository(authService, orderService, chatService, storageService, catalogService, application.applicationContext)
+                val appUpdateService = FirestoreAppUpdateService(fbService.firestore)
+                BestGroupRepository(authService, orderService, chatService, storageService, catalogService, appUpdateService, application.applicationContext)
             } catch (e: Throwable) {
                 BestGroupRepository(context = application.applicationContext)
             }

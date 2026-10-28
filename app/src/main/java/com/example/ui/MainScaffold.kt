@@ -16,13 +16,22 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import com.example.localization.StringKey
 import com.example.localization.localizedString
 import com.example.ui.screens.*
 import com.example.ui.theme.BestGroupTheme
-import com.example.ui.theme.Gold500
-import com.example.ui.theme.Navy800
-import com.example.ui.theme.Navy900
+import com.example.ui.theme.BirbankBorder
+import com.example.ui.theme.BirbankRed
+import com.example.ui.theme.BirbankRedLight
+import com.example.ui.theme.BirbankTextPrimary
+import com.example.ui.theme.BirbankTextSecondary
 import com.example.viewmodel.AppDestination
 import com.example.viewmodel.BottomTab
 import com.example.viewmodel.MainViewModel
@@ -279,6 +288,132 @@ fun MainApp(viewModel: MainViewModel) {
                     }
                 }
             }
+        }
+
+        // Birbank-style App Update Dialog
+        val isUpdateAvailable by viewModel.isUpdateAvailable.collectAsState()
+        val latestAppUpdate by viewModel.latestAppUpdate.collectAsState()
+        val isMandatoryUpdate by viewModel.isMandatoryUpdate.collectAsState()
+        val context = LocalContext.current
+
+        if (isUpdateAvailable && latestAppUpdate != null) {
+            val update = latestAppUpdate!!
+            AlertDialog(
+                onDismissRequest = {
+                    if (!isMandatoryUpdate) {
+                        viewModel.dismissUpdate()
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = Color.White,
+                icon = {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(BirbankRedLight),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.SystemUpdate,
+                            contentDescription = "Yeniləmə",
+                            tint = BirbankRed,
+                            modifier = Modifier.size(30.dp)
+                        )
+                    }
+                },
+                title = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Yeni versiya hazırdır",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = BirbankTextPrimary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "v${update.versionName} • Build ${update.versionCode}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = BirbankRed,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        val notes = update.releaseNotesAz.ifBlank {
+                            "BestGroup.az tətbiqinin yeni versiyası daha sürətli işləmə, dizayn təkmilləşdirmələri və yeni imkanlarla təqdim olunur."
+                        }
+                        Text(
+                            text = notes,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = BirbankTextSecondary,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        if (update.apkSizeMb > 0) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Həcm: ${String.format("%.1f", update.apkSizeMb)} MB",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = BirbankTextSecondary
+                            )
+                        }
+                        if (isMandatoryUpdate) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                color = BirbankRedLight,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "Bu yeniləmə tətbiqdən istifadə üçün vacibdir.",
+                                    color = BirbankRed,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val url = update.downloadUrl.ifBlank { update.githubReleaseUrl }
+                            val targetUrl = if (url.startsWith("http://") || url.startsWith("https://")) url else "https://github.com/rzayevnicat00-sys/BestGroup.az/releases/latest"
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl))
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            try {
+                                context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BirbankRed,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("İndi yenilə", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = if (!isMandatoryUpdate) {
+                    {
+                        TextButton(
+                            onClick = { viewModel.dismissUpdate() },
+                            colors = ButtonDefaults.textButtonColors(contentColor = BirbankTextSecondary),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Daha sonra", fontWeight = FontWeight.Medium)
+                        }
+                    }
+                } else null
+            )
         }
     }
 }

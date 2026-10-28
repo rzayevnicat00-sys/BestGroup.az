@@ -141,7 +141,7 @@ fun OnboardingScreen(
                                 .width(if (isSelected) 28.dp else 8.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    if (isSelected) Gold500 else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+                                    if (isSelected) BirbankRed else BirbankBorder
                                 )
                         )
                     }
@@ -160,8 +160,8 @@ fun OnboardingScreen(
                     },
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Navy800,
-                        contentColor = Gold500
+                        containerColor = BirbankRed,
+                        contentColor = Color.White
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -251,7 +251,7 @@ fun OnboardingScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(16.dp))
-                            .background(Navy800.copy(alpha = 0.06f))
+                            .background(BirbankRedLight)
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {

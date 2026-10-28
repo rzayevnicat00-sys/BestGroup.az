@@ -29,9 +29,7 @@ import com.example.localization.StringKey
 import com.example.localization.localizedString
 import com.example.model.ServiceCatalogItem
 import com.example.model.ServiceType
-import com.example.ui.theme.Gold500
-import com.example.ui.theme.Navy800
-import com.example.ui.theme.TechBlue600
+import com.example.ui.theme.*
 import com.example.viewmodel.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -91,7 +89,7 @@ fun ServicesScreen(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     placeholder = { Text(localizedString(StringKey.SERVICE_SEARCH_HINT)) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Gold500) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = BirbankRed) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = { searchQuery = "" }) {
@@ -176,14 +174,14 @@ fun ServicesScreen(
                         modifier = Modifier
                             .size(52.dp)
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Navy800),
+                            .background(BirbankRedLight),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = getServiceIconByName(srv.icon),
                             contentDescription = null,
-                            tint = Gold500,
-                            modifier = Modifier.size(30.dp)
+                            tint = BirbankRed,
+                            modifier = Modifier.size(28.dp)
                         )
                     }
 
@@ -192,13 +190,13 @@ fun ServicesScreen(
                             text = srv.getLocalizedName(currentLanguage),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = BirbankTextPrimary
                         )
                         Text(
                             text = srv.getFormattedPrice(currentLanguage),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = Gold500
+                            color = BirbankRed
                         )
                     }
                 }
@@ -224,14 +222,14 @@ fun ServicesScreen(
                             Text("Təhvil müddəti:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(srv.estimatedDuration.ifBlank { "7-15 gün" }, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                         }
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                        HorizontalDivider(color = BirbankBorder)
                         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text("Orijinallıq zəmanəti:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("100% Plagiat yoxlanışı", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Gold500)
+                            Text("Orijinallıq zəmanəti:", style = MaterialTheme.typography.bodySmall, color = BirbankTextSecondary)
+                            Text("100% Plagiat yoxlanışı", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = BirbankRed)
                         }
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                        HorizontalDivider(color = BirbankBorder)
                         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text("Düzəlişlər:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Düzəlişlər:", style = MaterialTheme.typography.bodySmall, color = BirbankTextSecondary)
                             Text("Müdafiəyə qədər ödənişsiz", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -250,8 +248,8 @@ fun ServicesScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500)
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White)
                 ) {
                     Text(localizedString(StringKey.BTN_ORDER_NOW), fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
@@ -290,13 +288,13 @@ private fun ServiceCatalogRowCard(
                         modifier = Modifier
                             .size(46.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Navy800),
+                            .background(BirbankRedLight),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = getServiceIconByName(item.icon),
                             contentDescription = null,
-                            tint = Gold500,
+                            tint = BirbankRed,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -305,13 +303,13 @@ private fun ServiceCatalogRowCard(
                             text = item.getLocalizedName(language),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = BirbankTextPrimary
                         )
                         Text(
                             text = item.getFormattedPrice(language),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold,
-                            color = Gold500
+                            color = BirbankRed
                         )
                     }
                 }
@@ -322,7 +320,7 @@ private fun ServiceCatalogRowCard(
             Text(
                 text = item.getLocalizedDescription(language),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = BirbankTextSecondary,
                 lineHeight = 18.sp,
                 maxLines = 2
             )
@@ -336,18 +334,19 @@ private fun ServiceCatalogRowCard(
                 OutlinedButton(
                     onClick = onDetailsClick,
                     shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BirbankBorder),
                     modifier = Modifier
                         .weight(1f)
                         .height(44.dp)
                         .testTag("service_details_${item.serviceId}")
                 ) {
-                    Text(localizedString(StringKey.BTN_DETAILS), style = MaterialTheme.typography.labelMedium)
+                    Text(localizedString(StringKey.BTN_DETAILS), style = MaterialTheme.typography.labelMedium, color = BirbankTextPrimary)
                 }
 
                 Button(
                     onClick = onOrderClick,
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
                     modifier = Modifier
                         .weight(1.3f)
                         .height(44.dp)
@@ -388,7 +387,7 @@ private fun ServicesLoadingSkeleton() {
                 ) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(28.dp),
-                        color = Gold500,
+                        color = BirbankRed,
                         strokeWidth = 2.dp
                     )
                 }
@@ -412,7 +411,7 @@ private fun ServicesEmptyState(currentLanguage: Language) {
             Icon(
                 imageVector = Icons.Default.Category,
                 contentDescription = null,
-                tint = Gold500,
+                tint = BirbankRed,
                 modifier = Modifier.size(56.dp)
             )
             Text(
@@ -423,7 +422,7 @@ private fun ServicesEmptyState(currentLanguage: Language) {
                 },
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = BirbankTextSecondary,
                 textAlign = TextAlign.Center
             )
         }
@@ -451,12 +450,12 @@ private fun ServicesErrorState(errorMessage: String, onRetry: () -> Unit) {
             Text(
                 text = errorMessage,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = BirbankTextPrimary,
                 textAlign = TextAlign.Center
             )
             Button(
                 onClick = onRetry,
-                colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Yenidən cəhd et", fontWeight = FontWeight.Bold)

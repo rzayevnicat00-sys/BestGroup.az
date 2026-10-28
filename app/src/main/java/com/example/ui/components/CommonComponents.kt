@@ -38,14 +38,10 @@ fun BestGroupLogoBadge(
         modifier = modifier
             .size(size.dp)
             .clip(RoundedCornerShape((size * 0.28).dp))
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(Navy800, Navy900)
-                )
-            )
+            .background(if (forceWhiteLogo) Color.White else BirbankRed)
             .border(
                 width = 1.dp,
-                brush = Brush.linearGradient(listOf(Gold500, Gold600)),
+                color = if (forceWhiteLogo) BirbankBorder else BirbankRedDark,
                 shape = RoundedCornerShape((size * 0.28).dp)
             ),
         contentAlignment = Alignment.Center
@@ -140,15 +136,15 @@ fun MetricStatCard(
     value: String,
     subtitle: String? = null,
     icon: ImageVector,
-    iconColor: Color = Gold500,
+    iconColor: Color = BirbankRed,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
+            .border(1.dp, BirbankBorder, RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = Color.White
         )
     ) {
         Column(
@@ -162,20 +158,20 @@ fun MetricStatCard(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = BirbankTextSecondary
                 )
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
-                        .background(iconColor.copy(alpha = 0.15f)),
+                        .background(iconColor.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
                         tint = iconColor,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -184,14 +180,14 @@ fun MetricStatCard(
                 text = value,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = BirbankTextPrimary
             )
             if (subtitle != null) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = BirbankTextSecondary
                 )
             }
         }
@@ -218,13 +214,13 @@ fun EmptyStateView(
             modifier = Modifier
                 .size(72.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .background(BirbankRedLight),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Gold500,
+                tint = BirbankRed,
                 modifier = Modifier.size(36.dp)
             )
         }
@@ -233,13 +229,13 @@ fun EmptyStateView(
             text = localizedString(titleKey),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = BirbankTextPrimary
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = localizedString(descKey),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = BirbankTextSecondary,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
         if (actionButtonTextKey != null && onActionClick != null) {
@@ -248,8 +244,8 @@ fun EmptyStateView(
                 onClick = onActionClick,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Navy800,
-                    contentColor = Gold500
+                    containerColor = BirbankRed,
+                    contentColor = Color.White
                 ),
                 modifier = Modifier.testTag("empty_state_action_button")
             ) {
@@ -277,7 +273,7 @@ fun InteractiveRatingBar(
         for (i in 1..maxStars) {
             val isSelected = i <= rating
             val starColor by animateColorAsState(
-                targetValue = if (isSelected) Gold500 else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                targetValue = if (isSelected) Color(0xFFFFB800) else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
                 label = "star_color"
             )
             IconButton(

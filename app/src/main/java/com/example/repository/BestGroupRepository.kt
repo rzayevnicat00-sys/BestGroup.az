@@ -22,6 +22,7 @@ class BestGroupRepository(
     val chatService: FirestoreChatService? = null,
     val storageService: FirebaseStorageService? = null,
     val serviceCatalogService: FirestoreServiceCatalogService? = null,
+    val appUpdateService: FirestoreAppUpdateService? = null,
     private val context: android.content.Context? = null
 ) {
 
@@ -304,9 +305,86 @@ class BestGroupRepository(
         context?.let { FcmTokenManager(it) }
     }
 
+    // App Updates & Version Control
+    val currentAppVersionCode: Int = try { com.example.BuildConfig.VERSION_CODE } catch (_: Throwable) { 1 }
+    val currentAppVersionName: String = try { com.example.BuildConfig.VERSION_NAME } catch (_: Throwable) { "1.0" }
+
+    private val _latestAppUpdate = MutableStateFlow<AppUpdateInfo?>(null)
+    val latestAppUpdate: StateFlow<AppUpdateInfo?> = _latestAppUpdate.asStateFlow()
+
+    private val _allAppUpdates = MutableStateFlow<List<AppUpdateInfo>>(emptyList())
+    val allAppUpdates: StateFlow<List<AppUpdateInfo>> = _allAppUpdates.asStateFlow()
+
+    private val _isUpdateDismissed = MutableStateFlow(false)
+    val isUpdateDismissed: StateFlow<Boolean> = _isUpdateDismissed.asStateFlow()
+
+    fun dismissUpdateForNow() {
+        _isUpdateDismissed.value = true
+    }
+
+    fun isUpdateAvailable(updateInfo: AppUpdateInfo?): Boolean {
+        if (updateInfo == null) return false
+        return updateInfo.versionCode > currentAppVersionCode
+    }
+
+    fun isMandatoryUpdate(updateInfo: AppUpdateInfo?): Boolean {
+        if (updateInfo == null) return false
+        return updateInfo.isMandatory || currentAppVersionCode < updateInfo.minSupportedVersionCode
+    }
+
+    suspend fun publishAppUpdate(
+        versionCode: Int,
+        versionName: String,
+        releaseNotesAz: String,
+        releaseNotesEn: String = "",
+        releaseNotesRu: String = "",
+        downloadUrl: String = FirestoreAppUpdateService.GITHUB_LATEST_RELEASE_URL,
+        githubReleaseUrl: String = FirestoreAppUpdateService.GITHUB_RELEASES_URL,
+        isMandatory: Boolean = false,
+        minSupportedVersionCode: Int = 1,
+        apkSizeMb: Double = 0.0
+    ): Result<String> {
+        val adminName = _currentUser.value?.fullName ?: "BestGroup.az Admin"
+        val info = AppUpdateInfo(
+            id = "v_$versionCode",
+            versionCode = versionCode,
+            versionName = versionName,
+            releaseNotesAz = releaseNotesAz,
+            releaseNotesEn = releaseNotesEn,
+            releaseNotesRu = releaseNotesRu,
+            downloadUrl = downloadUrl.ifBlank { FirestoreAppUpdateService.GITHUB_LATEST_RELEASE_URL },
+            githubReleaseUrl = githubReleaseUrl.ifBlank { FirestoreAppUpdateService.GITHUB_RELEASES_URL },
+            isMandatory = isMandatory,
+            minSupportedVersionCode = minSupportedVersionCode,
+            publishedAtMillis = System.currentTimeMillis(),
+            publishedBy = adminName,
+            apkSizeMb = apkSizeMb
+        )
+        return if (appUpdateService != null) {
+            appUpdateService.publishUpdate(info)
+        } else {
+            _latestAppUpdate.value = info
+            _allAppUpdates.value = listOf(info) + _allAppUpdates.value
+            Result.success("v_$versionCode")
+        }
+    }
+
     // --- Firebase Initialization & Synchronization ---
 
     fun initFirebaseObservers(scope: CoroutineScope) {
+        if (appUpdateService != null) {
+            scope.launch {
+                appUpdateService.getLatestUpdateFlow().collect { update ->
+                    _latestAppUpdate.value = update
+                }
+            }
+            scope.launch {
+                appUpdateService.getAllUpdatesFlow().collect { list ->
+                    _allAppUpdates.value = list
+                }
+            }
+        }
+
         if (authService == null) {
             initSampleDataIfEmpty()
             return

@@ -37,9 +37,7 @@ import com.example.model.OrderPriority
 import com.example.model.ServiceType
 import com.example.services.firebase.FirebaseStorageService
 import com.example.ui.components.PriorityBadge
-import com.example.ui.theme.Gold500
-import com.example.ui.theme.Navy800
-import com.example.ui.theme.Navy900
+import com.example.ui.theme.*
 import com.example.viewmodel.AppDestination
 import com.example.viewmodel.MainViewModel
 
@@ -66,7 +64,7 @@ fun OrderWizardScreen(
                         Text(
                             text = "Addım ${state.currentStep} / $totalSteps: ${getStepTitle(state.currentStep)}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Gold500
+                            color = BirbankRed
                         )
                     }
                 },
@@ -115,9 +113,9 @@ fun OrderWizardScreen(
 
                         Button(
                             onClick = { viewModel.wizardNextStep() },
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(14.dp),
                             enabled = !state.isSubmitting,
-                            colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                            colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
                             modifier = Modifier
                                 .weight(if (state.currentStep > 1) 1.5f else 1f)
                                 .height(50.dp)
@@ -130,7 +128,7 @@ fun OrderWizardScreen(
                                 ) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(20.dp),
-                                        color = Gold500,
+                                        color = Color.White,
                                         strokeWidth = 2.dp
                                     )
                                     val pct = (state.uploadProgress * 100).toInt()
@@ -164,8 +162,8 @@ fun OrderWizardScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(4.dp),
-                color = Gold500,
-                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                color = BirbankRed,
+                trackColor = BirbankBorder
             )
 
             if (state.error != null) {
@@ -254,12 +252,12 @@ private fun Step1ServiceSelect(state: com.example.viewmodel.OrderWizardUiState, 
                     }
                     .border(
                         width = if (isSelected) 2.dp else 1.dp,
-                        color = if (isSelected) Gold500 else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                        color = if (isSelected) BirbankRed else BirbankBorder,
                         shape = RoundedCornerShape(12.dp)
                     )
                     .testTag("wizard_service_choice_${cat.serviceId}"),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isSelected) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
+                    containerColor = if (isSelected) BirbankRedLight else Color.White
                 )
             ) {
                 Row(
@@ -269,6 +267,7 @@ private fun Step1ServiceSelect(state: com.example.viewmodel.OrderWizardUiState, 
                 ) {
                     RadioButton(
                         selected = isSelected,
+                        colors = RadioButtonDefaults.colors(selectedColor = BirbankRed),
                         onClick = {
                             val matchingType = ServiceType.values().find {
                                 it.name.equals(cat.serviceId, ignoreCase = true) || it.name.replace("_", "").equals(cat.serviceId.replace("_", ""), ignoreCase = true)
@@ -281,12 +280,12 @@ private fun Step1ServiceSelect(state: com.example.viewmodel.OrderWizardUiState, 
                             text = cat.getLocalizedName(currentLanguage),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = BirbankTextPrimary
                         )
                         Text(
                             text = cat.getFormattedPrice(currentLanguage),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Gold500,
+                            color = BirbankRed,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -469,12 +468,12 @@ private fun Step4FilesUpload(state: com.example.viewmodel.OrderWizardUiState, vi
                 .clip(RoundedCornerShape(16.dp))
                 .clickable { filePickerLauncher.launch(allowedMimeTypes) }
                 .border(
-                    1.5.dp,
-                    Gold500,
+                    1.dp,
+                    BirbankBorder,
                     RoundedCornerShape(16.dp)
                 )
                 .testTag("wizard_upload_dropzone"),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            colors = CardDefaults.cardColors(containerColor = BirbankRedLight)
         ) {
             Column(
                 modifier = Modifier
@@ -486,13 +485,13 @@ private fun Step4FilesUpload(state: com.example.viewmodel.OrderWizardUiState, vi
                     modifier = Modifier
                         .size(52.dp)
                         .clip(CircleShape)
-                        .background(Gold500.copy(alpha = 0.2f)),
+                        .background(Color.White),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.CloudUpload,
                         contentDescription = null,
-                        tint = Gold500,
+                        tint = BirbankRed,
                         modifier = Modifier.size(30.dp)
                     )
                 }
@@ -501,13 +500,13 @@ private fun Step4FilesUpload(state: com.example.viewmodel.OrderWizardUiState, vi
                     text = localizedString(StringKey.WIZARD_FILES_DROPZONE),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = BirbankTextPrimary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "PDF, DOC, DOCX, PPT, PPTX, JPG və PNG (maks. 20 MB)",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = BirbankTextSecondary
                 )
             }
         }
@@ -522,7 +521,7 @@ private fun Step4FilesUpload(state: com.example.viewmodel.OrderWizardUiState, vi
                 onClick = { filePickerLauncher.launch(allowedMimeTypes) },
                 modifier = Modifier.weight(1f).height(44.dp),
                 shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500)
+                colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White)
             ) {
                 Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
@@ -601,7 +600,7 @@ private fun Step4FilesUpload(state: com.example.viewmodel.OrderWizardUiState, vi
                                     Icon(
                                         imageVector = Icons.Default.InsertDriveFile,
                                         contentDescription = null,
-                                        tint = Gold500
+                                        tint = BirbankRed
                                     )
                                     Column {
                                         Text(
@@ -622,7 +621,7 @@ private fun Step4FilesUpload(state: com.example.viewmodel.OrderWizardUiState, vi
                                             )
                                             val (statusText, statusColor) = when (file.state) {
                                                 FileUploadState.PENDING -> "Gözləyir" to MaterialTheme.colorScheme.onSurfaceVariant
-                                                FileUploadState.UPLOADING -> "Yüklənir..." to Gold500
+                                                FileUploadState.UPLOADING -> "Yüklənir..." to BirbankRed
                                                 FileUploadState.UPLOADED, FileUploadState.SUCCESS -> "Yükləndi" to Color(0xFF2E7D32)
                                                 FileUploadState.FAILED, FileUploadState.ERROR -> "Uğursuz oldu" to MaterialTheme.colorScheme.error
                                                 FileUploadState.CANCELLED -> "Ləğv edildi" to MaterialTheme.colorScheme.error
@@ -671,7 +670,7 @@ private fun Step5DeadlinePriority(state: com.example.viewmodel.OrderWizardUiStat
             value = state.deadline,
             onValueChange = { v -> viewModel.updateWizardState { it.copy(deadline = v) } },
             label = { Text("Təhvil tarixi") },
-            leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = Gold500) },
+            leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = BirbankRed) },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
@@ -703,11 +702,11 @@ private fun Step5DeadlinePriority(state: com.example.viewmodel.OrderWizardUiStat
                     .clickable { viewModel.updateWizardState { it.copy(priority = pri) } }
                     .border(
                         if (isSelected) 2.dp else 1.dp,
-                        if (isSelected) Gold500 else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                        if (isSelected) BirbankRed else BirbankBorder,
                         RoundedCornerShape(12.dp)
                     ),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isSelected) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
+                    containerColor = if (isSelected) BirbankRedLight else Color.White
                 )
             ) {
                 Row(
@@ -717,6 +716,7 @@ private fun Step5DeadlinePriority(state: com.example.viewmodel.OrderWizardUiStat
                 ) {
                     RadioButton(
                         selected = isSelected,
+                        colors = RadioButtonDefaults.colors(selectedColor = BirbankRed),
                         onClick = { viewModel.updateWizardState { it.copy(priority = pri) } }
                     )
                     Column {
@@ -867,13 +867,13 @@ private fun OrderSuccessStep(
             modifier = Modifier
                 .size(80.dp)
                 .clip(CircleShape)
-                .background(Gold500),
+                .background(BirbankRed),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.Check,
                 contentDescription = null,
-                tint = Navy900,
+                tint = Color.White,
                 modifier = Modifier.size(44.dp)
             )
         }
@@ -893,7 +893,7 @@ private fun OrderSuccessStep(
         Text(
             text = localizedString(StringKey.WIZARD_SUCCESS_DESC),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = BirbankTextSecondary,
             textAlign = TextAlign.Center
         )
 
@@ -901,9 +901,11 @@ private fun OrderSuccessStep(
 
         // Order tracking code card
         Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            shape = RoundedCornerShape(12.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, BirbankBorder, RoundedCornerShape(14.dp)),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(14.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -914,14 +916,14 @@ private fun OrderSuccessStep(
                 Text(
                     text = localizedString(StringKey.WIZARD_ORDER_CODE),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = BirbankTextSecondary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = order.orderNumber,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Gold500
+                    color = BirbankRed
                 )
             }
         }
@@ -930,8 +932,8 @@ private fun OrderSuccessStep(
 
         Button(
             onClick = onViewOrder,
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)

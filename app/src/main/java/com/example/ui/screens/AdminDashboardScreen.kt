@@ -41,9 +41,12 @@ import com.example.ui.components.EmptyStateView
 import com.example.ui.components.MetricStatCard
 import com.example.ui.components.PriorityBadge
 import com.example.ui.components.StatusBadge
-import com.example.ui.theme.Gold500
-import com.example.ui.theme.Navy800
-import com.example.ui.theme.Navy900
+import com.example.ui.theme.BirbankBorder
+import com.example.ui.theme.BirbankBgLight
+import com.example.ui.theme.BirbankRed
+import com.example.ui.theme.BirbankRedLight
+import com.example.ui.theme.BirbankTextPrimary
+import com.example.ui.theme.BirbankTextSecondary
 import com.example.viewmodel.AppDestination
 import com.example.viewmodel.MainViewModel
 
@@ -53,6 +56,7 @@ enum class AdminTab(val title: String, val icon: ImageVector) {
     ORDERS("Sifarişlər", Icons.Default.Assignment),
     CUSTOMERS("Müştərilər", Icons.Default.People),
     ORDER_CHATS("Sifariş çatları", Icons.Default.Chat),
+    UPDATES("Yeniləmələr", Icons.Default.SystemUpdate),
     NOTIFICATIONS("Bildirişlər", Icons.Default.Notifications),
     PROFILE("Profil", Icons.Default.AccountCircle)
 }
@@ -102,7 +106,7 @@ fun AdminDashboardScreen(
                         Text(
                             text = "${currentUser?.role?.title ?: "Admin"} • BestGroup.az İdarəetmə",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Gold500
+                            color = BirbankRed
                         )
                     }
                 },
@@ -119,20 +123,21 @@ fun AdminDashboardScreen(
                         onClick = { showBroadcastDialog = true },
                         modifier = Modifier.testTag("admin_broadcast_btn")
                     ) {
-                        Icon(Icons.Default.Campaign, contentDescription = "Push Bildiriş", tint = Gold500)
+                        Icon(Icons.Default.Campaign, contentDescription = "Push Bildiriş", tint = BirbankRed)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },
         bottomBar = {
             ScrollableTabRow(
                 selectedTabIndex = currentTab.ordinal,
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = Gold500,
+                containerColor = Color.White,
+                contentColor = BirbankRed,
                 edgePadding = 12.dp,
                 modifier = Modifier
                     .navigationBarsPadding()
+                    .border(BorderStroke(1.dp, BirbankBorder))
                     .testTag("admin_tabs_row")
             ) {
                 AdminTab.values().forEach { tab ->
@@ -144,8 +149,8 @@ fun AdminDashboardScreen(
                         },
                         text = { Text(tab.title, fontSize = 12.sp, fontWeight = if (currentTab == tab) FontWeight.Bold else FontWeight.Normal) },
                         icon = { Icon(tab.icon, contentDescription = tab.title, modifier = Modifier.size(18.dp)) },
-                        selectedContentColor = Gold500,
-                        unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        selectedContentColor = BirbankRed,
+                        unselectedContentColor = BirbankTextSecondary
                     )
                 }
             }
@@ -265,6 +270,12 @@ fun AdminDashboardScreen(
                     )
                 }
             }
+            AdminTab.UPDATES -> {
+                AdminUpdatesContent(
+                    viewModel = viewModel,
+                    modifier = modifier.padding(innerPadding)
+                )
+            }
             AdminTab.NOTIFICATIONS -> {
                 AdminNotificationsContent(
                     notifications = notifications,
@@ -349,7 +360,7 @@ fun AdminDashboardScreen(
                             broadcastMessage = ""
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500)
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White)
                 ) {
                     Text(if (broadcastSentMessage) "Bağla" else "Göndər")
                 }
@@ -400,7 +411,7 @@ fun AdminDashboardScreen(
                             selectedCustomerForDetail = null
                             viewModel.openSupportChatForCustomer(c)
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500)
+                        colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White)
                     ) {
                         Text("Çat aç")
                     }
@@ -449,7 +460,7 @@ fun AdminDashboardScreen(
                         contactTargetCustomer = Triple(custName, custPhone, ordNum)
                     },
                     modifier = Modifier.fillMaxWidth().height(46.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Icon(Icons.Default.SendToMobile, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -499,8 +510,8 @@ fun AdminDashboardScreen(
                                 selectedOrderForAdminAction = null
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (o.priority == pr) Gold500 else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (o.priority == pr) Navy900 else MaterialTheme.colorScheme.onSurface
+                                containerColor = if (o.priority == pr) BirbankRed else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (o.priority == pr) Color.White else MaterialTheme.colorScheme.onSurface
                             ),
                             modifier = Modifier.weight(1f)
                         ) {
@@ -563,7 +574,7 @@ private fun AdminDashboardContent(
                     value = "${stats.pendingOrdersCount}",
                     subtitle = "Təsdiq gözləyir",
                     icon = Icons.Default.HourglassEmpty,
-                    iconColor = Gold500,
+                    iconColor = BirbankRed,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -630,7 +641,7 @@ private fun AdminDashboardContent(
                     value = "${stats.totalCustomersCount}",
                     subtitle = "Qeydiyyatdan keçmiş",
                     icon = Icons.Default.Group,
-                    iconColor = Gold500,
+                    iconColor = BirbankRed,
                     modifier = Modifier.weight(1f)
                 )
                 MetricStatCard(
@@ -651,7 +662,7 @@ private fun AdminDashboardContent(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
                     .clickable { onBroadcastClick() }
-                    .border(1.dp, Gold500.copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
+                    .border(1.dp, BirbankBorder, RoundedCornerShape(14.dp)),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Row(
@@ -663,7 +674,7 @@ private fun AdminDashboardContent(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(Icons.Default.SendToMobile, contentDescription = null, tint = Gold500)
+                        Icon(Icons.Default.SendToMobile, contentDescription = null, tint = BirbankRed)
                         Column {
                             Text(
                                 text = localizedString(StringKey.ADMIN_PUSH_BROADCAST),
@@ -678,7 +689,7 @@ private fun AdminDashboardContent(
                             )
                         }
                     }
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Gold500)
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = BirbankRed)
                 }
             }
         }
@@ -697,7 +708,7 @@ private fun AdminDashboardContent(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 TextButton(onClick = { onNavigateToTab(AdminTab.ORDERS) }) {
-                    Text("Hamısına bax (${orders.size})", color = Gold500, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("Hamısına bax (${orders.size})", color = BirbankRed, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
         }
@@ -768,7 +779,7 @@ private fun AdminSupportContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(Icons.Default.SupportAgent, contentDescription = null, tint = Gold500)
+                Icon(Icons.Default.SupportAgent, contentDescription = null, tint = BirbankRed)
                 Column {
                     Text(
                         text = "Müştəri Xidmətləri Müraciətləri",
@@ -806,10 +817,10 @@ private fun AdminSupportContent(
                             modifier = Modifier
                                 .size(56.dp)
                                 .clip(CircleShape)
-                                .background(Navy800),
+                                .background(BirbankRedLight),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.MarkUnreadChatAlt, contentDescription = null, tint = Gold500, modifier = Modifier.size(30.dp))
+                            Icon(Icons.Default.MarkUnreadChatAlt, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(30.dp))
                         }
                         Text(
                             text = "Aktiv müştəri müraciəti yoxdur",
@@ -858,10 +869,10 @@ private fun AdminSupportContent(
                                 modifier = Modifier
                                     .size(46.dp)
                                     .clip(CircleShape)
-                                    .background(Navy800),
+                                    .background(BirbankRedLight),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.SupportAgent, contentDescription = null, tint = Gold500)
+                                Icon(Icons.Default.SupportAgent, contentDescription = null, tint = BirbankRed)
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(
@@ -883,7 +894,7 @@ private fun AdminSupportContent(
                                 Text(
                                     text = subInfo,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Gold500
+                                    color = BirbankRed
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
@@ -894,11 +905,11 @@ private fun AdminSupportContent(
                                 )
                             }
                             if (conv.unreadCount > 0) {
-                                Badge(containerColor = Gold500, contentColor = Navy900) {
+                                Badge(containerColor = BirbankRed, contentColor = Color.White) {
                                     Text("${conv.unreadCount}", fontWeight = FontWeight.Bold)
                                 }
                             }
-                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Gold500)
+                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = BirbankRed)
                         }
                     }
                 }
@@ -973,17 +984,17 @@ fun AdminSupportChatDetailView(
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Geri",
-                        tint = Gold500
+                        tint = BirbankRed
                     )
                 }
                 Box(
                     modifier = Modifier
                         .size(42.dp)
                         .clip(CircleShape)
-                        .background(Navy800),
+                        .background(BirbankRedLight),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Person, contentDescription = null, tint = Gold500)
+                    Icon(Icons.Default.Person, contentDescription = null, tint = BirbankRed)
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -1029,7 +1040,7 @@ fun AdminSupportChatDetailView(
                     Icon(
                         Icons.Default.ChatBubbleOutline,
                         contentDescription = null,
-                        tint = Gold500,
+                        tint = BirbankRed,
                         modifier = Modifier.size(48.dp)
                     )
                     Text(
@@ -1097,12 +1108,12 @@ fun AdminSupportChatDetailView(
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(if (replyText.isNotBlank()) Gold500 else MaterialTheme.colorScheme.surfaceVariant)
+                        .background(if (replyText.isNotBlank()) BirbankRed else MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Göndər",
-                        tint = if (replyText.isNotBlank()) Navy900 else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (replyText.isNotBlank()) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -1121,7 +1132,7 @@ private fun AdminChatBubbleItem(message: ChatMessage) {
         horizontalAlignment = if (isAdmin) Alignment.End else Alignment.Start
     ) {
         Surface(
-            color = if (isAdmin) Navy800 else MaterialTheme.colorScheme.surfaceVariant,
+            color = if (isAdmin) BirbankRed else MaterialTheme.colorScheme.surfaceVariant,
             shape = RoundedCornerShape(
                 topStart = 16.dp,
                 topEnd = 16.dp,
@@ -1135,7 +1146,7 @@ private fun AdminChatBubbleItem(message: ChatMessage) {
                 Text(
                     text = if (isAdmin) "Siz (Baş Admin)" else message.senderName.ifBlank { "Müştəri" },
                     style = MaterialTheme.typography.labelSmall,
-                    color = Gold500,
+                    color = BirbankRed,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(2.dp))
@@ -1194,8 +1205,8 @@ private fun AdminOrdersContent(
                     )
                 },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = Gold500,
-                    selectedLabelColor = Navy900
+                    selectedContainerColor = BirbankRed,
+                    selectedLabelColor = Color.White
                 )
             )
             OrderStatus.values().forEach { st ->
@@ -1211,8 +1222,8 @@ private fun AdminOrdersContent(
                         )
                     },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = Gold500,
-                        selectedLabelColor = Navy900
+                        selectedContainerColor = BirbankRed,
+                        selectedLabelColor = Color.White
                     )
                 )
             }
@@ -1247,7 +1258,7 @@ private fun AdminOrdersContent(
             Text(
                 text = "Ən yeni sifarişlər üstdə",
                 style = MaterialTheme.typography.labelSmall,
-                color = Gold500,
+                color = BirbankRed,
                 fontSize = 11.sp
             )
         }
@@ -1333,11 +1344,11 @@ private fun AdminCustomersContent(
                             )
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = Navy800
+                                color = BirbankRed
                             ) {
                                 Text(
                                     text = cust.role.title,
-                                    color = Gold500,
+                                    color = BirbankRed,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -1362,7 +1373,7 @@ private fun AdminCustomersContent(
                             Text(
                                 text = "${cust.university} • ${cust.degreeLevel}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Gold500
+                                color = BirbankRed
                             )
                         }
 
@@ -1382,7 +1393,7 @@ private fun AdminCustomersContent(
                             OutlinedButton(
                                 onClick = { onContactCustomer(cust) },
                                 shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Gold500),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = BirbankRed),
                                 modifier = Modifier.weight(1.2f)
                             ) {
                                 Icon(Icons.Default.SendToMobile, contentDescription = null, modifier = Modifier.size(13.dp))
@@ -1392,7 +1403,7 @@ private fun AdminCustomersContent(
                             Button(
                                 onClick = { onOpenSupportChat(cust) },
                                 shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                                colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(13.dp))
@@ -1433,7 +1444,7 @@ private fun AdminOrderChatsContent(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, tint = Gold500, modifier = Modifier.size(36.dp))
+                    Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(36.dp))
                     Text(
                         text = "Aktiv sifariş çatı yoxdur",
                         style = MaterialTheme.typography.titleMedium,
@@ -1475,10 +1486,10 @@ private fun AdminOrderChatsContent(
                             modifier = Modifier
                                 .size(46.dp)
                                 .clip(CircleShape)
-                                .background(Navy800),
+                                .background(BirbankRedLight),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.AssignmentInd, contentDescription = null, tint = Gold500)
+                            Icon(Icons.Default.AssignmentInd, contentDescription = null, tint = BirbankRed)
                         }
                         Column(modifier = Modifier.weight(1f)) {
                             Row(
@@ -1506,7 +1517,7 @@ private fun AdminOrderChatsContent(
                             )
                         }
                         if (conv.unreadCount > 0) {
-                            Badge(containerColor = Gold500, contentColor = Navy900) {
+                            Badge(containerColor = BirbankRed, contentColor = Color.White) {
                                 Text("${conv.unreadCount}", fontWeight = FontWeight.Bold)
                             }
                         }
@@ -1542,7 +1553,7 @@ private fun AdminNotificationsContent(
             ) {
                 Button(
                     onClick = onBroadcastClick,
-                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .weight(1.3f)
@@ -1560,7 +1571,7 @@ private fun AdminNotificationsContent(
                         .weight(1f)
                         .height(48.dp)
                 ) {
-                    Icon(Icons.Default.DoneAll, contentDescription = null, tint = Gold500, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.DoneAll, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Hamısı Oxundu", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
@@ -1575,7 +1586,7 @@ private fun AdminNotificationsContent(
                     .clickable { onNotificationClick(item) }
                     .border(
                         1.dp,
-                        if (!item.isRead) Gold500.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                        if (!item.isRead) BirbankRed.copy(alpha = 0.6f) else BirbankBorder,
                         RoundedCornerShape(14.dp)
                     ),
                 colors = CardDefaults.cardColors(
@@ -1592,14 +1603,14 @@ private fun AdminNotificationsContent(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(if (item.isRead) Navy800.copy(alpha = 0.5f) else Navy800),
+                            .background(if (item.isRead) BirbankRedLight.copy(alpha = 0.5f) else BirbankRedLight),
                         contentAlignment = Alignment.Center
                     ) {
                         val (icon, tint) = when (item.category) {
-                            NotificationCategory.ORDERS -> Icons.Default.Assignment to Gold500
+                            NotificationCategory.ORDERS -> Icons.Default.Assignment to BirbankRed
                             NotificationCategory.MESSAGES -> Icons.Default.Chat to Color(0xFF3B82F6)
                             NotificationCategory.CAMPAIGNS -> Icons.Default.Campaign to Color(0xFF10B981)
-                            else -> Icons.Default.Notifications to Gold500
+                            else -> Icons.Default.Notifications to BirbankRed
                         }
                         Icon(
                             icon,
@@ -1627,7 +1638,7 @@ private fun AdminNotificationsContent(
                                     modifier = Modifier
                                         .size(8.dp)
                                         .clip(CircleShape)
-                                        .background(Gold500)
+                                        .background(BirbankRed)
                                 )
                             }
                         }
@@ -1641,7 +1652,7 @@ private fun AdminNotificationsContent(
                         Text(
                             text = if (item.isRead) "${item.timestamp} • Oxunub" else item.timestamp,
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (!item.isRead) Gold500 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            color = if (!item.isRead) BirbankRed else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             fontSize = 11.sp
                         )
                     }
@@ -1680,11 +1691,11 @@ private fun AdminProfileContent(
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = Navy800
+                    color = BirbankRed
                 ) {
                     Text(
                         text = "İcazə: ${user?.role?.title ?: "Admin"} (Firebase Custom Claim)",
-                        color = Gold500,
+                        color = BirbankRed,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
@@ -1706,7 +1717,7 @@ private fun AdminProfileContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Görünüş Teması", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                    Icon(Icons.Default.Palette, contentDescription = null, tint = Gold500)
+                    Icon(Icons.Default.Palette, contentDescription = null, tint = BirbankRed)
                 }
                 Text(
                     text = "Seçdiyiniz tema tətbiqdən çıxıb yenidən daxil olduqda da yaddaşda saxlanılır.",
@@ -1727,8 +1738,8 @@ private fun AdminProfileContent(
                         Button(
                             onClick = { onThemeChange(mode) },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isSelected) Gold500 else MaterialTheme.colorScheme.surface,
-                                contentColor = if (isSelected) Navy900 else MaterialTheme.colorScheme.onSurface
+                                containerColor = if (isSelected) BirbankRed else MaterialTheme.colorScheme.surface,
+                                contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
                             ),
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.weight(1f)
@@ -1801,7 +1812,7 @@ private fun AdminOrderManageCard(
                     text = order.orderNumber,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Gold500
+                    color = BirbankRed
                 )
                 StatusBadge(status = order.status)
             }
@@ -1822,7 +1833,7 @@ private fun AdminOrderManageCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(Icons.Default.Person, contentDescription = null, tint = Gold500, modifier = Modifier.size(13.dp))
+                    Icon(Icons.Default.Person, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(13.dp))
                     Text(
                         text = "$customerName ${if (customerPhone.isNotBlank()) "• $customerPhone" else ""}",
                         style = MaterialTheme.typography.labelSmall,
@@ -1858,7 +1869,7 @@ private fun AdminOrderManageCard(
                     OutlinedButton(
                         onClick = onContactClick,
                         shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Gold500),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = BirbankRed),
                         modifier = Modifier.weight(1.2f)
                     ) {
                         Icon(Icons.Default.SendToMobile, contentDescription = null, modifier = Modifier.size(12.dp))
@@ -1882,7 +1893,7 @@ private fun AdminOrderManageCard(
                 Button(
                     onClick = onManageClick,
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
                     modifier = Modifier.weight(1.1f)
                 ) {
                     Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(13.dp))
@@ -1945,7 +1956,7 @@ private fun ContactCustomerBottomSheet(
                     Text(
                         text = "$customerName ${if (orderNumber != null) "(#$orderNumber)" else ""}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Gold500
+                        color = BirbankRed
                     )
                 }
                 IconButton(onClick = onDismiss) {
@@ -1958,7 +1969,7 @@ private fun ContactCustomerBottomSheet(
                 onValueChange = { phoneNumber = it },
                 label = { Text("Telefon nömrəsi") },
                 placeholder = { Text("+994 50 123 45 67") },
-                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = Gold500) },
+                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = BirbankRed) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
@@ -2021,7 +2032,7 @@ private fun ContactCustomerBottomSheet(
                     },
                     modifier = Modifier.weight(1f).height(48.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500)
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White)
                 ) {
                     Icon(Icons.Default.Sms, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
@@ -2063,5 +2074,309 @@ private fun ContactCustomerBottomSheet(
 
             Spacer(modifier = Modifier.height(10.dp))
         }
+    }
+}
+
+@Composable
+fun AdminUpdatesContent(
+    viewModel: MainViewModel,
+    modifier: Modifier = Modifier
+) {
+    val allUpdates by viewModel.allAppUpdates.collectAsState()
+    val context = LocalContext.current
+    var showPublishDialog by remember { mutableStateOf(false) }
+    var newVersionCode by remember { mutableStateOf("") }
+    var newVersionName by remember { mutableStateOf("") }
+    var newReleaseNotesAz by remember { mutableStateOf("") }
+    var newDownloadUrl by remember { mutableStateOf("") }
+    var newApkSizeMb by remember { mutableStateOf("") }
+    var isMandatory by remember { mutableStateOf(false) }
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            // Header Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, BirbankBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(BirbankRedLight),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = BirbankRed)
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Tətbiq Yeniləmələri", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = BirbankTextPrimary)
+                                Text("GitHub Releases & OTA Dağıtımı", style = MaterialTheme.typography.bodySmall, color = BirbankTextSecondary)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(
+                        "Müştərilərə yeni versiya haqqında bildiriş və in-app yeniləmə dialoqu göndərmək üçün yeni versiya elan edin və ya GitHub Releases səhifəsinə keçin.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BirbankTextSecondary
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { showPublishDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Yeni versiya elan et", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/rzayevnicat00-sys/BestGroup.az/releases"))
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                try { context.startActivity(intent) } catch (_: Exception) {}
+                            },
+                            border = BorderStroke(1.dp, BirbankBorder),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = BirbankTextPrimary)
+                        ) {
+                            Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp), tint = BirbankRed)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("GitHub", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Text(
+                "Yayımlanmış versiyalar (${allUpdates.size})",
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleSmall,
+                color = BirbankTextPrimary
+            )
+        }
+
+        if (allUpdates.isEmpty()) {
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, BirbankBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Default.CloudDone, contentDescription = null, tint = BirbankTextSecondary, modifier = Modifier.size(40.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Hələ yayımlanmış versiya elanı yoxdur", fontWeight = FontWeight.SemiBold, color = BirbankTextPrimary)
+                        Text("Yeni versiya yaratmaq üçün yuxarıdakı düymədən istifadə edin.", style = MaterialTheme.typography.bodySmall, color = BirbankTextSecondary, textAlign = TextAlign.Center)
+                    }
+                }
+            }
+        } else {
+            items(allUpdates) { update ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, BirbankBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(BirbankRedLight),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(20.dp))
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text("v${update.versionName}", fontWeight = FontWeight.Bold, color = BirbankTextPrimary)
+                                    Text("Build: ${update.versionCode} • ${String.format("%.1f", update.apkSizeMb)} MB", style = MaterialTheme.typography.labelSmall, color = BirbankTextSecondary)
+                                }
+                            }
+                            if (update.isMandatory) {
+                                Surface(
+                                    color = BirbankRedLight,
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text("Məcburi", color = BirbankRed, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                                }
+                            }
+                        }
+
+                        if (update.releaseNotesAz.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(update.releaseNotesAz, style = MaterialTheme.typography.bodySmall, color = BirbankTextSecondary)
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (update.downloadUrl.isNotBlank()) {
+                                OutlinedButton(
+                                    onClick = {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(update.downloadUrl))
+                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        try { context.startActivity(intent) } catch (_: Exception) {}
+                                    },
+                                    border = BorderStroke(1.dp, BirbankBorder),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(14.dp), tint = BirbankRed)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("APK Yüklə", fontSize = 11.sp, color = BirbankTextPrimary)
+                                }
+                            }
+                            if (update.githubReleaseUrl.isNotBlank()) {
+                                OutlinedButton(
+                                    onClick = {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(update.githubReleaseUrl))
+                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        try { context.startActivity(intent) } catch (_: Exception) {}
+                                    },
+                                    border = BorderStroke(1.dp, BirbankBorder),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(14.dp), tint = BirbankRed)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("GitHub", fontSize = 11.sp, color = BirbankTextPrimary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showPublishDialog) {
+        AlertDialog(
+            onDismissRequest = { showPublishDialog = false },
+            title = { Text("Yeni Versiya Elan Et", fontWeight = FontWeight.Bold, color = BirbankTextPrimary) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = newVersionCode,
+                        onValueChange = { newVersionCode = it },
+                        label = { Text("Version Code (məsələn: 2)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    OutlinedTextField(
+                        value = newVersionName,
+                        onValueChange = { newVersionName = it },
+                        label = { Text("Version Name (məsələn: 1.1.0)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    OutlinedTextField(
+                        value = newReleaseNotesAz,
+                        onValueChange = { newReleaseNotesAz = it },
+                        label = { Text("Dəyişikliklər (Qeydlər)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    OutlinedTextField(
+                        value = newDownloadUrl,
+                        onValueChange = { newDownloadUrl = it },
+                        label = { Text("APK Yükləmə URL-i (GitHub və ya birbaşa)") },
+                        placeholder = { Text("https://github.com/rzayevnicat00-sys/BestGroup.az/releases/...") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    OutlinedTextField(
+                        value = newApkSizeMb,
+                        onValueChange = { newApkSizeMb = it },
+                        label = { Text("APK Həcmi MB (məsələn: 28.5)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { isMandatory = !isMandatory }
+                    ) {
+                        Checkbox(checked = isMandatory, onCheckedChange = { isMandatory = it }, colors = CheckboxDefaults.colors(checkedColor = BirbankRed))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Bu yeniləmə məcburidir", fontSize = 13.sp, color = BirbankTextPrimary)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val code = newVersionCode.trim().toIntOrNull() ?: 2
+                        val name = newVersionName.trim().ifBlank { "1.1.0" }
+                        val url = newDownloadUrl.trim().ifBlank { "https://github.com/rzayevnicat00-sys/BestGroup.az/releases/latest" }
+                        val size = newApkSizeMb.trim().toDoubleOrNull() ?: 25.0
+                        viewModel.adminPublishUpdate(
+                            versionCode = code,
+                            versionName = name,
+                            releaseNotesAz = newReleaseNotesAz.trim().ifBlank { "BestGroup.az tətbiqinin yeni versiyası yayımlandı." },
+                            downloadUrl = url,
+                            githubReleaseUrl = "https://github.com/rzayevnicat00-sys/BestGroup.az/releases",
+                            isMandatory = isMandatory,
+                            minSupportedVersionCode = if (isMandatory) code else 1,
+                            apkSizeMb = size
+                        )
+                        showPublishDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Elan et və Yayımla", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPublishDialog = false }) {
+                    Text("Ləğv et", color = BirbankTextSecondary)
+                }
+            }
+        )
     }
 }

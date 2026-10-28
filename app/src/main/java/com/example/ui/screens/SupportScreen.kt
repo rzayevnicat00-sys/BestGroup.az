@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -22,8 +23,7 @@ import com.example.localization.StringKey
 import com.example.localization.localizedString
 import com.example.model.FaqCategory
 import com.example.model.FaqItem
-import com.example.ui.theme.Gold500
-import com.example.ui.theme.Navy800
+import com.example.ui.theme.*
 import com.example.viewmodel.AppDestination
 import com.example.viewmodel.MainViewModel
 
@@ -103,7 +103,7 @@ fun SupportScreen(
                                     viewModel.openGeneralSupportChat()
                                 },
                                 shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                                colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(44.dp)
@@ -116,13 +116,14 @@ fun SupportScreen(
 
                             OutlinedButton(
                                 onClick = { showTicketDialog = true },
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BirbankBorder),
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(44.dp)
                                     .testTag("support_write_ticket_btn")
                             ) {
-                                Icon(Icons.Default.MailOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.MailOutline, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(localizedString(StringKey.SUPPORT_WRITE_US), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                             }
@@ -199,7 +200,7 @@ fun SupportScreen(
                             ticketMessage = ""
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500)
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White)
                 ) {
                     Text(if (ticketSent) "Bağla" else localizedString(StringKey.BTN_SEND))
                 }
@@ -238,9 +239,9 @@ private fun ExpandableFaqCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { expanded = !expanded }
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(12.dp)),
+            .border(1.dp, BirbankBorder, RoundedCornerShape(12.dp)),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -252,24 +253,24 @@ private fun ExpandableFaqCard(
                     text = question,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = BirbankTextPrimary,
                     modifier = Modifier.weight(1f)
                 )
                 Icon(
                     imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                     contentDescription = null,
-                    tint = Gold500
+                    tint = BirbankRed
                 )
             }
 
             AnimatedVisibility(visible = expanded) {
                 Column(modifier = Modifier.padding(top = 10.dp)) {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    HorizontalDivider(color = BirbankBorder)
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         text = answer,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = BirbankTextSecondary,
                         lineHeight = 22.sp
                     )
                 }

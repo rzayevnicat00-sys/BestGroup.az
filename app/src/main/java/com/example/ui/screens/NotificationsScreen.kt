@@ -26,8 +26,7 @@ import com.example.localization.localizedString
 import com.example.model.NotificationCategory
 import com.example.model.NotificationItem
 import com.example.ui.components.EmptyStateView
-import com.example.ui.theme.Gold500
-import com.example.ui.theme.Navy800
+import com.example.ui.theme.*
 import com.example.viewmodel.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,7 +66,7 @@ fun NotificationsScreen(
                         Text(
                             text = localizedString(StringKey.NOTIF_MARK_ALL_READ),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Gold500,
+                            color = BirbankRed,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -173,13 +172,11 @@ private fun NotificationCard(
     onClick: () -> Unit
 ) {
     val (icon, tint) = when (item.category) {
-        NotificationCategory.ORDERS -> Icons.Default.Assignment to Gold500
-        NotificationCategory.MESSAGES -> Icons.Default.Chat to Color(0xFF3B82F6)
+        NotificationCategory.ORDERS -> Icons.Default.Assignment to BirbankRed
+        NotificationCategory.MESSAGES -> Icons.Default.Chat to BirbankRed
         NotificationCategory.CAMPAIGNS -> Icons.Default.Campaign to Color(0xFF10B981)
-        NotificationCategory.SYSTEM, NotificationCategory.ALL -> Icons.Default.Notifications to Gold500
+        NotificationCategory.SYSTEM, NotificationCategory.ALL -> Icons.Default.Notifications to BirbankRed
     }
-
-    val cardAlpha = if (item.isRead) 0.65f else 1f
 
     Card(
         modifier = Modifier
@@ -188,13 +185,12 @@ private fun NotificationCard(
             .clickable(onClick = onClick)
             .border(
                 1.dp,
-                if (!item.isRead) Gold500.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                if (!item.isRead) BirbankRed else BirbankBorder,
                 RoundedCornerShape(14.dp)
             )
             .testTag("notif_card_${item.id}"),
         colors = CardDefaults.cardColors(
-            containerColor = if (item.isRead) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-            else MaterialTheme.colorScheme.surfaceVariant
+            containerColor = Color.White
         )
     ) {
         Row(
@@ -208,13 +204,13 @@ private fun NotificationCard(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(if (item.isRead) Navy800.copy(alpha = 0.5f) else Navy800),
+                    .background(BirbankRedLight),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = if (item.isRead) tint.copy(alpha = 0.6f) else tint,
+                    tint = tint,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -228,8 +224,8 @@ private fun NotificationCard(
                     Text(
                         text = item.title,
                         style = MaterialTheme.typography.titleSmall,
-                        fontWeight = if (!item.isRead) FontWeight.Bold else FontWeight.Normal,
-                        color = if (!item.isRead) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = if (!item.isRead) FontWeight.Bold else FontWeight.SemiBold,
+                        color = BirbankTextPrimary,
                         modifier = Modifier.weight(1f)
                     )
                     if (!item.isRead) {
@@ -238,7 +234,7 @@ private fun NotificationCard(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(Gold500)
+                                .background(BirbankRed)
                         )
                     }
                 }
@@ -248,7 +244,7 @@ private fun NotificationCard(
                 Text(
                     text = item.body,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (item.isRead) 0.8f else 1f),
+                    color = BirbankTextSecondary,
                     lineHeight = 18.sp
                 )
 
@@ -258,7 +254,7 @@ private fun NotificationCard(
                     text = if (item.isRead) "${item.timestamp} • Oxunub" else item.timestamp,
                     style = MaterialTheme.typography.labelSmall,
                     fontSize = 11.sp,
-                    color = if (!item.isRead) Gold500 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    color = if (!item.isRead) BirbankRed else BirbankTextSecondary
                 )
             }
         }

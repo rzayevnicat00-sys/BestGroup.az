@@ -23,9 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.ChatConversation
 import com.example.ui.components.BestGroupLogoBadge
-import com.example.ui.theme.Gold500
-import com.example.ui.theme.Navy800
-import com.example.ui.theme.Navy900
+import com.example.ui.theme.*
 import com.example.viewmodel.MainViewModel
 
 private enum class AdminChatCategory(val label: String) {
@@ -131,7 +129,7 @@ fun AdminChatScreen(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     placeholder = { Text("Müştəri adı, mövzu və ya nömrə axtar...") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Gold500) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = BirbankRed) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = { searchQuery = "" }) {
@@ -166,9 +164,9 @@ fun AdminChatScreen(
                             onClick = { selectedCategory = cat },
                             label = { Text("${cat.label} ($count)") },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Gold500,
-                                selectedLabelColor = Navy900,
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                selectedContainerColor = BirbankRed,
+                                selectedLabelColor = Color.White,
+                                containerColor = BirbankSearchBg
                             )
                         )
                     }
@@ -198,10 +196,10 @@ fun AdminChatScreen(
                                     modifier = Modifier
                                         .size(56.dp)
                                         .clip(CircleShape)
-                                        .background(Navy800),
+                                        .background(BirbankRedLight),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Icons.Default.Forum, contentDescription = null, tint = Gold500, modifier = Modifier.size(30.dp))
+                                    Icon(Icons.Default.Forum, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(30.dp))
                                 }
                                 Text(
                                     text = "Aktiv müştəri söhbəti yoxdur",
@@ -245,10 +243,10 @@ fun AdminChatScreen(
                                     }
                                     .border(
                                         1.dp,
-                                        if (conv.unreadCount > 0) Gold500 else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
+                                        if (conv.unreadCount > 0) BirbankRed else BirbankBorder,
                                         RoundedCornerShape(14.dp)
                                     ),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                colors = CardDefaults.cardColors(containerColor = Color.White)
                             ) {
                                 Row(
                                     modifier = Modifier.padding(14.dp),
@@ -259,13 +257,13 @@ fun AdminChatScreen(
                                         modifier = Modifier
                                             .size(46.dp)
                                             .clip(CircleShape)
-                                            .background(if (isOrderChat) Gold500.copy(alpha = 0.2f) else Navy800),
+                                            .background(BirbankRedLight),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = if (isOrderChat) Icons.Default.Assignment else Icons.Default.SupportAgent,
                                             contentDescription = null,
-                                            tint = Gold500
+                                            tint = BirbankRed
                                         )
                                     }
 
@@ -279,19 +277,20 @@ fun AdminChatScreen(
                                                 text = displayTitle,
                                                 style = MaterialTheme.typography.titleSmall,
                                                 fontWeight = FontWeight.Bold,
+                                                color = BirbankTextPrimary,
                                                 maxLines = 1
                                             )
                                             Text(
                                                 text = conv.lastMessageTime,
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                color = BirbankTextSecondary
                                             )
                                         }
 
                                         Text(
                                             text = subInfo,
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = Gold500
+                                            color = BirbankRed
                                         )
 
                                         Spacer(modifier = Modifier.height(4.dp))
@@ -299,13 +298,13 @@ fun AdminChatScreen(
                                         Text(
                                             text = conv.lastMessageText.ifBlank { "Yeni söhbət başlandı" },
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            color = BirbankTextSecondary,
                                             maxLines = 1
                                         )
                                     }
 
                                     if (conv.unreadCount > 0) {
-                                        Badge(containerColor = Gold500, contentColor = Navy900) {
+                                        Badge(containerColor = BirbankRed, contentColor = Color.White) {
                                             Text("${conv.unreadCount}", fontWeight = FontWeight.Bold)
                                         }
                                     }
@@ -313,7 +312,7 @@ fun AdminChatScreen(
                                     Icon(
                                         Icons.Default.ChevronRight,
                                         contentDescription = "Aç",
-                                        tint = Gold500
+                                        tint = BirbankTextSecondary
                                     )
                                 }
                             }

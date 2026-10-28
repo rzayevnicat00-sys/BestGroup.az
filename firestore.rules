@@ -246,5 +246,11 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isStaff();
     }
+
+    // App Updates & Version Releases (Publicly readable, staff/admin writable)
+    match /app_updates/{updateId} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
   }
 }

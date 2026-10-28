@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -26,8 +27,7 @@ import com.example.model.UserRole
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.PriorityBadge
 import com.example.ui.components.StatusBadge
-import com.example.ui.theme.Gold500
-import com.example.ui.theme.Navy800
+import com.example.ui.theme.*
 import com.example.viewmodel.AppDestination
 import com.example.viewmodel.MainViewModel
 import com.example.viewmodel.OrdersFilter
@@ -83,7 +83,7 @@ fun OrdersScreen(
                             onClick = { viewModel.startNewOrder() },
                             modifier = Modifier.testTag("orders_add_new_order_btn")
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = "Yeni Sifariş", tint = Gold500)
+                            Icon(Icons.Default.Add, contentDescription = "Yeni Sifariş", tint = BirbankRed)
                         }
                     }
                 },
@@ -101,7 +101,7 @@ fun OrdersScreen(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 placeholder = { Text(localizedString(StringKey.ORDERS_SEARCH_HINT)) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Gold500) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = BirbankRed) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         IconButton(onClick = { searchQuery = "" }) {
@@ -171,7 +171,7 @@ fun OrdersScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Icon(Icons.Default.Assignment, contentDescription = null, tint = Gold500, modifier = Modifier.size(48.dp))
+                                Icon(Icons.Default.Assignment, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(48.dp))
                                 Text(
                                     text = "Sistemdə sifariş tapılmadı",
                                     style = MaterialTheme.typography.titleMedium,
@@ -181,14 +181,14 @@ fun OrdersScreen(
                                 Text(
                                     text = "Müştərilər yeni sifariş yaratdıqda burada və Admin İdarəetmə Panelində dərhal əks olunacaq.",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = BirbankTextSecondary,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Button(
                                     onClick = { viewModel.navigateTo(AppDestination.ADMIN_DASHBOARD) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
-                                    shape = RoundedCornerShape(10.dp)
+                                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
+                                    shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Text("Admin İdarəetmə Panelinə keç", fontWeight = FontWeight.Bold)
                                 }
@@ -253,9 +253,9 @@ private fun OrderItemCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+            .border(1.dp, BirbankBorder, RoundedCornerShape(16.dp))
             .testTag("order_item_${order.id}"),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -267,7 +267,7 @@ private fun OrderItemCard(
                     text = order.orderNumber,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Gold500
+                    color = BirbankRed
                 )
                 StatusBadge(status = order.status)
             }
@@ -278,7 +278,7 @@ private fun OrderItemCard(
                 text = order.topic,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = BirbankTextPrimary,
                 maxLines = 2
             )
 
@@ -287,7 +287,7 @@ private fun OrderItemCard(
             Text(
                 text = localizedString(order.serviceType.nameKey),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = BirbankTextSecondary
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -299,8 +299,8 @@ private fun OrderItemCard(
                     .fillMaxWidth()
                     .height(5.dp)
                     .clip(CircleShape),
-                color = Gold500,
-                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                color = BirbankRed,
+                trackColor = BirbankBorder
             )
 
             Spacer(modifier = Modifier.height(12.dp))

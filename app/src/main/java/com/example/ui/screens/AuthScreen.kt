@@ -14,7 +14,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -29,8 +31,7 @@ import com.example.localization.LocalizationManager
 import com.example.localization.StringKey
 import com.example.localization.localizedString
 import com.example.ui.components.BestGroupLogoBadge
-import com.example.ui.theme.Gold500
-import com.example.ui.theme.Navy800
+import com.example.ui.theme.*
 import com.example.viewmodel.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -211,11 +212,18 @@ fun AuthScreen(
             // Login / Register Tabs
             TabRow(
                 selectedTabIndex = if (isLogin) 0 else 1,
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = Gold500,
+                containerColor = Color.White,
+                contentColor = BirbankRed,
+                indicator = { tabPositions ->
+                    TabRowDefaults.SecondaryIndicator(
+                        modifier = Modifier.tabIndicatorOffset(tabPositions[if (isLogin) 0 else 1]),
+                        color = BirbankRed
+                    )
+                },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(1.dp, BirbankBorder, RoundedCornerShape(12.dp))
             ) {
                 Tab(
                     selected = isLogin,
@@ -223,10 +231,12 @@ fun AuthScreen(
                         isLogin = true
                         errorMessage = null
                     },
+                    selectedContentColor = BirbankRed,
+                    unselectedContentColor = BirbankTextSecondary,
                     text = {
                         Text(
                             text = localizedString(StringKey.BTN_LOGIN),
-                            fontWeight = if (isLogin) FontWeight.Bold else FontWeight.Normal
+                            fontWeight = if (isLogin) FontWeight.Bold else FontWeight.Medium
                         )
                     }
                 )
@@ -236,6 +246,8 @@ fun AuthScreen(
                         isLogin = false
                         errorMessage = null
                     },
+                    selectedContentColor = BirbankRed,
+                    unselectedContentColor = BirbankTextSecondary,
                     text = {
                         Text(
                             text = localizedString(StringKey.BTN_REGISTER),
@@ -342,8 +354,8 @@ fun AuthScreen(
                             checked = rememberMe,
                             onCheckedChange = { rememberMe = it },
                             colors = CheckboxDefaults.colors(
-                                checkedColor = Gold500,
-                                checkmarkColor = Navy800
+                                checkedColor = BirbankRed,
+                                checkmarkColor = Color.White
                             ),
                             modifier = Modifier.testTag("auth_remember_me_checkbox")
                         )
@@ -362,7 +374,7 @@ fun AuthScreen(
                         Text(
                             text = localizedString(StringKey.AUTH_FORGOT_PASSWORD_LINK),
                             style = MaterialTheme.typography.bodySmall,
-                            color = Gold500,
+                            color = BirbankRed,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -510,10 +522,10 @@ fun AuthScreen(
             Button(
                 onClick = { validateAndProceed() },
                 enabled = !isLoading,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Navy800,
-                    contentColor = Gold500
+                    containerColor = BirbankRed,
+                    contentColor = Color.White
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -522,7 +534,7 @@ fun AuthScreen(
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(
-                        color = Gold500,
+                        color = Color.White,
                         modifier = Modifier.size(24.dp),
                         strokeWidth = 2.dp
                     )
@@ -582,7 +594,7 @@ fun AuthScreen(
                             showForgotPasswordDialog = false
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500)
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White)
                 ) {
                     Text(if (resetSent) "Bağla" else "Kodu göndər")
                 }
@@ -605,7 +617,7 @@ fun AuthScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = Gold500)
+                    Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = BirbankRed)
                     Text("Telefon nömrəsinin təsdiqi", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 }
             },
@@ -618,22 +630,22 @@ fun AuthScreen(
 
                     // Information box regarding real SMS vs demo/sandbox environment
                     Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(8.dp),
+                        color = BirbankRedLight,
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
+                        Column(modifier = Modifier.padding(12.dp)) {
                             Text(
                                 text = "🔒 Təhlükəsizlik Sistemi",
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.labelMedium,
-                                color = Gold500
+                                color = BirbankRed
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "Firebase Console-da SMS kvotası və Phone Auth aktivləşdirilənədək sandbox təhlükəsizlik kodu: $generatedOtpCode",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = BirbankTextPrimary
                             )
                         }
                     }
@@ -657,10 +669,10 @@ fun AuthScreen(
                         },
                         label = { Text("6 rəqəmli OTP kodu") },
                         placeholder = { Text("Məs: 123456") },
-                        leadingIcon = { Icon(Icons.Default.LockClock, contentDescription = null, tint = Gold500) },
+                        leadingIcon = { Icon(Icons.Default.LockClock, contentDescription = null, tint = BirbankRed) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         singleLine = true,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth().testTag("auth_otp_input")
                     )
 
@@ -672,7 +684,7 @@ fun AuthScreen(
                         Text(
                             text = if (otpTimerSeconds > 0) "Yenidən göndər ($otpTimerSeconds saniyə)" else "Kodu yenidən ala bilərsiniz",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = BirbankTextSecondary
                         )
                         TextButton(
                             onClick = {
@@ -688,7 +700,7 @@ fun AuthScreen(
                         ) {
                             Text(
                                 "Yenidən göndər",
-                                color = if (otpTimerSeconds == 0) Gold500 else MaterialTheme.colorScheme.outline
+                                color = if (otpTimerSeconds == 0) BirbankRed else MaterialTheme.colorScheme.outline
                             )
                         }
                     }
@@ -716,7 +728,7 @@ fun AuthScreen(
                         showOtpDialog = false
                         performRegistration(phoneVerified = true)
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Navy800, contentColor = Gold500),
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
                     modifier = Modifier.testTag("auth_otp_verify_btn")
                 ) {
                     Text("Təsdiq et və Davam et")

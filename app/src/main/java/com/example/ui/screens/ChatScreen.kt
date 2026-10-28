@@ -31,10 +31,7 @@ import com.example.model.ChatConversation
 import com.example.model.ChatMessage
 import com.example.model.ChatMessageType
 import com.example.model.MessageDeliveryStatus
-import com.example.ui.theme.Gold400
-import com.example.ui.theme.Gold500
-import com.example.ui.theme.Navy800
-import com.example.ui.theme.Navy900
+import com.example.ui.theme.*
 import com.example.viewmodel.BottomTab
 import com.example.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
@@ -141,13 +138,13 @@ fun ChatScreen(
                             badge = {
                                 val totalUnread = conversations.sumOf { it.unreadCount }
                                 if (totalUnread > 0) {
-                                    Badge(containerColor = Gold500, contentColor = Navy900) {
+                                    Badge(containerColor = BirbankRed, contentColor = Color.White) {
                                         Text("$totalUnread")
                                     }
                                 }
                             }
                         ) {
-                            Icon(Icons.Default.Forum, contentDescription = "Söhbətlər", tint = Gold500)
+                            Icon(Icons.Default.Forum, contentDescription = "Söhbətlər", tint = BirbankRed)
                         }
                     }
                 },
@@ -216,7 +213,7 @@ fun ChatScreen(
                             Icon(
                                 Icons.Default.AttachFile,
                                 contentDescription = "Fayl qoş",
-                                tint = Gold500
+                                tint = BirbankRed
                             )
                         }
 
@@ -257,8 +254,8 @@ fun ChatScreen(
                             },
                             enabled = canSend,
                             colors = IconButtonDefaults.iconButtonColors(
-                                containerColor = if (canSend) Navy800 else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = Gold500,
+                                containerColor = if (canSend) BirbankRed else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = Color.White,
                                 disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                                 disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                             ),
@@ -268,7 +265,7 @@ fun ChatScreen(
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp),
                                     strokeWidth = 2.dp,
-                                    color = Gold500
+                                    color = Color.White
                                 )
                             } else {
                                 Icon(Icons.Default.Send, contentDescription = localizedString(StringKey.CHAT_SEND))
@@ -296,7 +293,7 @@ fun ChatScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        CircularProgressIndicator(color = Gold500)
+                        CircularProgressIndicator(color = BirbankRed)
                         Text(
                             text = localizedString(StringKey.CHAT_LOADING),
                             style = MaterialTheme.typography.bodyMedium,
@@ -318,13 +315,13 @@ fun ChatScreen(
                             modifier = Modifier
                                 .size(68.dp)
                                 .clip(CircleShape)
-                                .background(Gold500.copy(alpha = 0.15f)),
+                                .background(BirbankRedLight),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SupportAgent,
                                 contentDescription = null,
-                                tint = Gold500,
+                                tint = BirbankRed,
                                 modifier = Modifier.size(38.dp)
                             )
                         }
@@ -357,7 +354,7 @@ fun ChatScreen(
                             text = "Tez-tez verilən suallar:",
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
-                            color = Gold500,
+                            color = BirbankRed,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -399,7 +396,7 @@ fun ChatScreen(
                                 Icon(
                                     Icons.Default.ChevronRight,
                                     contentDescription = null,
-                                    tint = Gold500,
+                                    tint = BirbankRed,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -427,8 +424,8 @@ fun ChatScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
-                        .border(1.5.dp, Gold500, RoundedCornerShape(16.dp)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        .border(1.dp, BirbankBorder, RoundedCornerShape(16.dp)),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -448,7 +445,7 @@ fun ChatScreen(
                             Text(
                                 text = "Aktiv söhbət tapılmadı.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = BirbankTextSecondary
                             )
                         } else {
                             conversations.forEach { conv ->
@@ -457,7 +454,7 @@ fun ChatScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(10.dp))
-                                        .background(if (isSel) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+                                        .background(if (isSel) BirbankRedLight else Color.Transparent)
                                         .clickable {
                                             viewModel.setActiveConversation(conv.id)
                                             showConversationsList = false
@@ -466,13 +463,13 @@ fun ChatScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, tint = Gold500)
+                                    Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, tint = BirbankRed)
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(conv.title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                                        Text(conv.curatorName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(conv.curatorName, style = MaterialTheme.typography.labelSmall, color = BirbankTextSecondary)
                                     }
                                     if (conv.unreadCount > 0) {
-                                        Badge(containerColor = Gold500, contentColor = Navy900) {
+                                        Badge(containerColor = BirbankRed, contentColor = Color.White) {
                                             Text("${conv.unreadCount}")
                                         }
                                     }
@@ -512,8 +509,8 @@ private fun ChatBubble(message: ChatMessage) {
 
     val isMe = message.isFromUser
     val alignment = if (isMe) Alignment.End else Alignment.Start
-    val bgColor = if (isMe) Navy800 else MaterialTheme.colorScheme.surfaceVariant
-    val textColor = if (isMe) Color.White else MaterialTheme.colorScheme.onSurface
+    val bgColor = if (isMe) BirbankRed else Color.White
+    val textColor = if (isMe) Color.White else BirbankTextPrimary
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -523,7 +520,7 @@ private fun ChatBubble(message: ChatMessage) {
             Text(
                 text = message.senderName.ifBlank { "Akademik Kurator" },
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = BirbankTextSecondary,
                 modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)
             )
         }
@@ -540,6 +537,16 @@ private fun ChatBubble(message: ChatMessage) {
                     )
                 )
                 .background(bgColor)
+                .border(
+                    width = 1.dp,
+                    color = if (isMe) BirbankRed else BirbankBorder,
+                    shape = RoundedCornerShape(
+                        topStart = 16.dp,
+                        topEnd = 16.dp,
+                        bottomStart = if (isMe) 16.dp else 4.dp,
+                        bottomEnd = if (isMe) 4.dp else 16.dp
+                    )
+                )
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
             Column {
@@ -549,15 +556,15 @@ private fun ChatBubble(message: ChatMessage) {
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color.Black.copy(alpha = 0.15f))
+                            .background(if (isMe) Color.Black.copy(alpha = 0.15f) else BirbankRedLight)
                             .padding(8.dp)
                     ) {
-                        Icon(Icons.Default.InsertDriveFile, contentDescription = null, tint = Gold500, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.InsertDriveFile, contentDescription = null, tint = if (isMe) Color.White else BirbankRed, modifier = Modifier.size(18.dp))
                         Text(
                             text = message.attachedFileName,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = Gold500
+                            color = if (isMe) Color.White else BirbankRed
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
@@ -581,7 +588,7 @@ private fun ChatBubble(message: ChatMessage) {
                         text = message.timestamp,
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 10.sp,
-                        color = if (isMe) Color(0xFFCBD5E1) else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isMe) Color.White.copy(alpha = 0.8f) else BirbankTextSecondary
                     )
                     if (isMe) {
                         val icon = when (message.status) {
@@ -591,9 +598,9 @@ private fun ChatBubble(message: ChatMessage) {
                             else -> Icons.Default.Done
                         }
                         val tint = when (message.status) {
-                            MessageDeliveryStatus.READ -> Gold500
+                            MessageDeliveryStatus.READ -> Color.White
                             MessageDeliveryStatus.FAILED -> MaterialTheme.colorScheme.error
-                            else -> Color(0xFFCBD5E1)
+                            else -> Color.White.copy(alpha = 0.7f)
                         }
                         Icon(
                             imageVector = icon,
