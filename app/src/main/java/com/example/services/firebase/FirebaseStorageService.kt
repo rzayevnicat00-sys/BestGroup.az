@@ -298,4 +298,49 @@ class FirebaseStorageService(
             mimeType = mimeType
         )
     }
+
+    suspend fun uploadProfileImage(
+        userId: String,
+        fileBytes: ByteArray,
+        mimeType: String = "image/jpeg"
+    ): String {
+        require(userId.isNotBlank()) { "İstifadəçi ID boş ola bilməz." }
+        require(fileBytes.isNotEmpty()) { "Şəkil faylı boşdur." }
+        if (fileBytes.size > 10 * 1024 * 1024) {
+            throw IllegalArgumentException("Profil şəkli 10 MB-dan böyük ola bilməz.")
+        }
+        val ext = if (mimeType.contains("png", ignoreCase = true)) "png" else "jpg"
+        val storagePath = "profile_images/$userId/avatar.$ext"
+        val ref = storage.reference.child(storagePath)
+        val metadata = StorageMetadata.Builder()
+            .setContentType(mimeType)
+            .setCustomMetadata("uploadedBy", userId)
+            .build()
+        ref.putBytes(fileBytes, metadata).await()
+        return ref.downloadUrl.await().toString()
+    }
+
+    suspend fun uploadStoryMedia(
+        storyId: String,
+        fileBytes: ByteArray,
+        mimeType: String = "image/jpeg"
+    ): String {
+        require(storyId.isNotBlank()) { "Story ID boş ola bilməz." }
+        require(fileBytes.isNotEmpty()) { "Media faylı boşdur." }
+        if (fileBytes.size > 50 * 1024 * 1024) {
+            throw IllegalArgumentException("Story media faylı 50 MB-dan böyük ola bilməz.")
+        }
+        val ext = when {
+            mimeType.contains("mp4", ignoreCase = true) || mimeType.contains("video", ignoreCase = true) -> "mp4"
+            mimeType.contains("png", ignoreCase = true) -> "png"
+            else -> "jpg"
+        }
+        val storagePath = "stories/$storyId/media.$ext"
+        val ref = storage.reference.child(storagePath)
+        val metadata = StorageMetadata.Builder()
+            .setContentType(mimeType)
+            .build()
+        ref.putBytes(fileBytes, metadata).await()
+        return ref.downloadUrl.await().toString()
+    }
 }

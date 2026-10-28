@@ -147,6 +147,11 @@ class FirebaseAuthService(
                 } catch (_: Exception) {}
             }
 
+            val photoUrl = userDoc.getString("profilePhoto") ?: userDoc.getString("avatarUrl") ?: firebaseUser.photoUrl?.toString()
+            val isOnline = userDoc.getBoolean("isOnline") ?: true
+            val lastActive = (userDoc.get("lastActiveAtMillis") as? Number)?.toLong() ?: System.currentTimeMillis()
+            val createdAtStr = userDoc.getString("createdAt") ?: ""
+
             val user = User(
                 id = firebaseUser.uid,
                 fullName = userDoc.getString("fullName") ?: (firebaseUser.displayName ?: "İstifadəçi"),
@@ -156,8 +161,20 @@ class FirebaseAuthService(
                 faculty = userDoc.getString("faculty") ?: "",
                 degreeLevel = userDoc.getString("educationLevel") ?: "Bakalavriat",
                 role = role,
-                phoneVerified = userDoc.getBoolean("phoneVerified") ?: false
+                avatarUrl = photoUrl,
+                createdAt = createdAtStr,
+                phoneVerified = userDoc.getBoolean("phoneVerified") ?: false,
+                isOnline = isOnline,
+                lastActiveAtMillis = lastActive
             )
+
+            // Update user online status
+            try {
+                firestore.collection("users").document(firebaseUser.uid).set(
+                    mapOf("isOnline" to true, "lastActiveAtMillis" to System.currentTimeMillis()),
+                    SetOptions.merge()
+                ).await()
+            } catch (_: Exception) {}
 
             AuthResult.Success(user)
         } catch (e: Exception) {
@@ -203,6 +220,11 @@ class FirebaseAuthService(
                     } catch (_: Exception) {}
                 }
 
+                val photoUrl = doc.getString("profilePhoto") ?: doc.getString("avatarUrl")
+                val isOnline = doc.getBoolean("isOnline") ?: false
+                val lastActive = (doc.get("lastActiveAtMillis") as? Number)?.toLong() ?: System.currentTimeMillis()
+                val createdAtStr = doc.getString("createdAt") ?: ""
+
                 User(
                     id = userId,
                     fullName = doc.getString("fullName") ?: "",
@@ -212,7 +234,11 @@ class FirebaseAuthService(
                     faculty = doc.getString("faculty") ?: "",
                     degreeLevel = doc.getString("educationLevel") ?: "Bakalavriat",
                     role = role,
-                    phoneVerified = doc.getBoolean("phoneVerified") ?: false
+                    avatarUrl = photoUrl,
+                    createdAt = createdAtStr,
+                    phoneVerified = doc.getBoolean("phoneVerified") ?: false,
+                    isOnline = isOnline,
+                    lastActiveAtMillis = lastActive
                 )
             } else null
         } catch (e: Exception) {
@@ -257,6 +283,45 @@ class FirebaseAuthService(
                 SetOptions.merge()
             ).await()
         } catch (_: Exception) {}
+    }
+
+    suspend fun updateUserPresence(userId: String, isOnline: Boolean) {
+        if (userId.isBlank()) return
+        try {
+            firestore.collection("users").document(userId).set(
+                mapOf(
+                    "isOnline" to isOnline,
+                    "lastActiveAtMillis" to System.currentTimeMillis()
+                ),
+                SetOptions.merge()
+            ).await()
+        } catch (_: Exception) {}
+    }
+
+    suspend fun updateProfilePhoto(userId: String, photoUrl: String): Result<Unit> {
+        if (userId.isBlank() || photoUrl.isBlank()) {
+            return Result.failure(IllegalArgumentException("Parametrlər boş ola bilməz."))
+        }
+        return try {
+            val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
+            firestore.collection("users").document(userId).set(
+                mapOf(
+                    "profilePhoto" to photoUrl,
+                    "avatarUrl" to photoUrl,
+                    "updatedAt" to now
+                ),
+                SetOptions.merge()
+            ).await()
+            try {
+                val profileUpdates = com.google.firebase.auth.userProfileChangeRequest {
+                    photoUri = android.net.Uri.parse(photoUrl)
+                }
+                auth.currentUser?.updateProfile(profileUpdates)?.await()
+            } catch (_: Exception) {}
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     suspend fun assignUserRole(targetUserId: String, newRole: UserRole): Boolean {

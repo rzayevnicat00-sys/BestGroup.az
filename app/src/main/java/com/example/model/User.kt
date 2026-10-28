@@ -19,5 +19,7 @@ data class User(
     val avatarUrl: String? = null,
     val createdAt: String = "",
     val orderCount: Int = 0,
-    val phoneVerified: Boolean = false
+    val phoneVerified: Boolean = false,
+    val isOnline: Boolean = false,
+    val lastActiveAtMillis: Long = System.currentTimeMillis()
 )

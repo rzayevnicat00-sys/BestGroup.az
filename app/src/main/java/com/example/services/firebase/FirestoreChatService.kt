@@ -201,15 +201,29 @@ class FirestoreChatService(
 
         val actualSenderId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: senderId
 
+        val isFromCustomer = senderRole.equals("customer", ignoreCase = true)
+        val targetRole = if (isFromCustomer) "customer" else "staff"
+
         // Ensure parent conversation exists in Firestore before creating a subcollection message
         val convRef = convCollection.document(conversationId)
         val convSnap = convRef.get().await()
         if (!convSnap.exists()) {
             val dateFmtInit = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date())
             val derivedOrderId = if (conversationId.startsWith("order_")) conversationId.removePrefix("order_") else null
+            val derivedCustomerId = when {
+                conversationId.startsWith("support_") -> conversationId.removePrefix("support_")
+                isFromCustomer -> actualSenderId
+                derivedOrderId != null -> {
+                    try {
+                        val ordDoc = firestore.collection("orders").document(derivedOrderId).get().await()
+                        ordDoc.getString("userId") ?: ordDoc.getString("customerId") ?: ""
+                    } catch (_: Exception) { "" }
+                }
+                else -> ""
+            }
             val newConvData = hashMapOf<String, Any?>(
                 "conversationId" to conversationId,
-                "customerId" to actualSenderId,
+                "customerId" to derivedCustomerId,
                 "assignedStaffId" to null,
                 "orderId" to derivedOrderId,
                 "title" to if (derivedOrderId != null) "Sifariş Kuratorluğu" else "Müştəri xidmətləri",
@@ -229,9 +243,6 @@ class FirestoreChatService(
             )
             convRef.set(newConvData).await()
         }
-
-        val isFromCustomer = senderRole.equals("customer", ignoreCase = true)
-        val targetRole = if (isFromCustomer) "customer" else "staff"
 
         val msgDoc = hashMapOf(
             "messageId" to messageId,
@@ -270,6 +281,43 @@ class FirestoreChatService(
 
         convCollection.document(conversationId).update(convUpdate).await()
 
+        // 3. Write notification document for instant push & in-app alerts
+        try {
+            val notifId = "notif_${UUID.randomUUID()}"
+            val existingConvData = if (convSnap.exists()) convSnap.data ?: emptyMap() else emptyMap()
+            val convCustomerId = (existingConvData["customerId"] as? String)?.takeIf { it.isNotBlank() }
+                ?: (if (conversationId.startsWith("support_")) conversationId.removePrefix("support_") else "")
+
+            val notifDoc = hashMapOf<String, Any?>(
+                "id" to notifId,
+                "notificationId" to notifId,
+                "type" to "chat_message",
+                "category" to "MESSAGES",
+                "timestamp" to nowFormatted,
+                "targetChatId" to conversationId,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "isRead" to false
+            )
+
+            if (isFromCustomer) {
+                // Customer -> Admin
+                val displayName = senderName.ifBlank { "Müştəri" }
+                notifDoc["title"] = "Yeni mesaj"
+                notifDoc["body"] = "$displayName sizə yeni mesaj göndərdi."
+                notifDoc["forAdmin"] = true
+                notifDoc["senderId"] = actualSenderId
+                firestore.collection("notifications").document(notifId).set(notifDoc)
+            } else if (convCustomerId.isNotBlank()) {
+                // Admin -> Customer
+                notifDoc["title"] = "BestGroup.az-dan yeni mesaj"
+                notifDoc["body"] = "Dəstək komandası sizə yeni mesaj göndərdi."
+                notifDoc["userId"] = convCustomerId
+                notifDoc["forAdmin"] = false
+                notifDoc["senderId"] = actualSenderId
+                firestore.collection("notifications").document(notifId).set(notifDoc)
+            }
+        } catch (_: Exception) {}
+
         return ChatMessage(
             id = messageId,
             conversationId = conversationId,
@@ -305,21 +353,25 @@ class FirestoreChatService(
 
             // Update readAt on messages
             val unreadRole = if (isStaff) "customer" else "staff"
+            val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
             val unreadDocs = convRef.collection("messages")
-                .whereEqualTo("senderRole", unreadRole)
                 .whereEqualTo("isRead", false)
-                .limit(20)
+                .limit(50)
                 .get()
                 .await()
 
             for (doc in unreadDocs.documents) {
-                doc.reference.update(
-                    mapOf(
-                        "isRead" to true,
-                        "readAt" to FieldValue.serverTimestamp(),
-                        "status" to "read"
-                    )
-                ).await()
+                val msgSenderId = doc.getString("senderId") ?: ""
+                val msgSenderRole = doc.getString("senderRole") ?: ""
+                if (msgSenderId != currentUid || msgSenderRole == unreadRole) {
+                    doc.reference.update(
+                        mapOf(
+                            "isRead" to true,
+                            "readAt" to FieldValue.serverTimestamp(),
+                            "status" to "read"
+                        )
+                    ).await()
+                }
             }
         } catch (_: Exception) {}
     }

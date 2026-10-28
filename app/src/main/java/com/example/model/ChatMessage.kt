@@ -59,5 +59,8 @@ data class ChatConversation(
     val lastMessageTime: String = if (lastMessageAt.isNotBlank()) lastMessageAt else "İndicə",
     val unreadCount: Int = unreadForCustomer
 ) {
+    fun getEffectiveUnreadCount(isStaff: Boolean): Int {
+        return if (isStaff) unreadForStaff else unreadForCustomer
+    }
     val conversationId: String get() = id
 }

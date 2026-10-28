@@ -67,10 +67,23 @@ async function sendPushToUsers(userIds, payload) {
  * Helper: Find all Admin, Manager, and Operator User IDs
  */
 async function getStaffUserIds() {
-  const staffIds = [];
+  const staffIds = new Set();
+  const superAdminEmails = ["elmarmmdov1@gmail.com", "rzayevnicat00@gmail.com"];
   try {
     const usersSnap = await db.collection("users").get();
     for (const doc of usersSnap.docs) {
+      const data = doc.data();
+      const role = (data.role || "").toLowerCase();
+      const email = (data.email || "").toLowerCase();
+      if (
+        role === "admin" ||
+        role === "manager" ||
+        role === "operator" ||
+        superAdminEmails.includes(email)
+      ) {
+        staffIds.add(doc.id);
+        continue;
+      }
       try {
         const userRecord = await admin.auth().getUser(doc.id);
         const claims = userRecord.customClaims || {};
@@ -80,16 +93,17 @@ async function getStaffUserIds() {
           claims.role === "operator" ||
           claims.admin === true ||
           claims.manager === true ||
-          claims.operator === true
+          claims.operator === true ||
+          superAdminEmails.includes((userRecord.email || "").toLowerCase())
         ) {
-          staffIds.push(doc.id);
+          staffIds.add(doc.id);
         }
       } catch (_) {}
     }
   } catch (e) {
     console.error("Failed to query staff IDs:", e);
   }
-  return staffIds;
+  return Array.from(staffIds);
 }
 
 /**
@@ -128,9 +142,12 @@ exports.onOrderCreated = onDocumentCreated("orders/{orderId}", async (event) => 
 
 /**
  * B & C) New Message in Conversation: "conversations/{conversationId}/messages/{messageId}"
- * -> If customer sends message in support -> notification to Admin/Staff
- * -> If customer sends message in order chat -> notification to Admin/Staff
- * -> If staff sends message -> notification to customer
+ * -> If customer sends message in support or order chat -> notification to Admin/Staff:
+ *    Title: "Yeni mesaj"
+ *    Body: "[Ad Soyad] sizə yeni mesaj göndərdi."
+ * -> If staff sends message -> notification to customer:
+ *    Title: "BestGroup.az-dan yeni mesaj"
+ *    Body: "Dəstək komandası sizə yeni mesaj göndərdi."
  */
 exports.onMessageCreated = onDocumentCreated("conversations/{conversationId}/messages/{messageId}", async (event) => {
   const snap = event.data;
@@ -146,53 +163,51 @@ exports.onMessageCreated = onDocumentCreated("conversations/{conversationId}/mes
   const convData = convSnap.data();
 
   const isStaffSender = msgData.senderRole === "staff" || msgData.senderRole === "admin";
-  const customerId = convData.customerId;
+  const customerId = convData.customerId || (conversationId.startsWith("support_") ? conversationId.replace("support_", "") : "");
   const orderId = convData.orderId;
 
   if (!isStaffSender) {
     // Message from Customer -> Notify Admin/Staff
     const staffIds = await getStaffUserIds();
+    const senderId = msgData.senderId || customerId;
 
-    if (orderId) {
-      // Order Chat Notification
-      const orderSnap = await db.collection("orders").doc(orderId).get();
-      const orderNum = orderSnap.exists ? (orderSnap.data().orderNumber || `#BG-${orderId}`) : `#BG-${orderId}`;
-
-      const payload = {
-        title: "BestGroup.az • Sifariş mesajı",
-        body: `${orderNum} sifarişi üzrə yeni mesajınız var.`,
-        data: {
-          type: "order_message",
-          conversationId: conversationId,
-          orderId: orderId,
-          orderNumber: orderNum,
-          userId: msgData.senderId || customerId,
-        },
-      };
-      await sendPushToUsers(staffIds, payload);
-    } else {
-      // General Customer Support Chat Notification
-      const payload = {
-        title: "BestGroup.az • Yeni mesaj",
-        body: "Müştəri sizə yeni mesaj göndərdi.",
-        data: {
-          type: "support_message",
-          conversationId: conversationId,
-          userId: msgData.senderId || customerId,
-        },
-      };
-      await sendPushToUsers(staffIds, payload);
+    // Get reliable customer name from user profile
+    let customerName = msgData.senderName;
+    if (!customerName || customerName === "Müştəri" || customerName.trim().length === 0) {
+      if (senderId) {
+        try {
+          const userDoc = await db.collection("users").doc(senderId).get();
+          if (userDoc.exists && userDoc.data().fullName) {
+            customerName = userDoc.data().fullName;
+          }
+        } catch (_) {}
+      }
     }
+    const safeCustomerName = (customerName && customerName.trim().length > 0) ? customerName.trim() : "Müştəri";
+
+    const payload = {
+      title: "Yeni mesaj",
+      body: `${safeCustomerName} sizə yeni mesaj göndərdi.`,
+      data: {
+        type: "chat_message",
+        conversationId: conversationId,
+        orderId: orderId || "",
+        userId: senderId,
+        messageId: messageId,
+      },
+    };
+    await sendPushToUsers(staffIds, payload);
   } else {
     // Message from Staff -> Notify Customer
     if (customerId) {
       const payload = {
-        title: "BestGroup.az • Yeni cavab",
-        body: msgData.text ? msgData.text.substring(0, 100) : "Kuratorunuzdan yeni mesaj var.",
+        title: "BestGroup.az-dan yeni mesaj",
+        body: "Dəstək komandası sizə yeni mesaj göndərdi.",
         data: {
-          type: orderId ? "order_message" : "support_message",
+          type: "chat_message",
           conversationId: conversationId,
           orderId: orderId || "",
+          messageId: messageId,
         },
       };
       await sendPushToUsers([customerId], payload);
