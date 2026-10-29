@@ -391,6 +391,24 @@ fun ProfileScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
 
                         ProfileMenuItem(
+                            icon = Icons.Default.SystemUpdate,
+                            title = "Tətbiq Yeniləməsi",
+                            subtitle = "v1.0 (Build 1) • Birbaşa yenilənmə",
+                            onClick = {
+                                val isAvail = viewModel.isUpdateAvailable.value
+                                if (isAvail) {
+                                    viewModel.checkOrShowUpdate()
+                                } else {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar("Tətbiqiniz ən son versiyadadır (v1.0)")
+                                    }
+                                }
+                            },
+                            tag = "profile_menu_update"
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                        ProfileMenuItem(
                             icon = Icons.Default.Logout,
                             title = localizedString(StringKey.BTN_LOGOUT),
                             titleColor = MaterialTheme.colorScheme.error,

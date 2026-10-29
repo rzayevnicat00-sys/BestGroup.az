@@ -2672,7 +2672,7 @@ fun AdminUpdatesContent(
                     onClick = {
                         val code = newVersionCode.trim().toIntOrNull() ?: 2
                         val name = newVersionName.trim().ifBlank { "1.1.0" }
-                        val url = newDownloadUrl.trim().ifBlank { "https://github.com/rzayevnicat00-sys/BestGroup.az/releases/latest" }
+                        val url = newDownloadUrl.trim().ifBlank { com.example.services.firebase.FirestoreAppUpdateService.GITHUB_DIRECT_APK_URL }
                         val size = newApkSizeMb.trim().toDoubleOrNull() ?: 25.0
                         viewModel.adminPublishUpdate(
                             versionCode = code,

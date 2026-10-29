@@ -1012,6 +1012,10 @@ class MainViewModel @JvmOverloads constructor(
         repository.dismissUpdateForNow()
     }
 
+    fun checkOrShowUpdate() {
+        repository.checkOrShowUpdate()
+    }
+
     fun adminPublishUpdate(
         versionCode: Int,
         versionName: String,

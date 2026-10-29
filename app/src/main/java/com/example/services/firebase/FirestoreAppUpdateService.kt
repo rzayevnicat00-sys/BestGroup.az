@@ -18,6 +18,7 @@ class FirestoreAppUpdateService(
         const val GITHUB_REPO_URL = "https://github.com/rzayevnicat00-sys/BestGroup.az"
         const val GITHUB_RELEASES_URL = "https://github.com/rzayevnicat00-sys/BestGroup.az/releases"
         const val GITHUB_LATEST_RELEASE_URL = "https://github.com/rzayevnicat00-sys/BestGroup.az/releases/latest"
+        const val GITHUB_DIRECT_APK_URL = "https://github.com/rzayevnicat00-sys/BestGroup.az/releases/latest/download/BestGroup.az.apk"
     }
 
     /**
@@ -86,7 +87,7 @@ class FirestoreAppUpdateService(
                 "releaseNotesAz" to updateInfo.releaseNotesAz,
                 "releaseNotesEn" to updateInfo.releaseNotesEn,
                 "releaseNotesRu" to updateInfo.releaseNotesRu,
-                "downloadUrl" to updateInfo.downloadUrl.ifBlank { GITHUB_LATEST_RELEASE_URL },
+                "downloadUrl" to updateInfo.downloadUrl.ifBlank { GITHUB_DIRECT_APK_URL },
                 "githubReleaseUrl" to updateInfo.githubReleaseUrl.ifBlank { GITHUB_RELEASES_URL },
                 "isMandatory" to updateInfo.isMandatory,
                 "minSupportedVersionCode" to updateInfo.minSupportedVersionCode,
@@ -110,7 +111,7 @@ class FirestoreAppUpdateService(
             releaseNotesAz = data["releaseNotesAz"] as? String ?: "",
             releaseNotesEn = data["releaseNotesEn"] as? String ?: "",
             releaseNotesRu = data["releaseNotesRu"] as? String ?: "",
-            downloadUrl = data["downloadUrl"] as? String ?: GITHUB_LATEST_RELEASE_URL,
+            downloadUrl = data["downloadUrl"] as? String ?: GITHUB_DIRECT_APK_URL,
             githubReleaseUrl = data["githubReleaseUrl"] as? String ?: GITHUB_RELEASES_URL,
             isMandatory = data["isMandatory"] as? Boolean ?: false,
             minSupportedVersionCode = (data["minSupportedVersionCode"] as? Number)?.toInt() ?: 1,

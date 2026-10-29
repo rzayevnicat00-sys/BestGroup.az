@@ -327,6 +327,10 @@ class BestGroupRepository(
         _isUpdateDismissed.value = true
     }
 
+    fun checkOrShowUpdate() {
+        _isUpdateDismissed.value = false
+    }
+
     fun isUpdateAvailable(updateInfo: AppUpdateInfo?): Boolean {
         if (updateInfo == null) return false
         return updateInfo.versionCode > currentAppVersionCode

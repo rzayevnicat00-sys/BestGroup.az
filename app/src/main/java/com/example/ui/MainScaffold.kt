@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Intent
 import android.net.Uri
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
@@ -290,17 +291,19 @@ fun MainApp(viewModel: MainViewModel) {
             }
         }
 
-        // Birbank-style App Update Dialog
+        // Birbank-style App Update Dialog (In-Place Auto Updater)
         val isUpdateAvailable by viewModel.isUpdateAvailable.collectAsState()
         val latestAppUpdate by viewModel.latestAppUpdate.collectAsState()
         val isMandatoryUpdate by viewModel.isMandatoryUpdate.collectAsState()
         val context = LocalContext.current
+        val coroutineScope = rememberCoroutineScope()
+        val downloadProgress by com.example.services.update.InAppUpdateInstaller.downloadState.collectAsState()
 
         if (isUpdateAvailable && latestAppUpdate != null) {
             val update = latestAppUpdate!!
             AlertDialog(
                 onDismissRequest = {
-                    if (!isMandatoryUpdate) {
+                    if (!isMandatoryUpdate && !downloadProgress.isDownloading) {
                         viewModel.dismissUpdate()
                     }
                 },
@@ -354,15 +357,112 @@ fun MainApp(viewModel: MainViewModel) {
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
                         if (update.apkSizeMb > 0) {
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "Həcm: ${String.format("%.1f", update.apkSizeMb)} MB",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = BirbankTextSecondary
                             )
                         }
+
+                        // Seamless upgrade badge
+                        Surface(
+                            color = Color(0xFFF0FDF4),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF16A34A),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Mövcud tətbiqin üzərinə yenilənir. Silməyə ehtiyac yoxdur.",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF15803D),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        // Download progress display
+                        if (downloadProgress.isDownloading) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            LinearProgressIndicator(
+                                progress = { downloadProgress.progress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = BirbankRed,
+                                trackColor = BirbankRedLight
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "Yüklənir: ${(downloadProgress.progress * 100).toInt()}%",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BirbankRed
+                                )
+                                val downloadedMb = downloadProgress.downloadedBytes / (1024.0 * 1024.0)
+                                val totalMb = if (downloadProgress.totalBytes > 0) {
+                                    downloadProgress.totalBytes / (1024.0 * 1024.0)
+                                } else {
+                                    update.apkSizeMb
+                                }
+                                Text(
+                                    text = "${String.format("%.1f", downloadedMb)} / ${String.format("%.1f", totalMb)} MB",
+                                    fontSize = 11.sp,
+                                    color = BirbankTextSecondary
+                                )
+                            }
+                        } else if (downloadProgress.isCompleted && downloadProgress.downloadedFile != null) {
+                            Surface(
+                                color = Color(0xFFEFF6FF),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp)
+                            ) {
+                                Text(
+                                    text = "Paket hazırdır! Aşağıdakı düyməyə toxunaraq quraşdırın.",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF1D4ED8),
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(8.dp)
+                                )
+                            }
+                        } else if (downloadProgress.errorMessage != null) {
+                            Surface(
+                                color = BirbankRedLight,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp)
+                            ) {
+                                Text(
+                                    text = "Yükləmə xətası: ${downloadProgress.errorMessage}",
+                                    fontSize = 11.sp,
+                                    color = BirbankRed,
+                                    modifier = Modifier.padding(8.dp)
+                                )
+                            }
+                        }
+
                         if (isMandatoryUpdate) {
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Surface(
                                 color = BirbankRedLight,
                                 shape = RoundedCornerShape(8.dp),
@@ -380,29 +480,84 @@ fun MainApp(viewModel: MainViewModel) {
                     }
                 },
                 confirmButton = {
-                    Button(
-                        onClick = {
-                            val url = update.downloadUrl.ifBlank { update.githubReleaseUrl }
-                            val targetUrl = if (url.startsWith("http://") || url.startsWith("https://")) url else "https://github.com/rzayevnicat00-sys/BestGroup.az/releases/latest"
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl))
-                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            try {
-                                context.startActivity(intent)
-                            } catch (_: Exception) {}
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = BirbankRed,
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("İndi yenilə", fontWeight = FontWeight.Bold)
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        when {
+                            downloadProgress.isDownloading -> {
+                                Button(
+                                    onClick = { /* In progress */ },
+                                    enabled = false,
+                                    colors = ButtonDefaults.buttonColors(
+                                        disabledContainerColor = BirbankRedLight,
+                                        disabledContentColor = BirbankRed
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = BirbankRed
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Yüklənir...", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            downloadProgress.isCompleted && downloadProgress.downloadedFile != null -> {
+                                Button(
+                                    onClick = {
+                                        val file = downloadProgress.downloadedFile!!
+                                        if (!com.example.services.update.InAppUpdateInstaller.canInstallPackages(context)) {
+                                            com.example.services.update.InAppUpdateInstaller.requestInstallPermission(context)
+                                        } else {
+                                            com.example.services.update.InAppUpdateInstaller.installApk(context, file)
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = BirbankRed,
+                                        contentColor = Color.White
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.DownloadDone, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("İndi quraşdır", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            else -> {
+                                Button(
+                                    onClick = {
+                                        val directUrl = update.downloadUrl.ifBlank { update.githubReleaseUrl }
+                                        coroutineScope.launch {
+                                            val result = com.example.services.update.InAppUpdateInstaller.downloadApk(
+                                                context = context,
+                                                rawUrl = directUrl
+                                            )
+                                            result.onSuccess { apkFile ->
+                                                if (com.example.services.update.InAppUpdateInstaller.canInstallPackages(context)) {
+                                                    com.example.services.update.InAppUpdateInstaller.installApk(context, apkFile)
+                                                } else {
+                                                    com.example.services.update.InAppUpdateInstaller.requestInstallPermission(context)
+                                                }
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = BirbankRed,
+                                        contentColor = Color.White
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Birbaşa yenilə", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
                     }
                 },
-                dismissButton = if (!isMandatoryUpdate) {
+                dismissButton = if (!isMandatoryUpdate && !downloadProgress.isDownloading) {
                     {
                         TextButton(
                             onClick = { viewModel.dismissUpdate() },

@@ -32,6 +32,10 @@ BestGroup.az tətbiqində Admin (`elmarmmdov1@gmail.com`) və Müştəri rollar�
 4. **Firebase Təhlükəsizlik və İcazə Qaydaları (`firestore.rules`)**:
    - Müştərilər yalnız öz `userId`-lərinə aid sifarişləri və söhbətləri oxuya və yarada bilər; başqalarının sifariş və fayllarına çıxış bloklanır.
    - Admin hüquqları server səviyyəsində yoxlanılır.
+5. **Birbaşa Tətbiqdaxili Yenilənmə (In-Place In-App Update)**:
+   - Tətbiqi silib yenidən yükləməyə ehtiyac yoxdur.
+   - Birbaşa tətbiqdaxili APK endirilməsi (`InAppUpdateInstaller`), canlı faiz və MB tərəqqisi indikatoru.
+   - `FileProvider` və `REQUEST_INSTALL_PACKAGES` vasitəsilə mövcud tətbiqin üzərinə yazılma, sessiya və məlumatların 100% qorunması.
 
 ---
 
