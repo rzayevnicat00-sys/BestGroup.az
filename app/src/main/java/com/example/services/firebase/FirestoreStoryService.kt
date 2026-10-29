@@ -102,6 +102,25 @@ class FirestoreStoryService(
         )
     }
 
+    suspend fun publishStory(story: StoryItem): StoryItem {
+        val data = hashMapOf(
+            "storyId" to story.id,
+            "createdBy" to story.createdBy,
+            "creatorName" to story.creatorName,
+            "mediaUrl" to story.mediaUrl,
+            "mediaType" to story.mediaType,
+            "caption" to story.caption.trim(),
+            "createdAtMillis" to story.createdAtMillis,
+            "expiresAtMillis" to story.expiresAtMillis,
+            "isActive" to story.isActive,
+            "viewedUserIds" to story.viewedUserIds,
+            "createdAt" to FieldValue.serverTimestamp(),
+            "expiresAt" to story.expiresAtMillis
+        )
+        storiesCollection.document(story.id).set(data).await()
+        return story
+    }
+
     suspend fun markStoryViewed(storyId: String, userId: String) {
         if (storyId.isBlank() || userId.isBlank()) return
         try {

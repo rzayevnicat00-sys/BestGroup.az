@@ -45,8 +45,11 @@ import com.example.model.ServiceCatalogItem
 import com.example.model.ServiceType
 import com.example.model.UserRole
 import com.example.ui.components.BestGroupLogoBadge
+import com.example.ui.components.CreateStoryDialog
 import com.example.ui.components.PriorityBadge
 import com.example.ui.components.StatusBadge
+import com.example.ui.components.StoryBar
+import com.example.ui.components.StoryViewerDialog
 import com.example.ui.theme.*
 import com.example.viewmodel.AppDestination
 import com.example.viewmodel.BottomTab
@@ -71,6 +74,10 @@ fun HomeScreen(
     val currentLanguage by viewModel.currentLanguage.collectAsState()
     val conversations by viewModel.conversations.collectAsState()
     val notifications by viewModel.notifications.collectAsState()
+    val stories by viewModel.stories.collectAsState()
+
+    var selectedStoryIndex by remember { mutableStateOf<Int?>(null) }
+    var showCreateStoryDialog by remember { mutableStateOf(false) }
 
     val unreadChatCount = remember(conversations) { conversations.sumOf { it.unreadCount } }
     val unreadNotifsCount = remember(notifications) { notifications.count { !it.isRead } }
@@ -274,7 +281,22 @@ fun HomeScreen(
         }
 
         // ========================================================
-        // 2. CIRCULAR SERVICE CATEGORIES (Birbank Circular Stories)
+        // 2. STORIES BAR (Real Stories with unviewed/viewed rings & admin creation)
+        // ========================================================
+        if (stories.isNotEmpty() || isStaff) {
+            item {
+                StoryBar(
+                    stories = stories,
+                    currentUserId = user?.id ?: "",
+                    isStaff = isStaff,
+                    onStoryClick = { index -> selectedStoryIndex = index },
+                    onAddStoryClick = { showCreateStoryDialog = true }
+                )
+            }
+        }
+
+        // ========================================================
+        // 3. CIRCULAR SERVICE CATEGORIES (Birbank Circular Services)
         // ========================================================
         item {
             Column(
@@ -726,6 +748,34 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    // --- Story Viewer Dialog ---
+    if (selectedStoryIndex != null) {
+        StoryViewerDialog(
+            stories = stories,
+            initialIndex = selectedStoryIndex ?: 0,
+            isStaff = isStaff,
+            onDismiss = { selectedStoryIndex = null },
+            onMarkViewed = { storyId -> viewModel.markStoryViewed(storyId) },
+            onDeleteStory = { storyId -> viewModel.deleteStory(storyId) }
+        )
+    }
+
+    // --- Create Story Dialog (Admin/Staff only) ---
+    if (showCreateStoryDialog) {
+        CreateStoryDialog(
+            onDismiss = { showCreateStoryDialog = false },
+            onPublish = { bytes, caption, mimeType ->
+                viewModel.publishStory(
+                    bytes = bytes,
+                    caption = caption,
+                    mimeType = mimeType,
+                    onSuccess = { showCreateStoryDialog = false },
+                    onError = { /* handled */ }
+                )
+            }
+        )
     }
 }
 

@@ -48,18 +48,37 @@ service firebase.storage {
 
     // Orders files path: users/{userId}/orders/{orderId}/files/{fileName}
     match /users/{userId}/orders/{orderId}/files/{fileName} {
-      // Owner or Staff can read files
       allow read: if isOwner(userId) || hasStaffClaim();
-
-      // Authenticated customer owner or authorized staff can upload
-      // Strictly validates MIME type, extension, and file size (max 50MB)
       allow create, update: if (isOwner(userId) || hasStaffClaim())
                             && isAllowedFileType()
                             && hasAllowedExtension(fileName)
                             && isUnderSizeLimit();
-
-      // Only owner or staff can delete
       allow delete: if isOwner(userId) || hasStaffClaim();
+    }
+
+    // User Profile Photos: profile_images/{userId}/{fileName}
+    match /profile_images/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if (isOwner(userId) || hasStaffClaim())
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if isOwner(userId) || hasStaffClaim();
+    }
+
+    // Story Media: stories/{userId}/{fileName}
+    match /stories/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if hasStaffClaim()
+                   && request.resource.size < 25 * 1024 * 1024
+                   && (request.resource.contentType.matches('image/.*') || request.resource.contentType.matches('video/.*'));
+      allow delete: if hasStaffClaim();
+    }
+
+    // Chat attachments: chat_attachments/{conversationId}/{fileName}
+    match /chat_attachments/{conversationId}/{fileName} {
+      allow read, write: if isAuthenticated()
+                         && request.resource.size < 25 * 1024 * 1024;
+      allow delete: if hasStaffClaim();
     }
   }
 }

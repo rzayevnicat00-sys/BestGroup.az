@@ -13,6 +13,11 @@ data class StoryItem(
     val viewedUserIds: List<String> = emptyList()
 ) {
     val storyId: String get() = id
+    val authorId: String get() = createdBy
+    val authorName: String get() = creatorName
+    val authorRole: String get() = "Rəsmi Təmsilçi"
+    val imageUrl: String get() = mediaUrl
+    val title: String get() = caption
     val isExpired: Boolean get() = System.currentTimeMillis() > expiresAtMillis
 
     fun isViewedBy(userId: String?): Boolean {

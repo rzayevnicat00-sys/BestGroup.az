@@ -23,6 +23,7 @@ class BestGroupRepository(
     val storageService: FirebaseStorageService? = null,
     val serviceCatalogService: FirestoreServiceCatalogService? = null,
     val appUpdateService: FirestoreAppUpdateService? = null,
+    val storyService: FirestoreStoryService? = null,
     private val context: android.content.Context? = null
 ) {
 
@@ -301,6 +302,10 @@ class BestGroupRepository(
     private val _adminCustomers = MutableStateFlow<List<User>>(emptyList())
     val adminCustomers: StateFlow<List<User>> = _adminCustomers.asStateFlow()
 
+    // Stories for Home Screen
+    private val _stories = MutableStateFlow<List<StoryItem>>(emptyList())
+    val stories: StateFlow<List<StoryItem>> = _stories.asStateFlow()
+
     private val fcmTokenManager by lazy {
         context?.let { FcmTokenManager(it) }
     }
@@ -499,7 +504,17 @@ class BestGroupRepository(
                 }
             }
 
-            // If authorized staff, load real customers list from Firestore users collection
+            if (storyService != null) {
+                launch {
+                    try {
+                        storyService.getActiveStoriesFlow().collect { activeStories ->
+                            _stories.value = activeStories
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+
+            // If authorized staff, load real customers list from Firestore users collection (strictly customers)
             if (isStaff && authService != null) {
                 launch {
                     try {
@@ -516,6 +531,9 @@ class BestGroupRepository(
                                         "operator" -> UserRole.OPERATOR
                                         else -> UserRole.CUSTOMER
                                     }
+                                    // Strictly only show real customers in the customers directory
+                                    if (cRole != UserRole.CUSTOMER) return@mapNotNull null
+
                                     val cOrdersCount = _orders.value.count { it.userId == doc.id }
                                     User(
                                         id = doc.id,
@@ -528,7 +546,10 @@ class BestGroupRepository(
                                         role = cRole,
                                         createdAt = data["createdAt"] as? String ?: "",
                                         orderCount = cOrdersCount,
-                                        phoneVerified = (data["phoneVerified"] as? Boolean) ?: false
+                                        phoneVerified = (data["phoneVerified"] as? Boolean) ?: false,
+                                        avatarUrl = data["avatarUrl"] as? String,
+                                        isOnline = (data["isOnline"] as? Boolean) ?: false,
+                                        lastActiveAtMillis = (data["lastActiveAtMillis"] as? Number)?.toLong() ?: 0L
                                     )
                                 }
                                 _adminCustomers.value = customerList
@@ -554,8 +575,8 @@ class BestGroupRepository(
         val supportConvs = allConvs.filter { it.orderId == null }
         val orderConvs = allConvs.filter { it.orderId != null }
 
-        val waitingSupport = supportConvs.count { it.unreadCount > 0 }
-        val waitingOrder = orderConvs.count { it.unreadCount > 0 }
+        val waitingSupport = supportConvs.count { it.getEffectiveUnreadCount(isStaff = true) > 0 }
+        val waitingOrder = orderConvs.count { it.getEffectiveUnreadCount(isStaff = true) > 0 }
 
         val revenue = allOrders.filter { it.status != OrderStatus.CANCELLED }.sumOf { it.estimatedPriceAzn }
 
@@ -1171,19 +1192,28 @@ class BestGroupRepository(
         return newConv
     }
 
-    suspend fun getOrCreateGeneralSupportConversation(): ChatConversation {
-        val currentUid = authService?.currentUserId ?: _currentUser.value?.id ?: ""
-        if (currentUid.isBlank()) {
+    suspend fun getOrCreateGeneralSupportConversation(
+        targetCustomerId: String? = null,
+        targetCustomerName: String? = null
+    ): ChatConversation {
+        val resolvedCustomerId = targetCustomerId?.ifBlank { null }
+            ?: authService?.currentUserId
+            ?: _currentUser.value?.id
+            ?: ""
+        if (resolvedCustomerId.isBlank()) {
             throw IllegalStateException("Müştəri xidmətləri ilə əlaqə saxlamaq üçün zəhmət olmasa sistemə daxil olun.")
         }
+        val resolvedName = targetCustomerName?.ifBlank { null }
+            ?: (if (resolvedCustomerId == _currentUser.value?.id) _currentUser.value?.fullName else null)
+            ?: "Müştəri"
 
-        val convId = FirestoreChatService.deterministicSupportConversationId(currentUid)
+        val convId = FirestoreChatService.deterministicSupportConversationId(resolvedCustomerId)
 
         if (chatService != null) {
             try {
                 val conv = chatService.getOrCreateSupportConversation(
-                    customerId = currentUid,
-                    customerName = _currentUser.value?.fullName ?: "Müştəri"
+                    customerId = resolvedCustomerId,
+                    customerName = resolvedName
                 )
                 val existing = _conversations.value.find { it.id == conv.id }
                 if (existing == null) {
@@ -1202,9 +1232,9 @@ class BestGroupRepository(
 
         val newConv = ChatConversation(
             id = convId,
-            customerId = currentUid,
+            customerId = resolvedCustomerId,
             orderId = null,
-            title = "BestGroup.az Müştəri Xidmətləri",
+            title = if (targetCustomerId != null) resolvedName else "BestGroup.az Müştəri Xidmətləri",
             lastMessage = "",
             lastMessageAt = "İndicə",
             unreadForCustomer = 0,
@@ -1361,6 +1391,125 @@ class BestGroupRepository(
         val isReadPersisted = _readNotificationIds.value.contains(item.id) || item.isRead
         val finalItem = item.copy(isRead = isReadPersisted)
         _notifications.value = listOf(finalItem) + _notifications.value.filter { it.id != item.id }
+    }
+
+    // --- Story Methods ---
+
+    suspend fun publishStory(mediaBytes: ByteArray, caption: String, mimeType: String = "image/jpeg"): Result<StoryItem> {
+        val user = _currentUser.value ?: return Result.failure(IllegalStateException("Yalnız təsdiqlənmiş istifadəçi story paylaşa bilər."))
+        val isStaff = user.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
+                      FirebaseAuthService.isSuperAdminEmail(user.email)
+        if (!isStaff) {
+            return Result.failure(IllegalStateException("Yalnız idarə heyəti və adminlər story paylaşa bilər."))
+        }
+
+        val mediaUrl = if (storageService != null) {
+            try {
+                storageService.uploadStoryMedia(user.id, mediaBytes, mimeType)
+            } catch (e: Exception) {
+                return Result.failure(e)
+            }
+        } else {
+            "https://firebasestorage.googleapis.com/v0/b/placeholder/o/story.jpg"
+        }
+
+        val storyId = "story_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}"
+        val now = System.currentTimeMillis()
+        val expiresAt = now + (24 * 60 * 60 * 1000L) // 24 hours
+
+        val storyItem = StoryItem(
+            id = storyId,
+            createdBy = user.id,
+            creatorName = user.fullName.ifBlank { "BestGroup.az Admin" },
+            mediaUrl = mediaUrl,
+            mediaType = if (mimeType.contains("video", ignoreCase = true) || mimeType.contains("mp4", ignoreCase = true)) "VIDEO" else "IMAGE",
+            caption = caption.trim(),
+            createdAtMillis = now,
+            expiresAtMillis = expiresAt,
+            isActive = true,
+            viewedUserIds = emptyList()
+        )
+
+        if (storyService != null) {
+            try {
+                storyService.publishStory(storyItem)
+            } catch (e: Exception) {
+                return Result.failure(e)
+            }
+        }
+
+        _stories.value = listOf(storyItem) + _stories.value.filter { it.id != storyId }
+        return Result.success(storyItem)
+    }
+
+    suspend fun markStoryViewed(storyId: String) {
+        val uid = _currentUser.value?.id ?: authService?.currentUserId ?: return
+        if (storyService != null) {
+            try {
+                storyService.markStoryViewed(storyId, uid)
+            } catch (_: Exception) {}
+        }
+        _stories.value = _stories.value.map { story ->
+            if (story.id == storyId && uid !in story.viewedUserIds) {
+                story.copy(viewedUserIds = story.viewedUserIds + uid)
+            } else story
+        }
+    }
+
+    suspend fun deleteStory(storyId: String): Result<Unit> {
+        val user = _currentUser.value ?: return Result.failure(IllegalStateException("İstifadəçi təsdiqlənməyib."))
+        val isStaff = user.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
+                      FirebaseAuthService.isSuperAdminEmail(user.email)
+        if (!isStaff) {
+            return Result.failure(IllegalStateException("Yalnız idarə heyəti story-ni silə bilər."))
+        }
+
+        if (storyService != null) {
+            try {
+                storyService.deleteStory(storyId)
+            } catch (e: Exception) {
+                return Result.failure(e)
+            }
+        }
+        _stories.value = _stories.value.filter { it.id != storyId }
+        return Result.success(Unit)
+    }
+
+    // --- Presence & Profile Photo Methods ---
+
+    suspend fun updateUserPresence(isOnline: Boolean) {
+        val uid = _currentUser.value?.id ?: authService?.currentUserId ?: return
+        if (authService != null) {
+            try {
+                authService.updateUserPresence(uid, isOnline)
+            } catch (_: Exception) {}
+        }
+        _currentUser.value = _currentUser.value?.copy(
+            isOnline = isOnline,
+            lastActiveAtMillis = System.currentTimeMillis()
+        )
+    }
+
+    suspend fun uploadProfilePhoto(bytes: ByteArray, mimeType: String = "image/jpeg"): Result<String> {
+        val user = _currentUser.value ?: return Result.failure(IllegalStateException("Zəhmət olmasa profil şəkli yükləmək üçün daxil olun."))
+        val uid = user.id
+        if (storageService == null) {
+            return Result.failure(IllegalStateException("Storage xidməti aktiv deyil."))
+        }
+        val downloadUrl = try {
+            storageService.uploadProfileImage(uid, bytes, mimeType)
+        } catch (e: Exception) {
+            return Result.failure(e)
+        }
+
+        // Update auth service and user profile
+        authService?.updateProfilePhoto(uid, downloadUrl)
+
+        _currentUser.value = _currentUser.value?.copy(avatarUrl = downloadUrl)
+        try {
+            sharedPrefs?.edit()?.putString("user_avatar_url", downloadUrl)?.apply()
+        } catch (_: Exception) {}
+        return Result.success(downloadUrl)
     }
 
     companion object {

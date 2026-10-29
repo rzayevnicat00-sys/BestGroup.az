@@ -252,5 +252,17 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isStaff();
     }
+
+    // Stories Collection (Publicly readable, staff writable, users can mark viewed)
+    match /stories/{storyId} {
+      allow read: if true;
+      allow create, delete: if isStaff();
+      allow update: if isStaff() || (
+        isAuthenticated() &&
+        request.resource.data.storyId == resource.data.storyId &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.mediaUrl == resource.data.mediaUrl
+      );
+    }
   }
 }

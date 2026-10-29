@@ -19,15 +19,18 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import com.example.ui.theme.ThemeMode
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Intent
@@ -41,6 +44,7 @@ import com.example.ui.components.EmptyStateView
 import com.example.ui.components.MetricStatCard
 import com.example.ui.components.PriorityBadge
 import com.example.ui.components.StatusBadge
+import coil.compose.AsyncImage
 import com.example.ui.theme.BirbankBorder
 import com.example.ui.theme.BirbankBgLight
 import com.example.ui.theme.BirbankRed
@@ -78,6 +82,7 @@ fun AdminDashboardScreen(
     var currentTab by remember { mutableStateOf(AdminTab.DASHBOARD) }
     var selectedSupportConversation by remember { mutableStateOf<ChatConversation?>(null) }
     var contactTargetCustomer by remember { mutableStateOf<Triple<String, String, String?>?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         viewModel.ensureAdminDataObserved()
@@ -242,7 +247,18 @@ fun AdminDashboardScreen(
                             selectedSupportConversation = supportConv
                             currentTab = AdminTab.SUPPORT
                         } else {
-                            viewModel.openSupportChatForCustomer(customer)
+                            coroutineScope.launch {
+                                try {
+                                    val conv = viewModel.repository.getOrCreateGeneralSupportConversation(
+                                        targetCustomerId = customer.id,
+                                        targetCustomerName = customer.fullName
+                                    )
+                                    selectedSupportConversation = conv
+                                    currentTab = AdminTab.SUPPORT
+                                } catch (_: Exception) {
+                                    viewModel.openSupportChatForCustomer(customer)
+                                }
+                            }
                         }
                     },
                     onContactCustomer = { customer ->
@@ -390,6 +406,26 @@ fun AdminDashboardScreen(
                     if (cust.degreeLevel.isNotBlank()) Text("Təhsil səviyyəsi: ${cust.degreeLevel}")
                     if (cust.createdAt.isNotBlank()) Text("Qeydiyyat: ${cust.createdAt}")
                     Text("Sifariş sayı: ${cust.orderCount}")
+
+                    val custOrders = orders.filter { it.userId == cust.id }
+                    if (custOrders.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Son Sifarişləri:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        custOrders.take(3).forEach { ord ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${ord.orderNumber} - ${ord.topic.take(18)}...",
+                                    fontSize = 12.sp,
+                                    color = BirbankTextSecondary
+                                )
+                                StatusBadge(status = ord.status)
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
@@ -409,10 +445,23 @@ fun AdminDashboardScreen(
                         onClick = {
                             val c = cust
                             selectedCustomerForDetail = null
-                            viewModel.openSupportChatForCustomer(c)
+                            coroutineScope.launch {
+                                try {
+                                    val conv = viewModel.repository.getOrCreateGeneralSupportConversation(
+                                        targetCustomerId = c.id,
+                                        targetCustomerName = c.fullName
+                                    )
+                                    selectedSupportConversation = conv
+                                    currentTab = AdminTab.SUPPORT
+                                } catch (_: Exception) {
+                                    viewModel.openSupportChatForCustomer(c)
+                                }
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White)
                     ) {
+                        Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text("Çat aç")
                     }
                 }
@@ -931,6 +980,11 @@ fun AdminSupportChatDetailView(
         onBack()
     }
 
+    LaunchedEffect(conversation.id) {
+        viewModel.setActiveConversation(conversation.id, navigateToCustomerChat = false)
+        viewModel.repository.markConversationAsRead(conversation.id)
+    }
+
     val matchingUser = remember(conversation, customers) {
         customers.find { it.id == conversation.customerId }
     }
@@ -1100,7 +1154,7 @@ fun AdminSupportChatDetailView(
                     onClick = {
                         val text = replyText.trim()
                         if (text.isNotBlank()) {
-                            viewModel.sendChatMessage(text)
+                            viewModel.sendChatMessage(text, targetConvId = conversation.id)
                             replyText = ""
                         }
                     },
@@ -1146,7 +1200,7 @@ private fun AdminChatBubbleItem(message: ChatMessage) {
                 Text(
                     text = if (isAdmin) "Siz (Baş Admin)" else message.senderName.ifBlank { "Müştəri" },
                     style = MaterialTheme.typography.labelSmall,
-                    color = BirbankRed,
+                    color = if (isAdmin) Color.White.copy(alpha = 0.9f) else BirbankRed,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(2.dp))
@@ -1156,13 +1210,26 @@ private fun AdminChatBubbleItem(message: ChatMessage) {
                     color = if (isAdmin) Color.White else MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = message.timestamp,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isAdmin) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.End),
-                    fontSize = 10.sp
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text(
+                        text = message.timestamp,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isAdmin) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 10.sp
+                    )
+                    if (isAdmin) {
+                        Icon(
+                            imageVector = if (message.isRead) Icons.Default.DoneAll else Icons.Default.Done,
+                            contentDescription = if (message.isRead) "Oxundu" else "Göndərildi",
+                            tint = if (message.isRead) Color(0xFF67E8F9) else Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -1307,114 +1374,367 @@ private fun AdminCustomersContent(
     onOpenSupportChat: (User) -> Unit,
     onContactCustomer: (User) -> Unit
 ) {
-    if (customers.isEmpty()) {
-        EmptyStateView(
-            titleKey = StringKey.EMPTY_ORDERS_TITLE,
-            descKey = StringKey.EMPTY_ORDERS_DESC,
-            modifier = modifier
-        )
-    } else {
-        LazyColumn(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(horizontal = 20.dp),
-            contentPadding = PaddingValues(top = 14.dp, bottom = 48.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedFilter by remember { mutableStateOf("all") } // "all", "online", "offline"
+
+    val totalCount = customers.size
+    val onlineCount = remember(customers) { customers.count { it.isOnline } }
+    val offlineCount = totalCount - onlineCount
+
+    val filteredCustomers = remember(customers, searchQuery, selectedFilter) {
+        customers.filter { cust ->
+            val q = searchQuery.trim().lowercase()
+            val matchesSearch = q.isBlank() ||
+                cust.fullName.lowercase().contains(q) ||
+                cust.email.lowercase().contains(q) ||
+                cust.phone.lowercase().contains(q) ||
+                cust.university.lowercase().contains(q)
+
+            val matchesFilter = when (selectedFilter) {
+                "online" -> cust.isOnline
+                "offline" -> !cust.isOnline
+                else -> true
+            }
+
+            matchesSearch && matchesFilter
+        }
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        // Search & Filter Header
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 2.dp,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            items(customers, key = { it.id }) { cust ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .clickable { onCustomerClick(cust) }
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(14.dp)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Search Field
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Müştəri axtar (ad, email, nömrə)...", fontSize = 13.sp) },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = "Axtar", tint = BirbankTextSecondary, modifier = Modifier.size(20.dp))
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotBlank()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Təmizlə", modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = BirbankRed,
+                        cursorColor = BirbankRed
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                // Filter Chips
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = cust.fullName,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = BirbankRed
-                            ) {
-                                Text(
-                                    text = cust.role.title,
-                                    color = BirbankRed,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
+                    FilterChip(
+                        selected = selectedFilter == "all",
+                        onClick = { selectedFilter = "all" },
+                        label = { Text("Hamısı ($totalCount)", fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = BirbankRed,
+                            selectedLabelColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(20.dp)
+                    )
 
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = cust.email,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        if (cust.phone.isNotBlank()) {
-                            Text(
-                                text = "Tel: ${cust.phone}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                    FilterChip(
+                        selected = selectedFilter == "online",
+                        onClick = { selectedFilter = "online" },
+                        leadingIcon = {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF12B76A))
                             )
-                        }
-                        if (cust.university.isNotBlank()) {
-                            Text(
-                                text = "${cust.university} • ${cust.degreeLevel}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = BirbankRed
+                        },
+                        label = { Text("Onlayn ($onlineCount)", fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFF12B76A),
+                            selectedLabelColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(20.dp)
+                    )
+
+                    FilterChip(
+                        selected = selectedFilter == "offline",
+                        onClick = { selectedFilter = "offline" },
+                        leadingIcon = {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF98A2B3))
                             )
-                        }
+                        },
+                        label = { Text("Oflayn ($offlineCount)", fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFF475467),
+                            selectedLabelColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                }
+            }
+        }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+        // List
+        if (filteredCustomers.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.PersonSearch,
+                        contentDescription = null,
+                        tint = BirbankTextSecondary,
+                        modifier = Modifier.size(52.dp)
+                    )
+                    Text(
+                        text = if (searchQuery.isNotBlank()) "Axtarışa uyğun müştəri tapılmadı" else "Qeydiyyatdan keçmiş müştəri yoxdur",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = BirbankTextPrimary
+                    )
+                    Text(
+                        text = "Qeydiyyatdan keçən bütün müştərilər real vaxt rejimində burada görünəcək.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BirbankTextSecondary,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                contentPadding = PaddingValues(top = 12.dp, bottom = 48.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(filteredCustomers, key = { it.id }) { cust ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { onCustomerClick(cust) }
+                            .border(1.dp, BirbankBorder, RoundedCornerShape(16.dp)),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                // Avatar with presence indicator dot
+                                Box(modifier = Modifier.size(54.dp)) {
+                                    if (!cust.avatarUrl.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model = cust.avatarUrl,
+                                            contentDescription = cust.fullName,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .size(50.dp)
+                                                .clip(CircleShape)
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(50.dp)
+                                                .clip(CircleShape)
+                                                .background(BirbankRedLight),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = cust.fullName.take(1).uppercase(),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = BirbankRed
+                                            )
+                                        }
+                                    }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = { onCustomerClick(cust) },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Profil", fontSize = 11.sp)
+                                    // Online/Offline status dot
+                                    Box(
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .align(Alignment.BottomEnd)
+                                            .clip(CircleShape)
+                                            .background(Color.White)
+                                            .padding(2.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .clip(CircleShape)
+                                                .background(if (cust.isOnline) Color(0xFF12B76A) else Color(0xFF98A2B3))
+                                        )
+                                    }
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = cust.fullName,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = BirbankTextPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+
+                                        // Presence status text badge
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (cust.isOnline) Color(0xFFECFDF3) else BirbankBgLight
+                                        ) {
+                                            Text(
+                                                text = if (cust.isOnline) "Onlayn" else formatRelativeActiveTime(cust.lastActiveAtMillis),
+                                                color = if (cust.isOnline) Color(0xFF027A48) else BirbankTextSecondary,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(2.dp))
+
+                                    Text(
+                                        text = cust.email,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = BirbankTextSecondary,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+
+                                    if (cust.phone.isNotBlank()) {
+                                        Text(
+                                            text = "Tel: ${cust.phone}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = BirbankTextPrimary,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+
+                                    if (cust.university.isNotBlank()) {
+                                        Text(
+                                            text = "${cust.university} • ${cust.degreeLevel}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = BirbankRed,
+                                            fontSize = 11.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
                             }
-                            OutlinedButton(
-                                onClick = { onContactCustomer(cust) },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = BirbankRed),
-                                modifier = Modifier.weight(1.2f)
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Order count badge & Action buttons
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.SendToMobile, contentDescription = null, modifier = Modifier.size(13.dp))
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text("SMS / WA", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Button(
-                                onClick = { onOpenSupportChat(cust) },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(13.dp))
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text("Çat", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = BirbankRedLight,
+                                    modifier = Modifier.padding(end = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "${cust.orderCount} sifariş",
+                                        color = BirbankRed,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                    )
+                                }
+
+                                OutlinedButton(
+                                    onClick = { onCustomerClick(cust) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                                ) {
+                                    Text("Detallar", fontSize = 11.sp)
+                                }
+
+                                OutlinedButton(
+                                    onClick = { onContactCustomer(cust) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = BirbankRed),
+                                    modifier = Modifier.weight(1.1f),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(Icons.Default.SendToMobile, contentDescription = null, modifier = Modifier.size(13.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("SMS / WA", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                Button(
+                                    onClick = { onOpenSupportChat(cust) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(13.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("Çat", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+private fun formatRelativeActiveTime(millis: Long): String {
+    if (millis <= 0L) return "Oflayn"
+    val diff = System.currentTimeMillis() - millis
+    val minutes = diff / (60 * 1000)
+    return when {
+        minutes < 2 -> "İndicə onlayn"
+        minutes < 60 -> "$minutes dəq əvvəl"
+        minutes < 1440 -> "${minutes / 60} saat əvvəl"
+        else -> "${minutes / 1440} gün əvvəl"
     }
 }
 

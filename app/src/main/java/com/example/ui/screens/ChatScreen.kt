@@ -591,20 +591,21 @@ private fun ChatBubble(message: ChatMessage) {
                         color = if (isMe) Color.White.copy(alpha = 0.8f) else BirbankTextSecondary
                     )
                     if (isMe) {
-                        val icon = when (message.status) {
-                            MessageDeliveryStatus.PENDING -> Icons.Default.Schedule
-                            MessageDeliveryStatus.READ -> Icons.Default.DoneAll
-                            MessageDeliveryStatus.FAILED -> Icons.Default.ErrorOutline
+                        val isEffectivelyRead = message.isRead || message.status == MessageDeliveryStatus.READ
+                        val icon = when {
+                            message.status == MessageDeliveryStatus.PENDING -> Icons.Default.Schedule
+                            message.status == MessageDeliveryStatus.FAILED -> Icons.Default.ErrorOutline
+                            isEffectivelyRead -> Icons.Default.DoneAll
                             else -> Icons.Default.Done
                         }
-                        val tint = when (message.status) {
-                            MessageDeliveryStatus.READ -> Color.White
-                            MessageDeliveryStatus.FAILED -> MaterialTheme.colorScheme.error
+                        val tint = when {
+                            isEffectivelyRead -> Color(0xFF67E8F9) // Double checkmark cyan
+                            message.status == MessageDeliveryStatus.FAILED -> MaterialTheme.colorScheme.error
                             else -> Color.White.copy(alpha = 0.7f)
                         }
                         Icon(
                             imageVector = icon,
-                            contentDescription = null,
+                            contentDescription = if (isEffectivelyRead) "Oxundu" else "Göndərildi",
                             tint = tint,
                             modifier = Modifier.size(14.dp)
                         )

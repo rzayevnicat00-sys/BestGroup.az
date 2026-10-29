@@ -310,7 +310,12 @@ class MainViewModel @JvmOverloads constructor(
         }
     }
 
-    fun sendChatMessage(text: String, file: String? = null, onComplete: ((Boolean, String?) -> Unit)? = null) {
+    fun sendChatMessage(
+        text: String,
+        file: String? = null,
+        targetConvId: String? = null,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
         if (isSendingChatMessage.value) return // Duplicate submission protection
 
         val trimmed = text.trim()
@@ -325,13 +330,13 @@ class MainViewModel @JvmOverloads constructor(
 
         viewModelScope.launch {
             try {
-                val targetConvId = _activeConversationId.value ?: run {
+                val convId = targetConvId ?: _activeConversationId.value ?: run {
                     val supportConv = repository.getOrCreateGeneralSupportConversation()
                     _activeConversationId.value = supportConv.id
                     repository.listenToConversationMessages(supportConv.id, viewModelScope)
                     supportConv.id
                 }
-                repository.sendMessage(targetConvId, trimmed, file)
+                repository.sendMessage(convId, trimmed, file)
                 onComplete?.invoke(true, null)
             } catch (e: Exception) {
                 val err = e.localizedMessage ?: "Mesaj göndərilmədi. İnternet bağlantısını yoxlayın."
@@ -339,6 +344,25 @@ class MainViewModel @JvmOverloads constructor(
                 onComplete?.invoke(false, err)
             } finally {
                 isSendingChatMessage.value = false
+            }
+        }
+    }
+
+    fun openSupportChatForCustomer(customer: User) {
+        viewModelScope.launch {
+            isChatLoading.value = true
+            try {
+                val conv = repository.getOrCreateGeneralSupportConversation(
+                    targetCustomerId = customer.id,
+                    targetCustomerName = customer.fullName
+                )
+                _activeConversationId.value = conv.id
+                repository.listenToConversationMessages(conv.id, viewModelScope)
+                selectBottomTab(BottomTab.CHAT)
+            } catch (e: Exception) {
+                chatErrorMessage.value = e.localizedMessage ?: "Söhbət açılarkən xəta baş verdi."
+            } finally {
+                isChatLoading.value = false
             }
         }
     }
@@ -954,14 +978,6 @@ class MainViewModel @JvmOverloads constructor(
         }
     }
 
-    fun openSupportChatForCustomer(customer: User) {
-        viewModelScope.launch {
-            val convId = FirestoreChatService.deterministicSupportConversationId(customer.id)
-            setActiveConversation(convId)
-            navigateTo(AppDestination.MAIN)
-            selectBottomTab(BottomTab.CHAT)
-        }
-    }
 
     fun openOrderChat(orderId: String) {
         viewModelScope.launch {
@@ -1031,6 +1047,63 @@ class MainViewModel @JvmOverloads constructor(
         }
     }
 
+    // --- Story Operations ---
+
+    val stories = repository.stories
+
+    fun publishStory(
+        bytes: ByteArray,
+        caption: String,
+        mimeType: String = "image/jpeg",
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val res = repository.publishStory(bytes, caption, mimeType)
+            if (res.isSuccess) {
+                onSuccess()
+            } else {
+                onError(res.exceptionOrNull()?.message ?: "Story paylaşıla bilmədi.")
+            }
+        }
+    }
+
+    fun markStoryViewed(storyId: String) {
+        viewModelScope.launch {
+            repository.markStoryViewed(storyId)
+        }
+    }
+
+    fun deleteStory(storyId: String, onSuccess: () -> Unit = {}, onError: (String) -> Unit = {}) {
+        viewModelScope.launch {
+            val res = repository.deleteStory(storyId)
+            if (res.isSuccess) {
+                onSuccess()
+            } else {
+                onError(res.exceptionOrNull()?.message ?: "Story silinmədi.")
+            }
+        }
+    }
+
+    // --- Presence & Profile Photo Operations ---
+
+    fun updateUserPresence(isOnline: Boolean) {
+        viewModelScope.launch {
+            repository.updateUserPresence(isOnline)
+        }
+    }
+
+    fun uploadProfilePhoto(bytes: ByteArray, mimeType: String = "image/jpeg", onComplete: (Boolean, String?) -> Unit) {
+        viewModelScope.launch {
+            val res = repository.uploadProfilePhoto(bytes, mimeType)
+            if (res.isSuccess) {
+                onComplete(true, res.getOrNull())
+            } else {
+                onComplete(false, res.exceptionOrNull()?.message ?: "Profil şəkli yüklənmədi.")
+            }
+        }
+    }
+
     companion object {
         fun createDefaultRepository(application: Application): BestGroupRepository {
             return try {
@@ -1041,7 +1114,17 @@ class MainViewModel @JvmOverloads constructor(
                 val storageService = FirebaseStorageService(fbService.storage)
                 val catalogService = FirestoreServiceCatalogService(fbService.firestore)
                 val appUpdateService = FirestoreAppUpdateService(fbService.firestore)
-                BestGroupRepository(authService, orderService, chatService, storageService, catalogService, appUpdateService, application.applicationContext)
+                val storyService = FirestoreStoryService(fbService.firestore)
+                BestGroupRepository(
+                    authService = authService,
+                    orderService = orderService,
+                    chatService = chatService,
+                    storageService = storageService,
+                    serviceCatalogService = catalogService,
+                    appUpdateService = appUpdateService,
+                    storyService = storyService,
+                    context = application.applicationContext
+                )
             } catch (e: Throwable) {
                 BestGroupRepository(context = application.applicationContext)
             }

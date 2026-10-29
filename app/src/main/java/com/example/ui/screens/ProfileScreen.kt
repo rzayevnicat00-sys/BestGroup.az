@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,10 +23,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.localization.Language
 import com.example.localization.StringKey
 import com.example.localization.localizedString
@@ -37,12 +44,47 @@ fun ProfileScreen(
     viewModel: MainViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val user by viewModel.currentUser.collectAsState()
     val currentTheme by viewModel.themeMode.collectAsState()
     val currentLang by viewModel.currentLanguage.collectAsState()
 
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    var isUploadingPhoto by remember { mutableStateOf(false) }
+
+    val photoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            isUploadingPhoto = true
+            coroutineScope.launch {
+                try {
+                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    if (bytes != null && bytes.isNotEmpty()) {
+                        val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
+                        viewModel.uploadProfilePhoto(bytes, mime) { success, urlOrErr ->
+                            isUploadingPhoto = false
+                            coroutineScope.launch {
+                                if (success) {
+                                    snackbarHostState.showSnackbar("Profil şəkli uğurla yeniləndi.")
+                                } else {
+                                    snackbarHostState.showSnackbar(urlOrErr ?: "Şəkil yüklənərkən xəta baş verdi.")
+                                }
+                            }
+                        }
+                    } else {
+                        isUploadingPhoto = false
+                        snackbarHostState.showSnackbar("Şəkil oxunmadı.")
+                    }
+                } catch (e: Exception) {
+                    isUploadingPhoto = false
+                    snackbarHostState.showSnackbar(e.localizedMessage ?: "Şəkil oxunarkən xəta.")
+                }
+            }
+        }
+    }
 
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
@@ -94,21 +136,67 @@ fun ProfileScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(74.dp)
+                                .size(84.dp)
                                 .clip(CircleShape)
                                 .background(BirbankRedLight)
-                                .border(1.5.dp, BirbankRed, CircleShape),
+                                .border(2.dp, BirbankRed, CircleShape)
+                                .clickable(enabled = !isUploadingPhoto) {
+                                    photoPicker.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                },
                             contentAlignment = Alignment.Center
                         ) {
+                            if (isUploadingPhoto) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(28.dp),
+                                    color = BirbankRed,
+                                    strokeWidth = 2.5.dp
+                                )
+                            } else if (!user?.avatarUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = user?.avatarUrl,
+                                    contentDescription = "Profil şəkli",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Text(
+                                    text = (user?.fullName ?: "İ").take(1).uppercase(),
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BirbankRed
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        TextButton(
+                            onClick = {
+                                photoPicker.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            },
+                            enabled = !isUploadingPhoto,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                        ) {
                             Icon(
-                                imageVector = Icons.Default.Person,
+                                imageVector = Icons.Default.PhotoCamera,
                                 contentDescription = null,
                                 tint = BirbankRed,
-                                modifier = Modifier.size(44.dp)
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (user?.avatarUrl.isNullOrBlank()) "Şəkil əlavə et" else "Şəkli dəyiş",
+                                color = BirbankRed,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
                             text = user?.fullName ?: "İstifadəçi",
