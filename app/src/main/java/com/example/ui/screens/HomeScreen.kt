@@ -766,13 +766,18 @@ fun HomeScreen(
     if (showCreateStoryDialog) {
         CreateStoryDialog(
             onDismiss = { showCreateStoryDialog = false },
-            onPublish = { bytes, caption, mimeType ->
+            onPublish = { bytes, caption, mimeType, onDone ->
                 viewModel.publishStory(
                     bytes = bytes,
                     caption = caption,
                     mimeType = mimeType,
-                    onSuccess = { showCreateStoryDialog = false },
-                    onError = { /* handled */ }
+                    onSuccess = {
+                        onDone(true, null)
+                        showCreateStoryDialog = false
+                    },
+                    onError = { err ->
+                        onDone(false, err)
+                    }
                 )
             }
         )

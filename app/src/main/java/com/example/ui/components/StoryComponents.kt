@@ -406,7 +406,7 @@ fun StoryViewerDialog(
 @Composable
 fun CreateStoryDialog(
     onDismiss: () -> Unit,
-    onPublish: (bytes: ByteArray, caption: String, mimeType: String) -> Unit
+    onPublish: (bytes: ByteArray, caption: String, mimeType: String, onDone: (Boolean, String?) -> Unit) -> Unit
 ) {
     val context = LocalContext.current
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
@@ -561,7 +561,12 @@ fun CreateStoryDialog(
                                     return@Button
                                 }
                                 val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-                                onPublish(bytes, caption, mimeType)
+                                onPublish(bytes, caption, mimeType) { success, err ->
+                                    isUploading = false
+                                    if (!success) {
+                                        errorMessage = err ?: "Story paylaşıla bilmədi."
+                                    }
+                                }
                             } catch (e: Exception) {
                                 errorMessage = e.localizedMessage ?: "Şəkil oxuna bilmədi."
                                 isUploading = false

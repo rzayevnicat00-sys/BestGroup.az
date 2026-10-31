@@ -107,10 +107,8 @@ fun ProfileScreen(
     val isAuthorizedStaff = user?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
                           com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(user?.email)
 
-    LaunchedEffect(isAuthorizedStaff) {
-        if (isAuthorizedStaff) {
-            viewModel.ensureAdminDataObserved()
-        }
+    LaunchedEffect(Unit, isAuthorizedStaff) {
+        viewModel.ensureAdminDataObserved()
     }
 
     Scaffold(

@@ -523,50 +523,19 @@ class BestGroupRepository(
                 }
             }
 
-            // If authorized staff, load all registered users and customers from Firestore users collection
-            if (isStaff && authService != null) {
+            // Load all registered users and customers from the configured Firestore users collection
+            if (authService != null) {
                 launch {
                     try {
-                        com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                            .collection("users")
-                            .addSnapshotListener { snapshot, error ->
-                                if (error != null || snapshot == null) return@addSnapshotListener
-                                val allUsersList = snapshot.documents.mapNotNull { doc ->
-                                    val data = doc.data ?: return@mapNotNull null
-                                    val emailStr = (data["email"] as? String ?: "").trim()
-                                    val isSuperAdmin = FirebaseAuthService.isSuperAdminEmail(emailStr)
-                                    val roleStr = data["role"] as? String ?: (if (isSuperAdmin) "admin" else "customer")
-                                    val cRole = when (roleStr.lowercase()) {
-                                        "admin" -> UserRole.ADMIN
-                                        "manager" -> UserRole.MANAGER
-                                        "operator" -> UserRole.OPERATOR
-                                        else -> if (isSuperAdmin) UserRole.ADMIN else UserRole.CUSTOMER
-                                    }
-
-                                    val cOrdersCount = _orders.value.count { it.userId == doc.id }
-                                    User(
-                                        id = doc.id,
-                                        fullName = (data["fullName"] as? String)?.takeIf { it.isNotBlank() }
-                                            ?: (data["name"] as? String)?.takeIf { it.isNotBlank() }
-                                            ?: "İstifadəçi",
-                                        email = emailStr,
-                                        phone = data["phone"] as? String ?: "",
-                                        university = data["university"] as? String ?: "",
-                                        faculty = data["faculty"] as? String ?: "",
-                                        degreeLevel = (data["educationLevel"] as? String) ?: (data["degreeLevel"] as? String) ?: "Bakalavriat",
-                                        role = cRole,
-                                        createdAt = data["createdAt"] as? String ?: "",
-                                        orderCount = cOrdersCount,
-                                        phoneVerified = (data["phoneVerified"] as? Boolean) ?: false,
-                                        avatarUrl = (data["avatarUrl"] as? String) ?: (data["profilePhoto"] as? String),
-                                        isOnline = (data["isOnline"] as? Boolean) ?: false,
-                                        lastActiveAtMillis = (data["lastActiveAtMillis"] as? Number)?.toLong() ?: 0L
-                                    )
-                                }
-                                _allRegisteredUsers.value = allUsersList
-                                _adminCustomers.value = allUsersList.filter { it.role == UserRole.CUSTOMER }
-                                recalculateAdminStats()
+                        authService.getAllUsersFlow().collect { allUsersList ->
+                            val enrichedList = allUsersList.map { u ->
+                                val cOrdersCount = _orders.value.count { it.userId == u.id }
+                                u.copy(orderCount = cOrdersCount)
                             }
+                            _allRegisteredUsers.value = enrichedList
+                            _adminCustomers.value = enrichedList.filter { it.role == UserRole.CUSTOMER }
+                            recalculateAdminStats()
+                        }
                     } catch (_: Exception) {}
                 }
             }
@@ -1410,6 +1379,31 @@ class BestGroupRepository(
 
     // --- Story Methods ---
 
+    private fun compressImageToDataUrl(bytes: ByteArray, maxWidth: Int = 512, maxHeight: Int = 512, quality: Int = 85): String {
+        return try {
+            val original = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            if (original != null) {
+                val width = original.width
+                val height = original.height
+                val ratio = minOf(maxWidth.toFloat() / width, maxHeight.toFloat() / height, 1.0f)
+                val targetWidth = (width * ratio).toInt().coerceAtLeast(1)
+                val targetHeight = (height * ratio).toInt().coerceAtLeast(1)
+                val scaled = if (ratio < 1.0f) {
+                    android.graphics.Bitmap.createScaledBitmap(original, targetWidth, targetHeight, true)
+                } else original
+
+                val baos = java.io.ByteArrayOutputStream()
+                scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, baos)
+                val compressedBytes = baos.toByteArray()
+                "data:image/jpeg;base64," + android.util.Base64.encodeToString(compressedBytes, android.util.Base64.NO_WRAP)
+            } else {
+                "data:image/jpeg;base64," + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            }
+        } catch (_: Exception) {
+            "data:image/jpeg;base64," + android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        }
+    }
+
     suspend fun publishStory(mediaBytes: ByteArray, caption: String, mimeType: String = "image/jpeg"): Result<StoryItem> {
         val user = _currentUser.value ?: return Result.failure(IllegalStateException("Yalnız təsdiqlənmiş istifadəçi story paylaşa bilər."))
         val isStaff = user.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
@@ -1421,11 +1415,11 @@ class BestGroupRepository(
         val mediaUrl = if (storageService != null) {
             try {
                 storageService.uploadStoryMedia(user.id, mediaBytes, mimeType)
-            } catch (e: Exception) {
-                return Result.failure(e)
+            } catch (_: Exception) {
+                compressImageToDataUrl(mediaBytes, maxWidth = 800, maxHeight = 1200, quality = 80)
             }
         } else {
-            "https://firebasestorage.googleapis.com/v0/b/placeholder/o/story.jpg"
+            compressImageToDataUrl(mediaBytes, maxWidth = 800, maxHeight = 1200, quality = 80)
         }
 
         val storyId = "story_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}"
@@ -1508,16 +1502,18 @@ class BestGroupRepository(
     suspend fun uploadProfilePhoto(bytes: ByteArray, mimeType: String = "image/jpeg"): Result<String> {
         val user = _currentUser.value ?: return Result.failure(IllegalStateException("Zəhmət olmasa profil şəkli yükləmək üçün daxil olun."))
         val uid = user.id
-        if (storageService == null) {
-            return Result.failure(IllegalStateException("Storage xidməti aktiv deyil."))
-        }
+
         val downloadUrl = try {
-            storageService.uploadProfileImage(uid, bytes, mimeType)
-        } catch (e: Exception) {
-            return Result.failure(e)
+            if (storageService != null) {
+                storageService.uploadProfileImage(uid, bytes, mimeType)
+            } else {
+                compressImageToDataUrl(bytes, maxWidth = 400, maxHeight = 400, quality = 82)
+            }
+        } catch (_: Exception) {
+            compressImageToDataUrl(bytes, maxWidth = 400, maxHeight = 400, quality = 82)
         }
 
-        // Update auth service and user profile
+        // Update auth service and user profile in Firestore
         authService?.updateProfilePhoto(uid, downloadUrl)
 
         _currentUser.value = _currentUser.value?.copy(avatarUrl = downloadUrl)

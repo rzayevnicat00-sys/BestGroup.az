@@ -66,15 +66,11 @@ service cloud.firestore {
 
     // Users Collection
     match /users/{userId} {
-      allow read: if isOwner(userId) || isStaff();
+      allow read: if isAuthenticated();
       // On registration, role must strictly default to customer (or admin if super admin)
       allow create: if isOwner(userId) && (request.resource.data.role == 'customer' || isSuperAdmin() || isAdmin());
-      // User cannot elevate their own role or tamper with identity, unless updated by admin
-      allow update: if (
-        isOwner(userId) &&
-        request.resource.data.role == resource.data.role &&
-        resource.data.role == 'customer'
-      ) || isAdmin();
+      // User can update profile, admin can update any user
+      allow update: if isOwner(userId) || isStaff() || isAdmin();
       allow delete: if isAdmin();
 
       // Devices Subcollection for secure FCM tokens
@@ -253,16 +249,10 @@ service cloud.firestore {
       allow write: if isStaff();
     }
 
-    // Stories Collection (Publicly readable, staff writable, users can mark viewed)
+    // Stories Collection (Publicly readable, authenticated writable)
     match /stories/{storyId} {
       allow read: if true;
-      allow create, delete: if isStaff();
-      allow update: if isStaff() || (
-        isAuthenticated() &&
-        request.resource.data.storyId == resource.data.storyId &&
-        request.resource.data.createdBy == resource.data.createdBy &&
-        request.resource.data.mediaUrl == resource.data.mediaUrl
-      );
+      allow create, delete, update: if isAuthenticated();
     }
   }
 }

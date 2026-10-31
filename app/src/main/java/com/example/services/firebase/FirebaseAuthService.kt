@@ -25,6 +25,9 @@ class FirebaseAuthService(
     private val firestore: FirebaseFirestore
 ) {
 
+    val firestoreInstance: FirebaseFirestore
+        get() = firestore
+
     val currentUser: FirebaseUser?
         get() = auth.currentUser
 
@@ -36,6 +39,48 @@ class FirebaseAuthService(
 
     val isEmailVerified: Boolean
         get() = auth.currentUser?.isEmailVerified == true
+
+    fun getAllUsersFlow(): Flow<List<User>> = callbackFlow {
+        val registration = firestore.collection("users")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val users = snapshot.documents.mapNotNull { doc ->
+                        val data = doc.data ?: return@mapNotNull null
+                        val emailStr = (data["email"] as? String ?: "").trim()
+                        val isSuperAdmin = isSuperAdminEmail(emailStr)
+                        val roleStr = data["role"] as? String ?: (if (isSuperAdmin) "admin" else "customer")
+                        val cRole = when (roleStr.lowercase()) {
+                            "admin" -> UserRole.ADMIN
+                            "manager" -> UserRole.MANAGER
+                            "operator" -> UserRole.OPERATOR
+                            else -> if (isSuperAdmin) UserRole.ADMIN else UserRole.CUSTOMER
+                        }
+                        User(
+                            id = doc.id,
+                            fullName = (data["fullName"] as? String)?.takeIf { it.isNotBlank() }
+                                ?: (data["name"] as? String)?.takeIf { it.isNotBlank() }
+                                ?: "İstifadəçi",
+                            email = emailStr,
+                            phone = data["phone"] as? String ?: "",
+                            university = data["university"] as? String ?: "",
+                            faculty = data["faculty"] as? String ?: "",
+                            degreeLevel = (data["educationLevel"] as? String) ?: (data["degreeLevel"] as? String) ?: "Bakalavriat",
+                            role = cRole,
+                            createdAt = data["createdAt"] as? String ?: "",
+                            phoneVerified = (data["phoneVerified"] as? Boolean) ?: false,
+                            avatarUrl = (data["avatarUrl"] as? String) ?: (data["profilePhoto"] as? String),
+                            isOnline = (data["isOnline"] as? Boolean) ?: false,
+                            lastActiveAtMillis = (data["lastActiveAtMillis"] as? Number)?.toLong() ?: 0L
+                        )
+                    }
+                    trySend(users)
+                }
+            }
+        awaitClose { registration.remove() }
+    }
 
     fun authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
         val listener = FirebaseAuth.AuthStateListener { currentAuth ->
