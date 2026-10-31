@@ -79,9 +79,12 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(currentMessages.size) {
+    LaunchedEffect(currentMessages.size, activeConvId) {
         if (currentMessages.isNotEmpty()) {
             listState.animateScrollToItem(currentMessages.size - 1)
+            activeConvId?.let { convId ->
+                viewModel.repository.markConversationAsRead(convId)
+            }
         }
     }
 

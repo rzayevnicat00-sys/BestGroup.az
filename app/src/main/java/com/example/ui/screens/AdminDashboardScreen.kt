@@ -75,6 +75,7 @@ fun AdminDashboardScreen(
     val orders by viewModel.orders.collectAsState()
     val conversations by viewModel.conversations.collectAsState()
     val customers by viewModel.adminCustomers.collectAsState()
+    val allUsers by viewModel.allRegisteredUsers.collectAsState()
     val notifications by viewModel.adminNotifications.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
@@ -238,7 +239,7 @@ fun AdminDashboardScreen(
             }
             AdminTab.CUSTOMERS -> {
                 AdminCustomersContent(
-                    customers = customers,
+                    customers = allUsers,
                     modifier = modifier.padding(innerPadding),
                     onCustomerClick = { selectedCustomerForDetail = it },
                     onOpenSupportChat = { customer ->
@@ -1010,6 +1011,7 @@ fun AdminSupportChatDetailView(
     LaunchedEffect(chatMessages.size) {
         if (chatMessages.isNotEmpty()) {
             listState.animateScrollToItem(chatMessages.size - 1)
+            viewModel.repository.markConversationAsRead(conversation.id)
         }
     }
 
@@ -1375,9 +1377,11 @@ private fun AdminCustomersContent(
     onContactCustomer: (User) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    var selectedFilter by remember { mutableStateOf("all") } // "all", "online", "offline"
+    var selectedFilter by remember { mutableStateOf("all") } // "all", "customers", "staff", "online", "offline"
 
     val totalCount = customers.size
+    val customerOnlyCount = remember(customers) { customers.count { it.role == UserRole.CUSTOMER } }
+    val staffOnlyCount = remember(customers) { customers.count { it.role != UserRole.CUSTOMER } }
     val onlineCount = remember(customers) { customers.count { it.isOnline } }
     val offlineCount = totalCount - onlineCount
 
@@ -1388,9 +1392,12 @@ private fun AdminCustomersContent(
                 cust.fullName.lowercase().contains(q) ||
                 cust.email.lowercase().contains(q) ||
                 cust.phone.lowercase().contains(q) ||
-                cust.university.lowercase().contains(q)
+                cust.university.lowercase().contains(q) ||
+                cust.role.title.lowercase().contains(q)
 
             val matchesFilter = when (selectedFilter) {
+                "customers" -> cust.role == UserRole.CUSTOMER
+                "staff" -> cust.role != UserRole.CUSTOMER
                 "online" -> cust.isOnline
                 "offline" -> !cust.isOnline
                 else -> true
@@ -1417,7 +1424,7 @@ private fun AdminCustomersContent(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Müştəri axtar (ad, email, nömrə)...", fontSize = 13.sp) },
+                    placeholder = { Text("İstifadəçi axtar (ad, email, nömrə, rol)...", fontSize = 13.sp) },
                     leadingIcon = {
                         Icon(Icons.Default.Search, contentDescription = "Axtar", tint = BirbankTextSecondary, modifier = Modifier.size(20.dp))
                     },
@@ -1437,9 +1444,11 @@ private fun AdminCustomersContent(
                     singleLine = true
                 )
 
-                // Filter Chips
+                // Filter Chips Scrollable Row
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -1449,6 +1458,28 @@ private fun AdminCustomersContent(
                         label = { Text("Hamısı ($totalCount)", fontSize = 12.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = BirbankRed,
+                            selectedLabelColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(20.dp)
+                    )
+
+                    FilterChip(
+                        selected = selectedFilter == "customers",
+                        onClick = { selectedFilter = "customers" },
+                        label = { Text("Müştərilər ($customerOnlyCount)", fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFF15803D),
+                            selectedLabelColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(20.dp)
+                    )
+
+                    FilterChip(
+                        selected = selectedFilter == "staff",
+                        onClick = { selectedFilter = "staff" },
+                        label = { Text("İdarə heyəti ($staffOnlyCount)", fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFF7E22CE),
                             selectedLabelColor = Color.White
                         ),
                         shape = RoundedCornerShape(20.dp)
@@ -1615,18 +1646,42 @@ private fun AdminCustomersContent(
                                             modifier = Modifier.weight(1f)
                                         )
 
-                                        // Presence status text badge
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = if (cust.isOnline) Color(0xFFECFDF3) else BirbankBgLight
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text(
-                                                text = if (cust.isOnline) "Onlayn" else formatRelativeActiveTime(cust.lastActiveAtMillis),
-                                                color = if (cust.isOnline) Color(0xFF027A48) else BirbankTextSecondary,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
+                                            val (rBg, rTxt, rLbl) = when (cust.role) {
+                                                UserRole.ADMIN -> Triple(BirbankRedLight, BirbankRed, "👑 Admin")
+                                                UserRole.MANAGER -> Triple(Color(0xFFF3E8FF), Color(0xFF7E22CE), "🛠️ Menecer")
+                                                UserRole.OPERATOR -> Triple(Color(0xFFEFF6FF), Color(0xFF1D4ED8), "🎧 Operator")
+                                                UserRole.CUSTOMER -> Triple(Color(0xFFF0FDF4), Color(0xFF15803D), "🎓 Müştəri")
+                                            }
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = rBg
+                                            ) {
+                                                Text(
+                                                    text = rLbl,
+                                                    color = rTxt,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                )
+                                            }
+
+                                            // Presence status text badge
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = if (cust.isOnline) Color(0xFFECFDF3) else BirbankBgLight
+                                            ) {
+                                                Text(
+                                                    text = if (cust.isOnline) "Onlayn" else formatRelativeActiveTime(cust.lastActiveAtMillis),
+                                                    color = if (cust.isOnline) Color(0xFF027A48) else BirbankTextSecondary,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
                                         }
                                     }
 

@@ -136,6 +136,7 @@ class MainViewModel @JvmOverloads constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val faqs = repository.faqs
     val adminStats = repository.adminStats
+    val allRegisteredUsers = repository.allRegisteredUsers
     val adminCustomers = repository.adminCustomers
     val currentLanguage = LocalizationManager.currentLanguage
 

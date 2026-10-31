@@ -298,6 +298,10 @@ class BestGroupRepository(
     )
     val adminStats: StateFlow<AdminDashboardStats> = _adminStats.asStateFlow()
 
+    // All Registered Users for Admin Panel & Admin Profile
+    private val _allRegisteredUsers = MutableStateFlow<List<User>>(emptyList())
+    val allRegisteredUsers: StateFlow<List<User>> = _allRegisteredUsers.asStateFlow()
+
     // Real Customers for Admin Panel
     private val _adminCustomers = MutableStateFlow<List<User>>(emptyList())
     val adminCustomers: StateFlow<List<User>> = _adminCustomers.asStateFlow()
@@ -446,6 +450,7 @@ class BestGroupRepository(
                     _orders.value = emptyList()
                     _conversations.value = emptyList()
                     _adminCustomers.value = emptyList()
+                    _allRegisteredUsers.value = emptyList()
                 }
             }
         }
@@ -518,7 +523,7 @@ class BestGroupRepository(
                 }
             }
 
-            // If authorized staff, load real customers list from Firestore users collection (strictly customers)
+            // If authorized staff, load all registered users and customers from Firestore users collection
             if (isStaff && authService != null) {
                 launch {
                     try {
@@ -526,23 +531,25 @@ class BestGroupRepository(
                             .collection("users")
                             .addSnapshotListener { snapshot, error ->
                                 if (error != null || snapshot == null) return@addSnapshotListener
-                                val customerList = snapshot.documents.mapNotNull { doc ->
+                                val allUsersList = snapshot.documents.mapNotNull { doc ->
                                     val data = doc.data ?: return@mapNotNull null
-                                    val roleStr = data["role"] as? String ?: "customer"
+                                    val emailStr = (data["email"] as? String ?: "").trim()
+                                    val isSuperAdmin = FirebaseAuthService.isSuperAdminEmail(emailStr)
+                                    val roleStr = data["role"] as? String ?: (if (isSuperAdmin) "admin" else "customer")
                                     val cRole = when (roleStr.lowercase()) {
                                         "admin" -> UserRole.ADMIN
                                         "manager" -> UserRole.MANAGER
                                         "operator" -> UserRole.OPERATOR
-                                        else -> UserRole.CUSTOMER
+                                        else -> if (isSuperAdmin) UserRole.ADMIN else UserRole.CUSTOMER
                                     }
-                                    // Strictly only show real customers in the customers directory
-                                    if (cRole != UserRole.CUSTOMER) return@mapNotNull null
 
                                     val cOrdersCount = _orders.value.count { it.userId == doc.id }
                                     User(
                                         id = doc.id,
-                                        fullName = data["fullName"] as? String ?: "Müştəri",
-                                        email = data["email"] as? String ?: "",
+                                        fullName = (data["fullName"] as? String)?.takeIf { it.isNotBlank() }
+                                            ?: (data["name"] as? String)?.takeIf { it.isNotBlank() }
+                                            ?: "İstifadəçi",
+                                        email = emailStr,
                                         phone = data["phone"] as? String ?: "",
                                         university = data["university"] as? String ?: "",
                                         faculty = data["faculty"] as? String ?: "",
@@ -551,12 +558,13 @@ class BestGroupRepository(
                                         createdAt = data["createdAt"] as? String ?: "",
                                         orderCount = cOrdersCount,
                                         phoneVerified = (data["phoneVerified"] as? Boolean) ?: false,
-                                        avatarUrl = data["avatarUrl"] as? String,
+                                        avatarUrl = (data["avatarUrl"] as? String) ?: (data["profilePhoto"] as? String),
                                         isOnline = (data["isOnline"] as? Boolean) ?: false,
                                         lastActiveAtMillis = (data["lastActiveAtMillis"] as? Number)?.toLong() ?: 0L
                                     )
                                 }
-                                _adminCustomers.value = customerList
+                                _allRegisteredUsers.value = allUsersList
+                                _adminCustomers.value = allUsersList.filter { it.role == UserRole.CUSTOMER }
                                 recalculateAdminStats()
                             }
                     } catch (_: Exception) {}
@@ -790,6 +798,7 @@ class BestGroupRepository(
         _orders.value = emptyList()
         _conversations.value = emptyList()
         _adminCustomers.value = emptyList()
+        _allRegisteredUsers.value = emptyList()
     }
 
     // --- Order Operations ---
@@ -1299,7 +1308,9 @@ class BestGroupRepository(
         }
 
         val sender = _currentUser.value?.fullName ?: "İstifadəçi"
-        val isStaff = _currentUser.value?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR)
+        val isStaff = _currentUser.value?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
+                      FirebaseAuthService.isSuperAdminEmail(_currentUser.value?.email) ||
+                      FirebaseAuthService.isSuperAdminEmail(authService?.currentUser?.email)
         val role = if (isStaff) "staff" else "customer"
 
         val sentMessage = if (chatService != null) {

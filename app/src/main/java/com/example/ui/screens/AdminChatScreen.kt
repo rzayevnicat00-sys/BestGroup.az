@@ -39,7 +39,7 @@ fun AdminChatScreen(
     modifier: Modifier = Modifier
 ) {
     val conversations by viewModel.conversations.collectAsState()
-    val customers by viewModel.adminCustomers.collectAsState()
+    val customers by viewModel.allRegisteredUsers.collectAsState()
     val orders by viewModel.orders.collectAsState()
     val activeConvId by viewModel.activeConversationId.collectAsState()
 

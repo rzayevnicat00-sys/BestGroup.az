@@ -266,6 +266,10 @@ class FirestoreChatService(
         convCollection.document(conversationId).collection("messages").document(messageId).set(msgDoc).await()
 
         // 2. Update conversation header
+        val existingConvData = if (convSnap.exists()) convSnap.data ?: emptyMap() else emptyMap()
+        val convCustomerId = (existingConvData["customerId"] as? String)?.takeIf { it.isNotBlank() }
+            ?: (if (conversationId.startsWith("support_")) conversationId.removePrefix("support_") else "")
+
         val convUpdate = hashMapOf<String, Any>(
             "lastMessage" to trimmed,
             "lastMessageText" to trimmed,
@@ -273,20 +277,20 @@ class FirestoreChatService(
             "lastMessageSenderId" to actualSenderId,
             "updatedAt" to FieldValue.serverTimestamp()
         )
+        if (convCustomerId.isNotBlank()) {
+            convUpdate["customerId"] = convCustomerId
+        }
         if (!isFromCustomer) {
             convUpdate["unreadForCustomer"] = FieldValue.increment(1)
         } else {
             convUpdate["unreadForStaff"] = FieldValue.increment(1)
         }
 
-        convCollection.document(conversationId).update(convUpdate).await()
+        convCollection.document(conversationId).set(convUpdate, SetOptions.merge()).await()
 
         // 3. Write notification document for instant push & in-app alerts
         try {
             val notifId = "notif_${UUID.randomUUID()}"
-            val existingConvData = if (convSnap.exists()) convSnap.data ?: emptyMap() else emptyMap()
-            val convCustomerId = (existingConvData["customerId"] as? String)?.takeIf { it.isNotBlank() }
-                ?: (if (conversationId.startsWith("support_")) conversationId.removePrefix("support_") else "")
 
             val notifDoc = hashMapOf<String, Any?>(
                 "id" to notifId,
@@ -349,7 +353,7 @@ class FirestoreChatService(
             } else {
                 updates["unreadForCustomer"] = 0
             }
-            convRef.update(updates).await()
+            convRef.set(updates, SetOptions.merge()).await()
 
             // Update readAt on messages
             val unreadRole = if (isStaff) "customer" else "staff"
@@ -379,7 +383,9 @@ class FirestoreChatService(
     private fun mapDocumentToConversation(id: String, data: Map<String, Any?>): ChatConversation {
         val title = data["title"] as? String ?: "Söhbət"
         val orderId = data["orderId"] as? String
-        val customerId = data["customerId"] as? String ?: (data["userId"] as? String ?: "")
+        val customerId = (data["customerId"] as? String)?.takeIf { it.isNotBlank() }
+            ?: (data["userId"] as? String)?.takeIf { it.isNotBlank() }
+            ?: (if (id.startsWith("support_")) id.removePrefix("support_") else "")
         val assignedStaffId = data["assignedStaffId"] as? String
         val lastMsg = data["lastMessage"] as? String ?: (data["lastMessageText"] as? String ?: "")
         val lastMsgTime = data["lastMessageAt"] as? String ?: (data["lastMessageTime"] as? String ?: "İndicə")
