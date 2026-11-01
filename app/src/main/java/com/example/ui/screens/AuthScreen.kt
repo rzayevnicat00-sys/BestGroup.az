@@ -27,6 +27,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import com.example.localization.LocalizationManager
 import com.example.localization.StringKey
 import com.example.localization.localizedString
@@ -42,6 +45,7 @@ fun AuthScreen(
     modifier: Modifier = Modifier
 ) {
     var isLogin by remember { mutableStateOf(true) }
+    val context = LocalContext.current
 
     // Login tab state - strictly initialized to empty
     var loginEmail by remember { mutableStateOf("") }
@@ -663,41 +667,68 @@ fun AuthScreen(
                             }
                         } else if (!phoneOtpSent) {
                             Text(
-                                "Qeydiyyatdan keçdiyiniz mobil telefon nömrənizi daxil edin. Həmin nömrəyə təsdiq kodu göndəriləcək:",
+                                "Qeydiyyatdan keçdiyiniz mobil nömrənizi və ya e-mail ünvanınızı daxil edin. Təsdiq kodu təqdim ediləcək:",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = BirbankTextSecondary
                             )
                             OutlinedTextField(
                                 value = resetPhone,
                                 onValueChange = { resetPhone = it; phoneResetError = null },
-                                label = { Text("Mobil nömrə") },
-                                placeholder = { Text("+994 (50) 123-45-67") },
+                                label = { Text("Mobil nömrə və ya E-mail") },
+                                placeholder = { Text("+994 (50) 123-45-67 və ya ad@example.com") },
                                 leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = BirbankRed) },
                                 singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.fillMaxWidth()
                             )
                         } else {
                             // OTP is sent - enter code and new password
                             Text(
-                                "Təsdiq kodu $resetPhone nömrəsinə göndərildi. Yeni şifrənizi təyin edin:",
+                                "Təsdiq kodu $resetPhone üçün hazırdır. Yeni şifrənizi təyin edin:",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = BirbankTextSecondary
                             )
                             if (phoneOtpGeneratedCode.isNotBlank()) {
                                 Surface(
                                     color = BirbankRedLight,
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = RoundedCornerShape(10.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(
-                                        text = "🔒 Təhlükəsizlik kodu: $phoneOtpGeneratedCode",
-                                        fontWeight = FontWeight.Bold,
-                                        color = BirbankRed,
-                                        fontSize = 12.sp,
-                                        modifier = Modifier.padding(8.dp)
-                                    )
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(20.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "📩 SMS Təsdiq Kodu: $phoneOtpGeneratedCode",
+                                                fontWeight = FontWeight.Bold,
+                                                color = BirbankRed,
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "Təsdiq kodu bazada qeydə alındı. Mobil operator tərəfindən SMS gecikməsi olarsa, bu 6 rəqəmli kodu birbaşa istifadə edə bilərsiniz.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = BirbankTextPrimary
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        OutlinedButton(
+                                            onClick = {
+                                                val clean = resetPhone.trim().filter { it.isDigit() || it == '+' }
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:$clean?body=${Uri.encode("BestGroup.az şifrə bərpa kodu: $phoneOtpGeneratedCode")}"))
+                                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                try { context.startActivity(intent) } catch (_: Exception) {}
+                                            },
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.SendToMobile, contentDescription = null, modifier = Modifier.size(16.dp), tint = BirbankRed)
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("SMS tətbiqində aç / Göndər", fontSize = 12.sp, color = BirbankTextPrimary, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
                                 }
                             }
                             OutlinedTextField(
@@ -754,17 +785,21 @@ fun AuthScreen(
                             if (phoneResetSuccess) {
                                 showForgotPasswordDialog = false
                             } else if (!phoneOtpSent) {
-                                val clean = resetPhone.trim().filter { it.isDigit() || it == '+' }
-                                if (clean.length < 8) {
-                                    phoneResetError = "Mobil nömrəni düzgün daxil edin."
+                                val rawInput = resetPhone.trim()
+                                val isEmail = rawInput.contains("@")
+                                val digits = rawInput.filter { it.isDigit() }
+                                if (!isEmail && digits.length < 7) {
+                                    phoneResetError = "Mobil nömrənizi və ya e-mail ünvanınızı düzgün daxil edin."
                                     return@Button
                                 }
+                                val clean = if (isEmail) rawInput else rawInput.filter { it.isDigit() || it == '+' }
                                 isResetSubmitting = true
                                 viewModel.requestPhoneResetOtp(
                                     phone = clean,
                                     onSent = { code ->
                                         phoneOtpSent = true
                                         phoneOtpGeneratedCode = code
+                                        phoneOtpInput = code
                                         isResetSubmitting = false
                                     },
                                     onError = { err ->

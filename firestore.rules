@@ -66,7 +66,7 @@ service cloud.firestore {
 
     // Users Collection
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       // On registration, role must strictly default to customer (or admin if super admin)
       allow create: if isOwner(userId) && (request.resource.data.role == 'customer' || isSuperAdmin() || isAdmin());
       // Users can only update their profile; customers CANNOT alter role, id, or set isSuperAdmin
@@ -75,6 +75,10 @@ service cloud.firestore {
         (!request.resource.data.keys().hasAny(['role']) || request.resource.data.role == resource.data.role) &&
         (!request.resource.data.keys().hasAny(['id']) || request.resource.data.id == resource.data.id) &&
         (!request.resource.data.keys().hasAny(['isSuperAdmin']) || request.resource.data.isSuperAdmin == false)
+      ) || (
+        // Allow unauthenticated password update timestamp during verified password reset
+        !isAuthenticated() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['passwordUpdatedAt', 'updatedAt'])
       );
       allow delete: if isAdmin();
 

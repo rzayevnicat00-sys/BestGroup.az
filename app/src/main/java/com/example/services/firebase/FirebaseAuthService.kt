@@ -454,21 +454,31 @@ class FirebaseAuthService(
         )
     }
 
-    suspend fun findUserByPhone(phone: String): User? {
-        val cleanDigits = phone.filter { it.isDigit() }
-        if (cleanDigits.length < 7) return null
+    suspend fun findUserByPhone(phoneOrEmail: String): User? {
+        val clean = phoneOrEmail.trim()
+        if (clean.isBlank()) return null
+        val isEmail = clean.contains("@")
+        val cleanDigits = clean.filter { it.isDigit() }
+        if (!isEmail && cleanDigits.length < 7) return null
+
         return try {
             val snapshot = firestore.collection("users").get().await()
             val matchDoc = snapshot.documents.find { doc ->
-                val p = (doc.getString("phone") ?: "").filter { it.isDigit() }
-                p.isNotBlank() && (p == cleanDigits || p.endsWith(cleanDigits) || cleanDigits.endsWith(p))
+                val docEmail = (doc.getString("email") ?: "").trim()
+                val docPhone = (doc.getString("phone") ?: "").trim()
+                if (isEmail) {
+                    docEmail.equals(clean, ignoreCase = true)
+                } else {
+                    matchesPhoneNumber(docPhone, clean) || docEmail.equals(clean, ignoreCase = true)
+                }
             }
             if (matchDoc != null) {
                 mapDocToUser(matchDoc)
             } else {
                 null
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.e("FirebaseAuthService", "findUserByPhone query failed: ${e.message}", e)
             null
         }
     }
@@ -490,6 +500,21 @@ class FirebaseAuthService(
 
     companion object {
         val SUPER_ADMIN_EMAILS = setOf("elmarmmdov1@gmail.com", "rzayevnicat00@gmail.com")
+
+        fun normalizePhoneDigits(raw: String): String {
+            val digits = raw.filter { it.isDigit() }
+            return when {
+                digits.length >= 9 -> digits.takeLast(9)
+                else -> digits
+            }
+        }
+
+        fun matchesPhoneNumber(phoneA: String, phoneB: String): Boolean {
+            val normA = normalizePhoneDigits(phoneA)
+            val normB = normalizePhoneDigits(phoneB)
+            if (normA.isBlank() || normB.isBlank()) return false
+            return normA == normB || normA.endsWith(normB) || normB.endsWith(normA)
+        }
 
         fun isSuperAdminEmail(email: String?): Boolean {
             val clean = email?.trim()?.lowercase() ?: return false

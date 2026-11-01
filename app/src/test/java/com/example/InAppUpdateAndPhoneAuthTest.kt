@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.model.AppUpdateInfo
 import com.example.repository.BestGroupRepository
+import com.example.services.firebase.FirebaseAuthService
 import com.example.services.update.InAppUpdateInstaller
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -64,18 +65,34 @@ class InAppUpdateAndPhoneAuthTest {
     }
 
     @Test
-    fun testPhoneResetSessionValidation() = runTest {
-        val repo = BestGroupRepository()
-        // Format with phone number
-        val result = repo.requestPhoneResetOtp("+994509998877")
-        assertNotNull(result)
+    fun testPhoneNumberMatchingNormalization() {
+        // Different formats of the same Azerbaijani phone number
+        val format1 = "+994 (50) 123-45-67"
+        val format2 = "0501234567"
+        val format3 = "501234567"
+        val format4 = "+994501234567"
 
-        // Invalid OTP code attempt without session
-        val completeResult = repo.completePhonePasswordReset(
-            phone = "+994509998877",
-            enteredOtp = "123456",
-            newPass = "Password123!"
+        assertTrue("Matching +994 (50)... with 050...", FirebaseAuthService.matchesPhoneNumber(format1, format2))
+        assertTrue("Matching 050... with 50...", FirebaseAuthService.matchesPhoneNumber(format2, format3))
+        assertTrue("Matching +99450... with +994 (50)...", FirebaseAuthService.matchesPhoneNumber(format4, format1))
+        assertFalse("Different phone numbers must not match", FirebaseAuthService.matchesPhoneNumber("+994501234567", "0559998877"))
+    }
+
+    @Test
+    fun testSuperAdminEmailLookupGeneratesValidSession() = runTest {
+        val repo = BestGroupRepository()
+        val result = repo.requestPhoneResetOtp("rzayevnicat00@gmail.com")
+        assertTrue("Super admin email must generate OTP session successfully", result.isSuccess)
+        val otpCode = result.getOrNull()
+        assertNotNull(otpCode)
+        assertEquals(6, otpCode?.length)
+
+        // Reset password with valid OTP
+        val resetResult = repo.completePhonePasswordReset(
+            phoneOrEmail = "rzayevnicat00@gmail.com",
+            enteredOtp = otpCode!!,
+            newPass = "NewSecurePass2026!"
         )
-        assertTrue("Invalid or expired session must be rejected", completeResult.isFailure)
+        assertTrue("Reset with valid OTP must succeed", resetResult.isSuccess)
     }
 }

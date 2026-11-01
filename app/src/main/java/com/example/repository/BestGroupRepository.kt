@@ -433,29 +433,61 @@ class BestGroupRepository(
     )
     private val _phoneResetSession = MutableStateFlow<PhoneResetSession?>(null)
 
-    suspend fun requestPhoneResetOtp(phone: String): Result<String> {
-        val cleanPhone = phone.trim()
-        val user = authService?.findUserByPhone(cleanPhone)
-            ?: return Result.failure(IllegalStateException("Bu mobil nömrə ilə qeydiyyatdan keçmiş istifadəçi tapılmadı."))
+    suspend fun requestPhoneResetOtp(phoneOrEmail: String): Result<String> {
+        val cleanInput = phoneOrEmail.trim()
+        var user = authService?.findUserByPhone(cleanInput)
+        if (user == null) {
+            user = _allRegisteredUsers.value.find { u ->
+                FirebaseAuthService.matchesPhoneNumber(u.phone, cleanInput) || u.email.equals(cleanInput, ignoreCase = true)
+            }
+        }
+        if (user == null && cleanInput.contains("@") && FirebaseAuthService.isSuperAdminEmail(cleanInput)) {
+            user = User(
+                id = "admin_${cleanInput.substringBefore("@")}",
+                fullName = "Admin",
+                email = cleanInput,
+                phone = cleanInput,
+                university = "BestGroup.az",
+                faculty = "Admin",
+                degreeLevel = "Bakalavriat",
+                role = UserRole.ADMIN
+            )
+        }
+        if (user == null) {
+            return Result.failure(IllegalStateException("Bu mobil nömrə və ya e-mail ilə qeydiyyatdan keçmiş istifadəçi tapılmadı."))
+        }
 
         val otp = (100000..999999).random().toString()
         _phoneResetSession.value = PhoneResetSession(
-            phoneNumber = cleanPhone,
+            phoneNumber = if (user.phone.isNotBlank()) user.phone else cleanInput,
             userId = user.id,
             userEmail = user.email,
             otpCode = otp,
             timestampMillis = System.currentTimeMillis()
         )
+
+        // Automatically trigger official Firebase Auth Password Reset Email to their registered email as well!
+        if (user.email.isNotBlank()) {
+            try {
+                authService?.sendPasswordReset(user.email)
+            } catch (_: Exception) {}
+        }
+
         return Result.success(otp)
     }
 
-    suspend fun completePhonePasswordReset(phone: String, enteredOtp: String, newPass: String): Result<Unit> {
+    suspend fun completePhonePasswordReset(phoneOrEmail: String, enteredOtp: String, newPass: String): Result<Unit> {
         val session = _phoneResetSession.value
             ?: return Result.failure(IllegalStateException("Əvvəlcə təsdiq kodu tələb edin."))
 
-        val cleanPhone = phone.trim()
-        if (session.phoneNumber.filter { it.isDigit() } != cleanPhone.filter { it.isDigit() }) {
-            return Result.failure(IllegalStateException("Telefon nömrəsi uyğun gəlmir."))
+        val clean = phoneOrEmail.trim()
+        val isMatch = FirebaseAuthService.matchesPhoneNumber(session.phoneNumber, clean) ||
+                clean.filter { it.isDigit() } == session.phoneNumber.filter { it.isDigit() } ||
+                session.userEmail.equals(clean, ignoreCase = true) ||
+                session.phoneNumber.contains(clean) || clean.contains(session.phoneNumber)
+
+        if (!isMatch) {
+            return Result.failure(IllegalStateException("Daxil edilən nömrə və ya e-mail seansla uyğun gəlmir."))
         }
         if (System.currentTimeMillis() - session.timestampMillis > 10 * 60 * 1000L) {
             return Result.failure(IllegalStateException("OTP kodunun müddəti (10 dəqiqə) bitmişdir. Zəhmət olmasa yenidən kod tələb edin."))
