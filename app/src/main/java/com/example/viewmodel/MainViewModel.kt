@@ -19,6 +19,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import com.google.firebase.pnv.FirebasePhoneNumberVerification
+import android.content.Context
 import java.util.UUID
 
 enum class AppDestination {
@@ -480,8 +483,13 @@ class MainViewModel @JvmOverloads constructor(
     }
 
     fun logout() {
-        repository.signOut()
-        _currentDestination.value = AppDestination.AUTH
+        viewModelScope.launch {
+            try {
+                repository.updateUserPresence(false)
+            } catch (_: Exception) {}
+            repository.signOut()
+            _currentDestination.value = AppDestination.AUTH
+        }
     }
 
     // --- Profile Editing & Real Persistence ---
@@ -1009,8 +1017,8 @@ class MainViewModel @JvmOverloads constructor(
         repository.isMandatoryUpdate(update)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    fun dismissUpdate() {
-        repository.dismissUpdateForNow()
+    fun dismissUpdate(versionCode: Int? = null) {
+        repository.dismissUpdateForNow(versionCode)
     }
 
     fun checkOrShowUpdate() {
@@ -1023,11 +1031,12 @@ class MainViewModel @JvmOverloads constructor(
         releaseNotesAz: String,
         releaseNotesEn: String = "",
         releaseNotesRu: String = "",
-        downloadUrl: String = FirestoreAppUpdateService.GITHUB_LATEST_RELEASE_URL,
+        downloadUrl: String = FirestoreAppUpdateService.GITHUB_DIRECT_APK_URL,
         githubReleaseUrl: String = FirestoreAppUpdateService.GITHUB_RELEASES_URL,
         isMandatory: Boolean = false,
         minSupportedVersionCode: Int = 1,
-        apkSizeMb: Double = 0.0,
+        isUpdateAvailable: Boolean = true,
+        apkSizeMb: Double = 31.0,
         onSuccess: () -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
@@ -1042,6 +1051,7 @@ class MainViewModel @JvmOverloads constructor(
                 githubReleaseUrl = githubReleaseUrl,
                 isMandatory = isMandatory,
                 minSupportedVersionCode = minSupportedVersionCode,
+                isUpdateAvailable = isUpdateAvailable,
                 apkSizeMb = apkSizeMb
             )
             if (result.isSuccess) {
@@ -1049,6 +1059,34 @@ class MainViewModel @JvmOverloads constructor(
             } else {
                 onError(result.exceptionOrNull()?.message ?: "Yenilənmə dərc edilə bilmədi")
             }
+        }
+    }
+
+    // --- Phone OTP Password Reset ---
+
+    fun requestPhoneResetOtp(
+        phone: String,
+        onSent: (String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = repository.requestPhoneResetOtp(phone)
+            result.onSuccess { otpCode -> onSent(otpCode) }
+                .onFailure { err -> onError(err.message ?: "Təsdiq kodu göndərilmədi.") }
+        }
+    }
+
+    fun completePhonePasswordReset(
+        phone: String,
+        enteredOtp: String,
+        newPass: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = repository.completePhonePasswordReset(phone, enteredOtp, newPass)
+            result.onSuccess { onSuccess() }
+                .onFailure { err -> onError(err.message ?: "Şifrə yenilənmədi.") }
         }
     }
 
@@ -1107,6 +1145,29 @@ class MainViewModel @JvmOverloads constructor(
                 onComplete(false, res.exceptionOrNull()?.message ?: "Profil şəkli yüklənmədi.")
             }
         }
+    }
+
+    val context: Context?
+        get() = getApplication<Application>()
+
+    /**
+     * Firebase Phone Number Verification (PNV)
+     * Test sessiyası Firebase konsolundan təqdim edilmiş tokenlə aktivləşdirilir:
+     * AawNgEpl2ovU84ZNo6a-RslOhZLF9Sm3nR0kHTsNVgmMZdMjFkXB4opzQtxkClcOx_dTdcz5k2JIReYoOpOtKYtQjAduE_SJZUy66BF0dxAczfyz-OjuEIoYHpDh-DKxHkLmXG9Xw3Zk0OMPGOhKCE83aA
+     */
+    suspend fun verifyPhoneNumber(activityContext: Context? = null): String {
+        // Initialize Firebase Phone Number Verification
+        val fpnv = FirebasePhoneNumberVerification.getInstance()
+
+        // Enable Test session
+        fpnv.enableTestSession("AawNgEpl2ovU84ZNo6a-RslOhZLF9Sm3nR0kHTsNVgmMZdMjFkXB4opzQtxkClcOx_dTdcz5k2JIReYoOpOtKYtQjAduE_SJZUy66BF0dxAczfyz-OjuEIoYHpDh-DKxHkLmXG9Xw3Zk0OMPGOhKCE83aA")
+
+        // Trigger the Firebase PNV pop up
+        val targetContext = activityContext ?: context!!
+        val response = fpnv.getVerifiedPhoneNumber(targetContext).await()
+        val phoneNumber = response.getPhoneNumber()
+
+        return phoneNumber
     }
 
     companion object {

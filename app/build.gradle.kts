@@ -104,6 +104,7 @@ dependencies {
   implementation(libs.firebase.auth)
   implementation(libs.firebase.storage)
   implementation(libs.firebase.messaging)
+  implementation(libs.firebase.pnv)
 
   // Uncomment ALL FOUR of the following dependencies together to use Firebase Auth and Google
   // Sign-In via Credential Manager:

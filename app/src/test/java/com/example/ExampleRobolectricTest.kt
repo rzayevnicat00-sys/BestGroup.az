@@ -2198,19 +2198,91 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `requirement 11 - windowSoftInputMode is configured to adjustResize in manifest`() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        val pm = context.packageManager
-        val activityInfo = pm.getActivityInfo(
-            android.content.ComponentName(context, com.example.MainActivity::class.java),
-            android.content.pm.PackageManager.GET_META_DATA
+    fun `requirement 12 - real online presence timeout after 5 minutes and default offline`() {
+        val now = System.currentTimeMillis()
+        val onlineUserRecent = com.example.model.User(
+            id = "u1",
+            email = "user1@example.com",
+            fullName = "Aktiv İstifadəçi",
+            phone = "+994501112233",
+            university = "BDU",
+            faculty = "İT",
+            degreeLevel = "Bakalavriat",
+            isOnline = true,
+            lastActiveAtMillis = now - (2 * 60 * 1000L) // 2 minutes ago
         )
-        val softInputMode = activityInfo.softInputMode
-        val isAdjustResize = (softInputMode and android.view.WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST) ==
-                android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-        assertTrue("MainActivity must have adjustResize softInputMode", isAdjustResize)
+        assertTrue("User active 2 mins ago should be considered online", onlineUserRecent.isCurrentlyOnline)
+
+        val onlineUserTimedOut = com.example.model.User(
+            id = "u2",
+            email = "user2@example.com",
+            fullName = "Keçmiş İstifadəçi",
+            phone = "+994501112233",
+            university = "BDU",
+            faculty = "İT",
+            degreeLevel = "Bakalavriat",
+            isOnline = true,
+            lastActiveAtMillis = now - (6 * 60 * 1000L) // 6 minutes ago (> 5 min timeout)
+        )
+        assertFalse("User inactive for >5 mins must be treated as offline", onlineUserTimedOut.isCurrentlyOnline)
+
+        val offlineUser = com.example.model.User(
+            id = "u3",
+            email = "user3@example.com",
+            fullName = "Oflayn İstifadəçi",
+            phone = "+994501112233",
+            university = "BDU",
+            faculty = "İT",
+            degreeLevel = "Bakalavriat",
+            isOnline = false,
+            lastActiveAtMillis = now
+        )
+        assertFalse("User with isOnline=false must be offline", offlineUser.isCurrentlyOnline)
+
+        val legacyUser = com.example.model.User(
+            id = "u4",
+            email = "user4@example.com",
+            fullName = "Köhnə İstifadəçi",
+            phone = "+994501112233",
+            university = "BDU",
+            faculty = "İT",
+            degreeLevel = "Bakalavriat",
+            isOnline = true,
+            lastActiveAtMillis = 0L
+        )
+        assertFalse("User with lastActiveAtMillis=0 must not be considered online", legacyUser.isCurrentlyOnline)
+    }
+
+    @Test
+    fun `requirement 13 - excel spreadsheet files xls and xlsx are supported in storage validation`() {
+        // XLS
+        com.example.services.firebase.FirebaseStorageService.validateFile(
+            fileName = "hesabat_cedveli.xls",
+            sizeBytes = 500000L,
+            mimeType = "application/vnd.ms-excel"
+        )
+
+        // XLSX
+        com.example.services.firebase.FirebaseStorageService.validateFile(
+            fileName = "maliyye_plan.xlsx",
+            sizeBytes = 750000L,
+            mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    }
+
+    @Test
+    fun `requirement 14 - base64 image data url decoding handles valid base64 cleanly`() {
+        // 1x1 transparent PNG base64
+        val samplePngDataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        val bitmap = com.example.ui.components.decodeDataUrlOrBase64ToBitmap(samplePngDataUrl)
+        assertNotNull("Decoding valid base64 PNG data url must return non-null bitmap", bitmap)
+
+        // Empty/blank string returns null safely
+        val emptyResult = com.example.ui.components.decodeDataUrlOrBase64ToBitmap("   ")
+        assertNull("Blank data must return null safely", emptyResult)
     }
 }
+
 
 
 

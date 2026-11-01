@@ -128,31 +128,16 @@ fun StoryBar(
                         .padding(3.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (story.mediaUrl.isNotBlank()) {
-                        AsyncImage(
-                            model = story.mediaUrl,
-                            contentDescription = story.caption,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(CircleShape)
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(CircleShape)
-                                .background(BirbankRedLight),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = story.creatorName.take(1).uppercase(),
-                                color = BirbankRed,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            )
-                        }
-                    }
+                    SafeMediaImage(
+                        model = story.mediaUrl,
+                        contentDescription = story.caption,
+                        contentScale = ContentScale.Crop,
+                        fallbackInitial = story.creatorName,
+                        isAvatar = true,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                    )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
@@ -253,7 +238,7 @@ fun StoryViewerDialog(
         ) {
             // Main Media Image
             if (currentStory.mediaUrl.isNotBlank()) {
-                AsyncImage(
+                SafeMediaImage(
                     model = currentStory.mediaUrl,
                     contentDescription = currentStory.caption,
                     contentScale = ContentScale.Fit,

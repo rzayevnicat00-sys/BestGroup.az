@@ -166,6 +166,14 @@ object InAppUpdateInstaller {
                 throw IllegalStateException("Yüklənmiş fayl tapılmadı və ya boşdur")
             }
 
+            // Verify package name and integrity
+            val verificationResult = verifyDownloadedApk(context, outputFile)
+            if (verificationResult.isFailure) {
+                outputFile.delete()
+                val err = verificationResult.exceptionOrNull()?.message ?: "APK faylı yoxlanışdan keçmədi."
+                throw IllegalStateException(err)
+            }
+
             _downloadState.value = UpdateDownloadProgress(
                 isDownloading = false,
                 progress = 1f,
@@ -176,7 +184,7 @@ object InAppUpdateInstaller {
                 errorMessage = null
             )
 
-            Log.d(TAG, "APK successfully downloaded to: ${outputFile.absolutePath} (${outputFile.length()} bytes)")
+            Log.d(TAG, "APK successfully downloaded and verified: ${outputFile.absolutePath} (${outputFile.length()} bytes)")
             Result.success(outputFile)
         } catch (e: Exception) {
             Log.e(TAG, "Download failed: ${e.message}", e)
@@ -184,6 +192,50 @@ object InAppUpdateInstaller {
                 isDownloading = false,
                 errorMessage = e.message ?: "Yükləmə xətası baş verdi"
             )
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Verifies that the downloaded APK package name, certificates, and integrity match the current app.
+     * Prevents corrupted or malicious APKs from being installed.
+     */
+    fun verifyDownloadedApk(context: Context, apkFile: File): Result<Unit> {
+        return try {
+            if (!apkFile.exists() || apkFile.length() < 1024L) {
+                return Result.failure(IllegalStateException("APK faylı mövcud deyil və ya zədələnib."))
+            }
+
+            val pm = context.packageManager
+            @Suppress("DEPRECATION")
+            val archiveInfo = pm.getPackageArchiveInfo(apkFile.absolutePath, android.content.pm.PackageManager.GET_SIGNATURES)
+                ?: return Result.failure(IllegalStateException("Fayl etibarlı Android APK formatında deyil və ya natamam endirilib."))
+
+            if (archiveInfo.packageName != context.packageName) {
+                return Result.failure(
+                    IllegalStateException("Endirilmiş APK başqa tətbiqə aiddir (${archiveInfo.packageName} != ${context.packageName}). Təhlükəsizlik səbəbindən quraşdırma dayandırıldı.")
+                )
+            }
+
+            // Verify signature consistency if available
+            try {
+                @Suppress("DEPRECATION")
+                val currentPkg = pm.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_SIGNATURES)
+                if (currentPkg.signatures != null && archiveInfo.signatures != null) {
+                    val curSig = currentPkg.signatures?.firstOrNull()?.toByteArray()
+                    val newSig = archiveInfo.signatures?.firstOrNull()?.toByteArray()
+                    if (curSig != null && newSig != null && !curSig.contentEquals(newSig)) {
+                        return Result.failure(
+                            IllegalStateException("APK rəqəmsal imzası mövcud tətbiqin sertifikatı ilə uyğun gəlmir.")
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+                // If system signature retrieval is restricted in sandbox, package identity suffices
+            }
+
+            Result.success(Unit)
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -200,7 +252,7 @@ object InAppUpdateInstaller {
     }
 
     /**
-     * Opens system settings to allow installing apps for BestGroup.az.
+     * Opens system settings to allow installing apps for BestGroup.az with clear explanation.
      */
     fun requestInstallPermission(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -220,11 +272,19 @@ object InAppUpdateInstaller {
      * Installs the downloaded APK directly on top of the currently installed app using FileProvider.
      * The OS package manager compares signatures and versions, upgrading in-place without data loss.
      */
-    fun installApk(context: Context, apkFile: File): Boolean {
-        try {
+    fun installApk(context: Context, apkFile: File): Result<Unit> {
+        return try {
             if (!apkFile.exists()) {
-                Log.e(TAG, "Cannot install: APK file does not exist")
-                return false
+                val msg = "Quraşdırma faylı tapılmadı."
+                _downloadState.value = _downloadState.value.copy(errorMessage = msg)
+                return Result.failure(IllegalStateException(msg))
+            }
+
+            val verification = verifyDownloadedApk(context, apkFile)
+            if (verification.isFailure) {
+                val err = verification.exceptionOrNull()?.message ?: "APK yoxlanışı uğursuz oldu."
+                _downloadState.value = _downloadState.value.copy(errorMessage = err)
+                return Result.failure(IllegalStateException(err))
             }
 
             val authority = "${context.packageName}.fileprovider"
@@ -238,10 +298,12 @@ object InAppUpdateInstaller {
             }
 
             context.startActivity(installIntent)
-            return true
+            Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start install intent: ${e.message}", e)
-            return false
+            val err = "Quraşdırma başladıla bilmədi: ${e.message}"
+            Log.e(TAG, err, e)
+            _downloadState.value = _downloadState.value.copy(errorMessage = err)
+            Result.failure(e)
         }
     }
 

@@ -21,5 +21,16 @@ data class User(
     val orderCount: Int = 0,
     val phoneVerified: Boolean = false,
     val isOnline: Boolean = false,
-    val lastActiveAtMillis: Long = System.currentTimeMillis()
-)
+    val lastActiveAtMillis: Long = 0L
+) {
+    companion object {
+        const val ONLINE_TIMEOUT_MS = 5 * 60 * 1000L // 5 minutes inactivity timeout
+    }
+
+    /**
+     * Determines whether the user is authentically online:
+     * Requires both `isOnline == true` AND an activity heartbeat recorded within the last 5 minutes.
+     */
+    val isCurrentlyOnline: Boolean
+        get() = isOnline && lastActiveAtMillis > 0 && (System.currentTimeMillis() - lastActiveAtMillis < ONLINE_TIMEOUT_MS)
+}

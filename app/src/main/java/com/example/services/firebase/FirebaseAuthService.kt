@@ -5,6 +5,7 @@ import com.example.model.UserRole
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.channels.awaitClose
@@ -193,8 +194,8 @@ class FirebaseAuthService(
             }
 
             val photoUrl = userDoc.getString("profilePhoto") ?: userDoc.getString("avatarUrl") ?: firebaseUser.photoUrl?.toString()
-            val isOnline = userDoc.getBoolean("isOnline") ?: true
-            val lastActive = (userDoc.get("lastActiveAtMillis") as? Number)?.toLong() ?: System.currentTimeMillis()
+            val isOnline = userDoc.getBoolean("isOnline") ?: false
+            val lastActive = (userDoc.get("lastActiveAtMillis") as? Number)?.toLong() ?: 0L
             val createdAtStr = userDoc.getString("createdAt") ?: ""
 
             val user = User(
@@ -418,7 +419,73 @@ class FirebaseAuthService(
     }
 
     fun signOut() {
-        auth.signOut()
+        try {
+            auth.signOut()
+        } catch (_: Exception) {}
+    }
+
+    fun mapDocToUser(doc: DocumentSnapshot): User? {
+        val data = doc.data ?: return null
+        val emailStr = (data["email"] as? String ?: "").trim()
+        val isSuperAdmin = isSuperAdminEmail(emailStr)
+        val roleStr = data["role"] as? String ?: (if (isSuperAdmin) "admin" else "customer")
+        val cRole = when (roleStr.lowercase()) {
+            "admin" -> UserRole.ADMIN
+            "manager" -> UserRole.MANAGER
+            "operator" -> UserRole.OPERATOR
+            else -> if (isSuperAdmin) UserRole.ADMIN else UserRole.CUSTOMER
+        }
+        return User(
+            id = doc.id,
+            fullName = (data["fullName"] as? String)?.takeIf { it.isNotBlank() }
+                ?: (data["name"] as? String)?.takeIf { it.isNotBlank() }
+                ?: "İstifadəçi",
+            email = emailStr,
+            phone = data["phone"] as? String ?: "",
+            university = data["university"] as? String ?: "",
+            faculty = data["faculty"] as? String ?: "",
+            degreeLevel = (data["educationLevel"] as? String) ?: (data["degreeLevel"] as? String) ?: "Bakalavriat",
+            role = cRole,
+            createdAt = data["createdAt"] as? String ?: "",
+            phoneVerified = (data["phoneVerified"] as? Boolean) ?: false,
+            avatarUrl = (data["avatarUrl"] as? String) ?: (data["profilePhoto"] as? String),
+            isOnline = (data["isOnline"] as? Boolean) ?: false,
+            lastActiveAtMillis = (data["lastActiveAtMillis"] as? Number)?.toLong() ?: 0L
+        )
+    }
+
+    suspend fun findUserByPhone(phone: String): User? {
+        val cleanDigits = phone.filter { it.isDigit() }
+        if (cleanDigits.length < 7) return null
+        return try {
+            val snapshot = firestore.collection("users").get().await()
+            val matchDoc = snapshot.documents.find { doc ->
+                val p = (doc.getString("phone") ?: "").filter { it.isDigit() }
+                p.isNotBlank() && (p == cleanDigits || p.endsWith(cleanDigits) || cleanDigits.endsWith(p))
+            }
+            if (matchDoc != null) {
+                mapDocToUser(matchDoc)
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    suspend fun updateUserPasswordInFirestore(userId: String, newPasswordPlain: String): Boolean {
+        return try {
+            firestore.collection("users").document(userId).set(
+                mapOf(
+                    "passwordUpdatedAt" to System.currentTimeMillis(),
+                    "updatedAt" to System.currentTimeMillis().toString()
+                ),
+                SetOptions.merge()
+            ).await()
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     companion object {

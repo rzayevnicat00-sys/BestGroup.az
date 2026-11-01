@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Intent
@@ -47,6 +48,16 @@ fun MainApp(viewModel: MainViewModel) {
     val unreadNotifsCount = remember(notifications) { notifications.count { !it.isRead } }
     val currentUser by viewModel.currentUser.collectAsState()
     val isUserLoggedIn = currentUser != null || viewModel.repository.isUserLoggedIn()
+
+    // Real-time presence heartbeat while user is active in foreground
+    LaunchedEffect(currentUser) {
+        if (currentUser != null) {
+            while (true) {
+                viewModel.updateUserPresence(true)
+                kotlinx.coroutines.delay(120_000L)
+            }
+        }
+    }
 
     BestGroupTheme(themeMode = themeMode) {
         Surface(
@@ -328,18 +339,25 @@ fun MainApp(viewModel: MainViewModel) {
                 title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = "Yeni versiya hazırdır",
+                            text = "Tətbiqin yeni versiyası mövcuddur!",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = BirbankTextPrimary
+                            color = BirbankTextPrimary,
+                            textAlign = TextAlign.Center
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "v${update.versionName} • Build ${update.versionCode}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = BirbankRed,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Surface(
+                            color = BirbankRedLight,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "Cari: v1.0 (Build 1) → Yeni: v${update.versionName} (Build ${update.versionCode})",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = BirbankRed,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
                     }
                 },
                 text = {
@@ -347,9 +365,7 @@ fun MainApp(viewModel: MainViewModel) {
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        val notes = update.releaseNotesAz.ifBlank {
-                            "BestGroup.az tətbiqinin yeni versiyası daha sürətli işləmə, dizayn təkmilləşdirmələri və yeni imkanlarla təqdim olunur."
-                        }
+                        val notes = update.effectiveReleaseNotes
                         Text(
                             text = notes,
                             style = MaterialTheme.typography.bodyMedium,
@@ -437,7 +453,7 @@ fun MainApp(viewModel: MainViewModel) {
                                     .padding(top = 4.dp)
                             ) {
                                 Text(
-                                    text = "Paket hazırdır! Aşağıdakı düyməyə toxunaraq quraşdırın.",
+                                    text = "Paket hazırdır və yoxlanıldı! Aşağıdakı düyməyə toxunaraq quraşdırın.",
                                     fontSize = 11.sp,
                                     color = Color(0xFF1D4ED8),
                                     fontWeight = FontWeight.Medium,
@@ -453,7 +469,7 @@ fun MainApp(viewModel: MainViewModel) {
                                     .padding(top = 4.dp)
                             ) {
                                 Text(
-                                    text = "Yükləmə xətası: ${downloadProgress.errorMessage}",
+                                    text = "Xəta: ${downloadProgress.errorMessage}",
                                     fontSize = 11.sp,
                                     color = BirbankRed,
                                     modifier = Modifier.padding(8.dp)
@@ -469,10 +485,10 @@ fun MainApp(viewModel: MainViewModel) {
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
-                                    text = "Bu yeniləmə tətbiqdən istifadə üçün vacibdir.",
+                                    text = "Bu yeniləmə tətbiqdən istifadə üçün məcburidir.",
                                     color = BirbankRed,
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                                 )
                             }
@@ -507,6 +523,7 @@ fun MainApp(viewModel: MainViewModel) {
                                     onClick = {
                                         val file = downloadProgress.downloadedFile!!
                                         if (!com.example.services.update.InAppUpdateInstaller.canInstallPackages(context)) {
+                                            android.widget.Toast.makeText(context, "BestGroup.az yenilənməsi üçün naməlum mənbələrdən quraşdırma icazəsini aktivləşdirin.", android.widget.Toast.LENGTH_LONG).show()
                                             com.example.services.update.InAppUpdateInstaller.requestInstallPermission(context)
                                         } else {
                                             com.example.services.update.InAppUpdateInstaller.installApk(context, file)
@@ -527,7 +544,7 @@ fun MainApp(viewModel: MainViewModel) {
                             else -> {
                                 Button(
                                     onClick = {
-                                        val directUrl = update.downloadUrl.ifBlank { update.githubReleaseUrl }
+                                        val directUrl = update.effectiveDownloadUrl
                                         coroutineScope.launch {
                                             val result = com.example.services.update.InAppUpdateInstaller.downloadApk(
                                                 context = context,
@@ -537,6 +554,7 @@ fun MainApp(viewModel: MainViewModel) {
                                                 if (com.example.services.update.InAppUpdateInstaller.canInstallPackages(context)) {
                                                     com.example.services.update.InAppUpdateInstaller.installApk(context, apkFile)
                                                 } else {
+                                                    android.widget.Toast.makeText(context, "BestGroup.az yenilənməsi üçün naməlum mənbələrdən quraşdırma icazəsini aktivləşdirin.", android.widget.Toast.LENGTH_LONG).show()
                                                     com.example.services.update.InAppUpdateInstaller.requestInstallPermission(context)
                                                 }
                                             }
@@ -551,7 +569,7 @@ fun MainApp(viewModel: MainViewModel) {
                                 ) {
                                     Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Birbaşa yenilə", fontWeight = FontWeight.Bold)
+                                    Text("İndi yenilə", fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -560,7 +578,7 @@ fun MainApp(viewModel: MainViewModel) {
                 dismissButton = if (!isMandatoryUpdate && !downloadProgress.isDownloading) {
                     {
                         TextButton(
-                            onClick = { viewModel.dismissUpdate() },
+                            onClick = { viewModel.dismissUpdate(update.versionCode) },
                             colors = ButtonDefaults.textButtonColors(contentColor = BirbankTextSecondary),
                             modifier = Modifier.fillMaxWidth()
                         ) {

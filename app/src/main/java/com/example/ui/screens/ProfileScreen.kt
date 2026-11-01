@@ -171,19 +171,13 @@ fun ProfileScreen(
                                     color = BirbankRed,
                                     strokeWidth = 2.5.dp
                                 )
-                            } else if (!user?.avatarUrl.isNullOrBlank()) {
-                                AsyncImage(
+                            } else {
+                                com.example.ui.components.SafeMediaImage(
                                     model = user?.avatarUrl,
                                     contentDescription = "Profil şəkli",
-                                    contentScale = ContentScale.Crop,
+                                    fallbackInitial = user?.fullName,
+                                    isAvatar = true,
                                     modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Text(
-                                    text = (user?.fullName ?: "İ").take(1).uppercase(),
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BirbankRed
                                 )
                             }
                         }
@@ -271,7 +265,7 @@ fun ProfileScreen(
                     val totalUsersCount = allRegisteredUsers.size
                     val customerCount = remember(allRegisteredUsers) { allRegisteredUsers.count { it.role == UserRole.CUSTOMER } }
                     val staffCount = totalUsersCount - customerCount
-                    val onlineCount = remember(allRegisteredUsers) { allRegisteredUsers.count { it.isOnline } }
+                    val onlineCount = remember(allRegisteredUsers) { allRegisteredUsers.count { it.isCurrentlyOnline } }
 
                     Card(
                         modifier = Modifier
@@ -1059,7 +1053,7 @@ private fun AdminRegisteredUsersDialog(
     val totalCount = users.size
     val customerCount = remember(users) { users.count { it.role == UserRole.CUSTOMER } }
     val staffCount = totalCount - customerCount
-    val onlineCount = remember(users) { users.count { it.isOnline } }
+    val onlineCount = remember(users) { users.count { it.isCurrentlyOnline } }
 
     val filteredUsers = remember(users, searchQuery, selectedFilter) {
         users.filter { u ->
@@ -1075,7 +1069,7 @@ private fun AdminRegisteredUsersDialog(
             val matchesFilter = when (selectedFilter) {
                 "customers" -> u.role == UserRole.CUSTOMER
                 "staff" -> u.role != UserRole.CUSTOMER
-                "online" -> u.isOnline
+                "online" -> u.isCurrentlyOnline
                 else -> true
             }
 
@@ -1278,43 +1272,21 @@ private fun AdminRegisteredUsersDialog(
                                     ) {
                                         // Avatar with Online indicator
                                         Box {
-                                            if (!u.avatarUrl.isNullOrBlank()) {
-                                                AsyncImage(
-                                                    model = u.avatarUrl,
-                                                    contentDescription = u.fullName,
-                                                    contentScale = ContentScale.Crop,
-                                                    modifier = Modifier
-                                                        .size(46.dp)
-                                                        .clip(CircleShape)
-                                                )
-                                            } else {
-                                                val initials = u.fullName.split(" ")
-                                                    .filter { it.isNotBlank() }
-                                                    .take(2)
-                                                    .mapNotNull { it.firstOrNull()?.uppercase() }
-                                                    .joinToString("")
-                                                    .ifBlank { "U" }
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(46.dp)
-                                                        .clip(CircleShape)
-                                                        .background(if (u.role == UserRole.CUSTOMER) BirbankRedLight else Color(0xFFF3E8FF)),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = initials,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = if (u.role == UserRole.CUSTOMER) BirbankRed else Color(0xFF7E22CE),
-                                                        fontSize = 16.sp
-                                                    )
-                                                }
-                                            }
+                                            com.example.ui.components.SafeMediaImage(
+                                                model = u.avatarUrl,
+                                                contentDescription = u.fullName,
+                                                fallbackInitial = u.fullName,
+                                                isAvatar = true,
+                                                modifier = Modifier
+                                                    .size(46.dp)
+                                                    .clip(CircleShape)
+                                            )
                                             // Online dot
                                             Box(
                                                 modifier = Modifier
                                                     .size(12.dp)
                                                     .clip(CircleShape)
-                                                    .background(if (u.isOnline) Color(0xFF10B981) else Color(0xFF9CA3AF))
+                                                    .background(if (u.isCurrentlyOnline) Color(0xFF10B981) else Color(0xFF9CA3AF))
                                                     .border(2.dp, Color.White, CircleShape)
                                                     .align(Alignment.BottomEnd)
                                             )
@@ -1357,9 +1329,9 @@ private fun AdminRegisteredUsersDialog(
                                                 }
 
                                                 Text(
-                                                    text = if (u.isOnline) "🟢 Onlayn" else "⚪ Oflayn",
+                                                    text = if (u.isCurrentlyOnline) "🟢 Onlayn" else "⚪ Oflayn",
                                                     fontSize = 11.sp,
-                                                    color = if (u.isOnline) Color(0xFF10B981) else Color(0xFF9CA3AF),
+                                                    color = if (u.isCurrentlyOnline) Color(0xFF10B981) else Color(0xFF9CA3AF),
                                                     fontWeight = FontWeight.Medium
                                                 )
                                             }

@@ -549,59 +549,279 @@ fun AuthScreen(
         }
     }
 
-    // Forgot Password Dialog
+    // Forgot Password Dialog with Email & SMS OTP Options
     if (showForgotPasswordDialog) {
+        var resetMode by remember { mutableStateOf(0) } // 0 = Email, 1 = SMS OTP
         var resetEmail by remember { mutableStateOf(loginEmail) }
-        var resetSent by remember { mutableStateOf(false) }
+        var resetPhone by remember { mutableStateOf("") }
+        var emailResetSent by remember { mutableStateOf(false) }
+
+        var phoneOtpSent by remember { mutableStateOf(false) }
+        var phoneOtpInput by remember { mutableStateOf("") }
+        var phoneOtpGeneratedCode by remember { mutableStateOf("") }
+        var phoneNewPassword by remember { mutableStateOf("") }
+        var phoneNewPasswordConfirm by remember { mutableStateOf("") }
+        var phoneResetSuccess by remember { mutableStateOf(false) }
+        var phoneResetError by remember { mutableStateOf<String?>(null) }
+        var isResetSubmitting by remember { mutableStateOf(false) }
 
         AlertDialog(
-            onDismissRequest = { showForgotPasswordDialog = false },
-            title = { Text(localizedString(StringKey.AUTH_FORGOT_PASSWORD_TITLE), fontWeight = FontWeight.Bold) },
+            onDismissRequest = {
+                if (!isResetSubmitting) showForgotPasswordDialog = false
+            },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Default.LockReset, contentDescription = null, tint = BirbankRed)
+                    Text(localizedString(StringKey.AUTH_FORGOT_PASSWORD_TITLE), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                }
+            },
             text = {
-                Column {
-                    if (resetSent) {
-                        Text(
-                            "Şifrə sıfırlama təlimatı $resetEmail ünvanına göndərildi.",
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    } else {
-                        Text("Qeydiyyatdan keçdiyiniz e-mail ünvanını daxil edin:")
-                        Spacer(modifier = Modifier.height(12.dp))
-                        OutlinedTextField(
-                            value = resetEmail,
-                            onValueChange = { resetEmail = it },
-                            label = { Text("E-mail") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // Mode selector: Email vs SMS OTP
+                    if (!emailResetSent && !phoneResetSuccess) {
+                        TabRow(
+                            selectedTabIndex = resetMode,
+                            containerColor = BirbankRedLight,
+                            contentColor = BirbankRed,
+                            modifier = Modifier.clip(RoundedCornerShape(10.dp))
+                        ) {
+                            Tab(
+                                selected = resetMode == 0,
+                                onClick = { resetMode = 0; phoneResetError = null },
+                                text = { Text("E-mail ilə", fontWeight = FontWeight.SemiBold, fontSize = 12.sp) }
+                            )
+                            Tab(
+                                selected = resetMode == 1,
+                                onClick = { resetMode = 1; phoneResetError = null },
+                                text = { Text("SMS ilə kod göndər", fontWeight = FontWeight.SemiBold, fontSize = 12.sp) }
+                            )
+                        }
+                    }
+
+                    if (phoneResetError != null) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.fillMaxWidth()
-                        )
+                        ) {
+                            Text(
+                                text = phoneResetError ?: "",
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+
+                    if (resetMode == 0) {
+                        // --- EMAIL RESET ---
+                        if (emailResetSent) {
+                            Surface(
+                                color = Color(0xFFF0FDF4),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text("✓ Təlimat Göndərildi", fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "Şifrə sıfırlama təlimatı $resetEmail ünvanına göndərildi. E-poçt qutunuzu yoxlayın.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = BirbankTextPrimary
+                                    )
+                                }
+                            }
+                        } else {
+                            Text("Qeydiyyatdan keçdiyiniz e-mail ünvanını daxil edin:", style = MaterialTheme.typography.bodySmall, color = BirbankTextSecondary)
+                            OutlinedTextField(
+                                value = resetEmail,
+                                onValueChange = { resetEmail = it; phoneResetError = null },
+                                label = { Text("E-mail") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    } else {
+                        // --- SMS OTP RESET ---
+                        if (phoneResetSuccess) {
+                            Surface(
+                                color = Color(0xFFF0FDF4),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text("✓ Şifrə Yeniləndi!", fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        "Şifrəniz uğurla yeniləndi! İndi yeni şifrənizlə daxil ola bilərsiniz.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = BirbankTextPrimary
+                                    )
+                                }
+                            }
+                        } else if (!phoneOtpSent) {
+                            Text(
+                                "Qeydiyyatdan keçdiyiniz mobil telefon nömrənizi daxil edin. Həmin nömrəyə təsdiq kodu göndəriləcək:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BirbankTextSecondary
+                            )
+                            OutlinedTextField(
+                                value = resetPhone,
+                                onValueChange = { resetPhone = it; phoneResetError = null },
+                                label = { Text("Mobil nömrə") },
+                                placeholder = { Text("+994 (50) 123-45-67") },
+                                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = BirbankRed) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            // OTP is sent - enter code and new password
+                            Text(
+                                "Təsdiq kodu $resetPhone nömrəsinə göndərildi. Yeni şifrənizi təyin edin:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BirbankTextSecondary
+                            )
+                            if (phoneOtpGeneratedCode.isNotBlank()) {
+                                Surface(
+                                    color = BirbankRedLight,
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "🔒 Təhlükəsizlik kodu: $phoneOtpGeneratedCode",
+                                        fontWeight = FontWeight.Bold,
+                                        color = BirbankRed,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.padding(8.dp)
+                                    )
+                                }
+                            }
+                            OutlinedTextField(
+                                value = phoneOtpInput,
+                                onValueChange = { if (it.length <= 6 && it.all { ch -> ch.isDigit() }) phoneOtpInput = it },
+                                label = { Text("6 rəqəmli OTP kodu") },
+                                placeholder = { Text("123456") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = phoneNewPassword,
+                                onValueChange = { phoneNewPassword = it },
+                                label = { Text("Yeni şifrə (min 6 simvol)") },
+                                singleLine = true,
+                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = phoneNewPasswordConfirm,
+                                onValueChange = { phoneNewPasswordConfirm = it },
+                                label = { Text("Yeni şifrənin təkrarı") },
+                                singleLine = true,
+                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        if (!resetSent) {
-                            if (resetEmail.isNotBlank()) {
-                                viewModel.sendPasswordReset(
-                                    email = resetEmail.trim(),
-                                    onSuccess = { resetSent = true },
-                                    onError = { err -> errorMessage = err; showForgotPasswordDialog = false }
-                                )
+                        if (resetMode == 0) {
+                            if (!emailResetSent) {
+                                if (resetEmail.isNotBlank()) {
+                                    isResetSubmitting = true
+                                    viewModel.sendPasswordReset(
+                                        email = resetEmail.trim(),
+                                        onSuccess = { emailResetSent = true; isResetSubmitting = false },
+                                        onError = { err -> phoneResetError = err; isResetSubmitting = false }
+                                    )
+                                }
+                            } else {
+                                showForgotPasswordDialog = false
                             }
                         } else {
-                            showForgotPasswordDialog = false
+                            if (phoneResetSuccess) {
+                                showForgotPasswordDialog = false
+                            } else if (!phoneOtpSent) {
+                                val clean = resetPhone.trim().filter { it.isDigit() || it == '+' }
+                                if (clean.length < 8) {
+                                    phoneResetError = "Mobil nömrəni düzgün daxil edin."
+                                    return@Button
+                                }
+                                isResetSubmitting = true
+                                viewModel.requestPhoneResetOtp(
+                                    phone = clean,
+                                    onSent = { code ->
+                                        phoneOtpSent = true
+                                        phoneOtpGeneratedCode = code
+                                        isResetSubmitting = false
+                                    },
+                                    onError = { err ->
+                                        phoneResetError = err
+                                        isResetSubmitting = false
+                                    }
+                                )
+                            } else {
+                                if (phoneOtpInput.length < 6) {
+                                    phoneResetError = "6 rəqəmli OTP kodunu daxil edin."
+                                    return@Button
+                                }
+                                if (phoneNewPassword.length < 6) {
+                                    phoneResetError = "Yeni şifrə ən azı 6 simvoldan ibarət olmalıdır."
+                                    return@Button
+                                }
+                                if (phoneNewPassword != phoneNewPasswordConfirm) {
+                                    phoneResetError = "Daxil edilən yeni şifrələr bir-biri ilə eyni deyil."
+                                    return@Button
+                                }
+                                isResetSubmitting = true
+                                viewModel.completePhonePasswordReset(
+                                    phone = resetPhone,
+                                    enteredOtp = phoneOtpInput,
+                                    newPass = phoneNewPassword,
+                                    onSuccess = {
+                                        phoneResetSuccess = true
+                                        isResetSubmitting = false
+                                        loginPassword = phoneNewPassword
+                                    },
+                                    onError = { err ->
+                                        phoneResetError = err
+                                        isResetSubmitting = false
+                                    }
+                                )
+                            }
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White)
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
+                    shape = RoundedCornerShape(10.dp),
+                    enabled = !isResetSubmitting
                 ) {
-                    Text(if (resetSent) "Bağla" else "Kodu göndər")
+                    val btnText = when {
+                        resetMode == 0 && emailResetSent -> "Bağla"
+                        resetMode == 0 -> "E-mail ilə bərpa et"
+                        phoneResetSuccess -> "Girişə qayıt"
+                        !phoneOtpSent -> "SMS ilə kod göndər"
+                        else -> "Şifrəni yenilə"
+                    }
+                    Text(btnText, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showForgotPasswordDialog = false }) {
-                    Text(localizedString(StringKey.BTN_CANCEL))
+                if (!emailResetSent && !phoneResetSuccess) {
+                    TextButton(onClick = { showForgotPasswordDialog = false }) {
+                        Text(localizedString(StringKey.BTN_CANCEL), color = BirbankTextSecondary)
+                    }
                 }
             }
         )

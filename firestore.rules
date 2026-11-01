@@ -69,8 +69,13 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       // On registration, role must strictly default to customer (or admin if super admin)
       allow create: if isOwner(userId) && (request.resource.data.role == 'customer' || isSuperAdmin() || isAdmin());
-      // User can update profile, admin can update any user
-      allow update: if isOwner(userId) || isStaff() || isAdmin();
+      // Users can only update their profile; customers CANNOT alter role, id, or set isSuperAdmin
+      allow update: if isStaff() || isAdmin() || (
+        isOwner(userId) &&
+        (!request.resource.data.keys().hasAny(['role']) || request.resource.data.role == resource.data.role) &&
+        (!request.resource.data.keys().hasAny(['id']) || request.resource.data.id == resource.data.id) &&
+        (!request.resource.data.keys().hasAny(['isSuperAdmin']) || request.resource.data.isSuperAdmin == false)
+      );
       allow delete: if isAdmin();
 
       // Devices Subcollection for secure FCM tokens
@@ -245,6 +250,12 @@ service cloud.firestore {
 
     // App Updates & Version Releases (Publicly readable, staff/admin writable)
     match /app_updates/{updateId} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    // App Configuration & In-app Updates (app_config/update)
+    match /app_config/{configId} {
       allow read: if true;
       allow write: if isStaff();
     }

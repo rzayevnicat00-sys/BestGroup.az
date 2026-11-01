@@ -21,12 +21,14 @@ service firebase.storage {
       );
     }
 
-    // Supported MIME types: PDF, DOC, DOCX, PPT, PPTX, JPG, JPEG, PNG, MP4
+    // Supported MIME types: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, JPG, JPEG, PNG, MP4
     function isAllowedFileType() {
       return request.resource.contentType in [
         'application/pdf',
         'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'application/vnd.ms-powerpoint',
         'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         'image/jpeg',
@@ -37,8 +39,8 @@ service firebase.storage {
 
     // Restrict file extensions to authorized academic and document types
     function hasAllowedExtension(fileName) {
-      return fileName.matches('.*\\.(pdf|doc|docx|ppt|pptx|jpg|jpeg|png|mp4)$') ||
-             fileName.matches('.*\\.(PDF|DOC|DOCX|PPT|PPTX|JPG|JPEG|PNG|MP4)$');
+      return fileName.matches('.*\\.(pdf|doc|docx|xls|xlsx|ppt|pptx|jpg|jpeg|png|mp4)$') ||
+             fileName.matches('.*\\.(PDF|DOC|DOCX|XLS|XLSX|PPT|PPTX|JPG|JPEG|PNG|MP4)$');
     }
 
     // Maximum file size: 50 MB
@@ -68,10 +70,10 @@ service firebase.storage {
     // Story Media: stories/{userId}/{fileName}
     match /stories/{userId}/{fileName} {
       allow read: if true;
-      allow write: if hasStaffClaim()
+      allow write: if (isOwner(userId) || hasStaffClaim())
                    && request.resource.size < 25 * 1024 * 1024
                    && (request.resource.contentType.matches('image/.*') || request.resource.contentType.matches('video/.*'));
-      allow delete: if hasStaffClaim();
+      allow delete: if isOwner(userId) || hasStaffClaim();
     }
 
     // Chat attachments: chat_attachments/{conversationId}/{fileName}

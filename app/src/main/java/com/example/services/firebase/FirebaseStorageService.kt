@@ -28,13 +28,15 @@ class FirebaseStorageService(
         const val MAX_FILES_PER_ORDER: Int = 15
 
         val SUPPORTED_EXTENSIONS = setOf(
-            "pdf", "doc", "docx", "ppt", "pptx", "jpg", "jpeg", "png", "mp4"
+            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "jpg", "jpeg", "png", "mp4"
         )
 
         val SUPPORTED_MIME_TYPES = setOf(
             "application/pdf",
             "application/msword",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/vnd.ms-powerpoint",
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             "image/jpeg",

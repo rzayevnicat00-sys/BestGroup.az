@@ -21,6 +21,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        viewModel.updateUserPresence(true)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.updateUserPresence(true)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        viewModel.updateUserPresence(false)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        viewModel.updateUserPresence(false)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -40,4 +60,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-

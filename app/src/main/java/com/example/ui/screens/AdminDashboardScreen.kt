@@ -1396,7 +1396,7 @@ private fun AdminCustomersContent(
     val totalCount = customers.size
     val customerOnlyCount = remember(customers) { customers.count { it.role == UserRole.CUSTOMER } }
     val staffOnlyCount = remember(customers) { customers.count { it.role != UserRole.CUSTOMER } }
-    val onlineCount = remember(customers) { customers.count { it.isOnline } }
+    val onlineCount = remember(customers) { customers.count { it.isCurrentlyOnline } }
     val offlineCount = totalCount - onlineCount
 
     val filteredCustomers = remember(customers, searchQuery, selectedFilter) {
@@ -1412,8 +1412,8 @@ private fun AdminCustomersContent(
             val matchesFilter = when (selectedFilter) {
                 "customers" -> cust.role == UserRole.CUSTOMER
                 "staff" -> cust.role != UserRole.CUSTOMER
-                "online" -> cust.isOnline
-                "offline" -> !cust.isOnline
+                "online" -> cust.isCurrentlyOnline
+                "offline" -> !cust.isCurrentlyOnline
                 else -> true
             }
 
@@ -1600,31 +1600,15 @@ private fun AdminCustomersContent(
                             ) {
                                 // Avatar with presence indicator dot
                                 Box(modifier = Modifier.size(54.dp)) {
-                                    if (!cust.avatarUrl.isNullOrBlank()) {
-                                        AsyncImage(
-                                            model = cust.avatarUrl,
-                                            contentDescription = cust.fullName,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier
-                                                .size(50.dp)
-                                                .clip(CircleShape)
-                                        )
-                                    } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(50.dp)
-                                                .clip(CircleShape)
-                                                .background(BirbankRedLight),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = cust.fullName.take(1).uppercase(),
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = BirbankRed
-                                            )
-                                        }
-                                    }
+                                    com.example.ui.components.SafeMediaImage(
+                                        model = cust.avatarUrl,
+                                        contentDescription = cust.fullName,
+                                        fallbackInitial = cust.fullName,
+                                        isAvatar = true,
+                                        modifier = Modifier
+                                            .size(50.dp)
+                                            .clip(CircleShape)
+                                    )
 
                                     // Online/Offline status dot
                                     Box(
@@ -1639,7 +1623,7 @@ private fun AdminCustomersContent(
                                             modifier = Modifier
                                                 .fillMaxSize()
                                                 .clip(CircleShape)
-                                                .background(if (cust.isOnline) Color(0xFF12B76A) else Color(0xFF98A2B3))
+                                                .background(if (cust.isCurrentlyOnline) Color(0xFF12B76A) else Color(0xFF98A2B3))
                                         )
                                     }
                                 }
@@ -1686,11 +1670,11 @@ private fun AdminCustomersContent(
                                             // Presence status text badge
                                             Surface(
                                                 shape = RoundedCornerShape(6.dp),
-                                                color = if (cust.isOnline) Color(0xFFECFDF3) else BirbankBgLight
+                                                color = if (cust.isCurrentlyOnline) Color(0xFFECFDF3) else BirbankBgLight
                                             ) {
                                                 Text(
-                                                    text = if (cust.isOnline) "Onlayn" else formatRelativeActiveTime(cust.lastActiveAtMillis),
-                                                    color = if (cust.isOnline) Color(0xFF027A48) else BirbankTextSecondary,
+                                                    text = if (cust.isCurrentlyOnline) "Onlayn" else formatRelativeActiveTime(cust.lastActiveAtMillis),
+                                                    color = if (cust.isCurrentlyOnline) Color(0xFF027A48) else BirbankTextSecondary,
                                                     fontSize = 10.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -2486,6 +2470,8 @@ fun AdminUpdatesContent(
     var newDownloadUrl by remember { mutableStateOf("") }
     var newApkSizeMb by remember { mutableStateOf("") }
     var isMandatory by remember { mutableStateOf(false) }
+    var minSupportedCode by remember { mutableStateOf("1") }
+    var isAvailableToggle by remember { mutableStateOf(true) }
 
     LazyColumn(
         modifier = modifier
@@ -2727,18 +2713,34 @@ fun AdminUpdatesContent(
                     OutlinedTextField(
                         value = newApkSizeMb,
                         onValueChange = { newApkSizeMb = it },
-                        label = { Text("APK Həcmi MB (məsələn: 28.5)") },
+                        label = { Text("APK Həcmi MB (məsələn: 31.0)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    OutlinedTextField(
+                        value = minSupportedCode,
+                        onValueChange = { minSupportedCode = it },
+                        label = { Text("Minimum Dəstəklənən Versiya Kodu (məsələn: 1)") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp)
                     )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { isAvailableToggle = !isAvailableToggle }
+                    ) {
+                        Checkbox(checked = isAvailableToggle, onCheckedChange = { isAvailableToggle = it }, colors = CheckboxDefaults.colors(checkedColor = BirbankRed))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Yenilənmə aktivdir (Müştərilərə göstərilsin)", fontSize = 13.sp, color = BirbankTextPrimary)
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().clickable { isMandatory = !isMandatory }
                     ) {
                         Checkbox(checked = isMandatory, onCheckedChange = { isMandatory = it }, colors = CheckboxDefaults.colors(checkedColor = BirbankRed))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Bu yeniləmə məcburidir", fontSize = 13.sp, color = BirbankTextPrimary)
+                        Text("Məcburi yenilənmə (Force Update)", fontSize = 13.sp, color = BirbankTextPrimary, fontWeight = FontWeight.SemiBold)
                     }
                 }
             },
@@ -2748,15 +2750,17 @@ fun AdminUpdatesContent(
                         val code = newVersionCode.trim().toIntOrNull() ?: 2
                         val name = newVersionName.trim().ifBlank { "1.1.0" }
                         val url = newDownloadUrl.trim().ifBlank { com.example.services.firebase.FirestoreAppUpdateService.GITHUB_DIRECT_APK_URL }
-                        val size = newApkSizeMb.trim().toDoubleOrNull() ?: 25.0
+                        val size = newApkSizeMb.trim().toDoubleOrNull() ?: 31.0
+                        val minCode = minSupportedCode.trim().toIntOrNull() ?: 1
                         viewModel.adminPublishUpdate(
                             versionCode = code,
                             versionName = name,
-                            releaseNotesAz = newReleaseNotesAz.trim().ifBlank { "BestGroup.az tətbiqinin yeni versiyası yayımlandı." },
+                            releaseNotesAz = newReleaseNotesAz.trim().ifBlank { "BestGroup.az 2.0 tətbiqinin yeni versiyası yayımlandı." },
                             downloadUrl = url,
                             githubReleaseUrl = "https://github.com/rzayevnicat00-sys/BestGroup.az/releases",
                             isMandatory = isMandatory,
-                            minSupportedVersionCode = if (isMandatory) code else 1,
+                            minSupportedVersionCode = if (isMandatory) code else minCode,
+                            isUpdateAvailable = isAvailableToggle,
                             apkSizeMb = size
                         )
                         showPublishDialog = false

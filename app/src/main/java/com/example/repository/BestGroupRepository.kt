@@ -1,5 +1,6 @@
 package com.example.repository
 
+import android.content.Context
 import com.example.localization.Language
 import com.example.localization.LocalizationManager
 import com.example.model.*
@@ -15,6 +16,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+
+private const val UPDATE_SNOOZE_DURATION_MS = 24 * 60 * 60 * 1000L
 
 class BestGroupRepository(
     val authService: FirebaseAuthService? = null,
@@ -327,8 +330,14 @@ class BestGroupRepository(
     private val _isUpdateDismissed = MutableStateFlow(false)
     val isUpdateDismissed: StateFlow<Boolean> = _isUpdateDismissed.asStateFlow()
 
-    fun dismissUpdateForNow() {
+    fun dismissUpdateForNow(versionCode: Int? = null) {
         _isUpdateDismissed.value = true
+        val targetCode = versionCode ?: _latestAppUpdate.value?.versionCode ?: 0
+        context?.getSharedPreferences("bestgroup_prefs", Context.MODE_PRIVATE)
+            ?.edit()
+            ?.putInt("dismissed_update_version_code", targetCode)
+            ?.putLong("dismissed_update_timestamp", System.currentTimeMillis())
+            ?.apply()
     }
 
     fun checkOrShowUpdate() {
@@ -337,7 +346,25 @@ class BestGroupRepository(
 
     fun isUpdateAvailable(updateInfo: AppUpdateInfo?): Boolean {
         if (updateInfo == null) return false
-        return updateInfo.versionCode > currentAppVersionCode
+        if (!updateInfo.isUpdateAvailable) return false
+        val hasNewer = updateInfo.versionCode > currentAppVersionCode
+        if (!hasNewer) return false
+
+        // Mandatory updates can NEVER be dismissed or snoozed
+        if (isMandatoryUpdate(updateInfo)) return true
+
+        // For optional updates: check if dismissed within 24 hours
+        val prefs = context?.getSharedPreferences("bestgroup_prefs", Context.MODE_PRIVATE)
+        val lastDismissedCode = prefs?.getInt("dismissed_update_version_code", -1) ?: -1
+        val lastDismissedTime = prefs?.getLong("dismissed_update_timestamp", 0L) ?: 0L
+
+        if (lastDismissedCode == updateInfo.versionCode) {
+            val elapsed = System.currentTimeMillis() - lastDismissedTime
+            if (elapsed < UPDATE_SNOOZE_DURATION_MS) {
+                return false
+            }
+        }
+        return true
     }
 
     fun isMandatoryUpdate(updateInfo: AppUpdateInfo?): Boolean {
@@ -351,35 +378,98 @@ class BestGroupRepository(
         releaseNotesAz: String,
         releaseNotesEn: String = "",
         releaseNotesRu: String = "",
-        downloadUrl: String = FirestoreAppUpdateService.GITHUB_LATEST_RELEASE_URL,
+        downloadUrl: String = FirestoreAppUpdateService.GITHUB_DIRECT_APK_URL,
         githubReleaseUrl: String = FirestoreAppUpdateService.GITHUB_RELEASES_URL,
         isMandatory: Boolean = false,
         minSupportedVersionCode: Int = 1,
-        apkSizeMb: Double = 0.0
+        isUpdateAvailable: Boolean = true,
+        apkSizeMb: Double = 31.0
     ): Result<String> {
         val adminName = _currentUser.value?.fullName ?: "BestGroup.az Admin"
+        val effectiveNotes = releaseNotesAz.ifBlank { "BestGroup.az 2.0 tətbiqinin yeni versiyası yayımlandı." }
+        val effectiveUrl = downloadUrl.ifBlank { FirestoreAppUpdateService.GITHUB_DIRECT_APK_URL }
+
         val info = AppUpdateInfo(
-            id = "v_$versionCode",
-            versionCode = versionCode,
-            versionName = versionName,
-            releaseNotesAz = releaseNotesAz,
+            id = "update",
+            latestVersionCode = versionCode.toLong(),
+            latestVersionName = versionName,
+            apkDownloadUrl = effectiveUrl,
+            releaseNotes = effectiveNotes,
+            isUpdateAvailable = isUpdateAvailable,
+            isForceUpdate = isMandatory,
+            minimumSupportedVersionCode = minSupportedVersionCode.toLong(),
+            updatedAt = System.currentTimeMillis(),
+            legacyVersionCode = versionCode,
+            legacyVersionName = versionName,
+            releaseNotesAz = effectiveNotes,
             releaseNotesEn = releaseNotesEn,
             releaseNotesRu = releaseNotesRu,
-            downloadUrl = downloadUrl.ifBlank { FirestoreAppUpdateService.GITHUB_LATEST_RELEASE_URL },
-            githubReleaseUrl = githubReleaseUrl.ifBlank { FirestoreAppUpdateService.GITHUB_RELEASES_URL },
-            isMandatory = isMandatory,
-            minSupportedVersionCode = minSupportedVersionCode,
+            downloadUrl = effectiveUrl,
+            githubReleaseUrl = githubReleaseUrl,
+            legacyIsMandatory = isMandatory,
+            legacyMinSupportedVersionCode = minSupportedVersionCode,
             publishedAtMillis = System.currentTimeMillis(),
             publishedBy = adminName,
             apkSizeMb = apkSizeMb
         )
+
         return if (appUpdateService != null) {
             appUpdateService.publishUpdate(info)
         } else {
             _latestAppUpdate.value = info
             _allAppUpdates.value = listOf(info) + _allAppUpdates.value
-            Result.success("v_$versionCode")
+            Result.success("update")
         }
+    }
+
+    // --- Phone OTP Password Reset ---
+
+    data class PhoneResetSession(
+        val phoneNumber: String,
+        val userId: String,
+        val userEmail: String,
+        val otpCode: String,
+        val timestampMillis: Long
+    )
+    private val _phoneResetSession = MutableStateFlow<PhoneResetSession?>(null)
+
+    suspend fun requestPhoneResetOtp(phone: String): Result<String> {
+        val cleanPhone = phone.trim()
+        val user = authService?.findUserByPhone(cleanPhone)
+            ?: return Result.failure(IllegalStateException("Bu mobil nömrə ilə qeydiyyatdan keçmiş istifadəçi tapılmadı."))
+
+        val otp = (100000..999999).random().toString()
+        _phoneResetSession.value = PhoneResetSession(
+            phoneNumber = cleanPhone,
+            userId = user.id,
+            userEmail = user.email,
+            otpCode = otp,
+            timestampMillis = System.currentTimeMillis()
+        )
+        return Result.success(otp)
+    }
+
+    suspend fun completePhonePasswordReset(phone: String, enteredOtp: String, newPass: String): Result<Unit> {
+        val session = _phoneResetSession.value
+            ?: return Result.failure(IllegalStateException("Əvvəlcə təsdiq kodu tələb edin."))
+
+        val cleanPhone = phone.trim()
+        if (session.phoneNumber.filter { it.isDigit() } != cleanPhone.filter { it.isDigit() }) {
+            return Result.failure(IllegalStateException("Telefon nömrəsi uyğun gəlmir."))
+        }
+        if (System.currentTimeMillis() - session.timestampMillis > 10 * 60 * 1000L) {
+            return Result.failure(IllegalStateException("OTP kodunun müddəti (10 dəqiqə) bitmişdir. Zəhmət olmasa yenidən kod tələb edin."))
+        }
+        if (enteredOtp.trim() != session.otpCode) {
+            return Result.failure(IllegalStateException("Daxil edilən 6 rəqəmli OTP kodu yanlışdır."))
+        }
+        if (newPass.length < 6) {
+            return Result.failure(IllegalStateException("Yeni şifrə ən azı 6 simvoldan ibarət olmalıdır."))
+        }
+
+        authService?.updateUserPasswordInFirestore(session.userId, newPass)
+        _phoneResetSession.value = null
+        return Result.success(Unit)
     }
 
     // --- Firebase Initialization & Synchronization ---
@@ -1501,6 +1591,7 @@ class BestGroupRepository(
 
     suspend fun updateUserPresence(isOnline: Boolean) {
         val uid = _currentUser.value?.id ?: authService?.currentUserId ?: return
+        val now = System.currentTimeMillis()
         if (authService != null) {
             try {
                 authService.updateUserPresence(uid, isOnline)
@@ -1508,8 +1599,11 @@ class BestGroupRepository(
         }
         _currentUser.value = _currentUser.value?.copy(
             isOnline = isOnline,
-            lastActiveAtMillis = System.currentTimeMillis()
+            lastActiveAtMillis = now
         )
+        _allRegisteredUsers.value = _allRegisteredUsers.value.map {
+            if (it.id == uid) it.copy(isOnline = isOnline, lastActiveAtMillis = now) else it
+        }
     }
 
     suspend fun uploadProfilePhoto(bytes: ByteArray, mimeType: String = "image/jpeg"): Result<String> {
