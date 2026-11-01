@@ -78,17 +78,24 @@ fun AdminChatScreen(
                     AdminChatCategory.ORDERS -> conv.orderId != null
                 }
                 val matchingUser = customers.find { it.id == conv.customerId }
+                    ?: (if (conv.orderId != null) orders.find { it.id == conv.orderId }?.let { o -> customers.find { it.id == o.userId } } else null)
+                val customerFullName = matchingUser?.fullName?.takeIf { it.isNotBlank() }
+                    ?: (if (conv.orderId != null) orders.find { it.id == conv.orderId }?.customerName?.takeIf { it.isNotBlank() } else null)
+                    ?: conv.customerName?.takeIf { it.isNotBlank() && !it.contains("Müştəri Xidmətləri", true) }
+                    ?: "Müştəri"
+
                 val matchingOrder = orders.find { it.id == conv.orderId }
                 val searchLower = searchQuery.trim().lowercase()
                 val matchesSearch = searchLower.isEmpty() ||
+                        customerFullName.lowercase().contains(searchLower) ||
                         conv.title.lowercase().contains(searchLower) ||
                         conv.lastMessageText.lowercase().contains(searchLower) ||
                         matchingOrder?.orderNumber?.lowercase()?.contains(searchLower) == true ||
-                        (matchingUser?.fullName?.lowercase()?.contains(searchLower) == true) ||
-                        (matchingUser?.phone?.contains(searchLower) == true)
+                        (matchingUser?.phone?.contains(searchLower) == true) ||
+                        (matchingUser?.email?.lowercase()?.contains(searchLower) == true)
 
                 matchesCategory && matchesSearch
-            }.sortedByDescending { it.unreadCount > 0 }
+            }.sortedByDescending { it.getEffectiveUnreadCount(isStaff = true) > 0 }
         }
 
         Scaffold(
@@ -224,14 +231,22 @@ fun AdminChatScreen(
                     ) {
                         items(filteredConversations, key = { it.id }) { conv ->
                             val matchingUser = customers.find { it.id == conv.customerId }
-                            val displayTitle = conv.title.ifBlank { matchingUser?.fullName ?: "Müştəri" }
+                                ?: (if (conv.orderId != null) orders.find { it.id == conv.orderId }?.let { o -> customers.find { it.id == o.userId } } else null)
+                            val customerFullName = matchingUser?.fullName?.takeIf { it.isNotBlank() }
+                                ?: (if (conv.orderId != null) orders.find { it.id == conv.orderId }?.customerName?.takeIf { it.isNotBlank() } else null)
+                                ?: conv.customerName?.takeIf { it.isNotBlank() && !it.contains("Müştəri Xidmətləri", true) }
+                                ?: "Müştəri"
+
                             val isOrderChat = conv.orderId != null
                             val matchingOrder = if (isOrderChat) orders.find { it.id == conv.orderId } else null
                             val subInfo = when {
                                 isOrderChat && matchingOrder != null -> "${matchingOrder.orderNumber} • Sifariş Çatı"
+                                isOrderChat -> "${conv.title} • Sifariş Çatı"
                                 matchingUser?.phone?.isNotBlank() == true -> "${matchingUser.phone} • Müştəri Xidmətləri"
+                                conv.customerPhone?.isNotBlank() == true -> "${conv.customerPhone} • Müştəri Xidmətləri"
                                 else -> "Canlı Müştəri Sorğusu"
                             }
+                            val adminUnread = conv.getEffectiveUnreadCount(isStaff = true)
 
                             Card(
                                 modifier = Modifier
@@ -243,7 +258,7 @@ fun AdminChatScreen(
                                     }
                                     .border(
                                         1.dp,
-                                        if (conv.unreadCount > 0) BirbankRed else BirbankBorder,
+                                        if (adminUnread > 0) BirbankRed else BirbankBorder,
                                         RoundedCornerShape(14.dp)
                                     ),
                                 colors = CardDefaults.cardColors(containerColor = Color.White)
@@ -274,16 +289,19 @@ fun AdminChatScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
-                                                text = displayTitle,
-                                                style = MaterialTheme.typography.titleSmall,
+                                                text = customerFullName,
+                                                style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold,
                                                 color = BirbankTextPrimary,
-                                                maxLines = 1
+                                                maxLines = 1,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
                                             )
                                             Text(
                                                 text = conv.lastMessageTime,
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = BirbankTextSecondary
+                                                color = BirbankTextSecondary,
+                                                maxLines = 1
                                             )
                                         }
 
@@ -299,13 +317,14 @@ fun AdminChatScreen(
                                             text = conv.lastMessageText.ifBlank { "Yeni söhbət başlandı" },
                                             style = MaterialTheme.typography.bodySmall,
                                             color = BirbankTextSecondary,
-                                            maxLines = 1
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                         )
                                     }
 
-                                    if (conv.unreadCount > 0) {
+                                    if (adminUnread > 0) {
                                         Badge(containerColor = BirbankRed, contentColor = Color.White) {
-                                            Text("${conv.unreadCount}", fontWeight = FontWeight.Bold)
+                                            Text("$adminUnread", fontWeight = FontWeight.Bold)
                                         }
                                     }
 

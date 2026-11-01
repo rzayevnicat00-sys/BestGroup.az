@@ -41,6 +41,8 @@ data class ChatConversation(
     val title: String,
     val orderId: String? = null,
     val customerId: String = "",
+    val customerName: String? = null,
+    val customerPhone: String? = null,
     val assignedStaffId: String? = null,
     val lastMessage: String = "",
     val lastMessageAt: String = "",

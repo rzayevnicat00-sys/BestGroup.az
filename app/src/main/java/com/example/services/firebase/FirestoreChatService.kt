@@ -44,36 +44,41 @@ class FirestoreChatService(
             }
             if (snapshot != null) {
                 val list = snapshot.documents.mapNotNull { doc ->
-                    mapDocumentToConversation(doc.id, doc.data ?: emptyMap())
-                }.sortedByDescending { it.lastMessageAt }
+                    mapDocumentToConversation(doc.id, doc.data ?: emptyMap(), isStaff = isStaff)
+                }.sortedWith(
+                    compareByDescending<ChatConversation> { it.updatedAtMillis }
+                        .thenByDescending { it.lastMessageAt }
+                )
                 trySend(list)
             }
         }
         awaitClose { registration.remove() }
     }
 
-    fun getMessagesFlow(conversationId: String, limit: Long = DEFAULT_MESSAGES_LIMIT): Flow<List<ChatMessage>> = callbackFlow {
+    fun getMessagesFlow(conversationId: String, limit: Long = 100L): Flow<List<ChatMessage>> = callbackFlow {
         if (conversationId.isBlank()) {
             trySend(emptyList())
             close()
             return@callbackFlow
         }
 
+        // Query messages directly without orderBy to eliminate serverTimestamp latency for optimistic local writes
         val query = convCollection.document(conversationId)
             .collection("messages")
-            .orderBy("createdAt", Query.Direction.ASCENDING)
-            .limitToLast(limit)
+            .limit(limit)
 
         val registration = query.addSnapshotListener { snapshot, error ->
             if (error != null) {
-                // If orderBy('createdAt') fails because some older/pending local message lacks it,
-                // we gracefully handle it
                 return@addSnapshotListener
             }
             if (snapshot != null) {
                 val msgs = snapshot.documents.mapNotNull { doc ->
                     mapDocumentToMessage(doc.id, conversationId, doc.data ?: emptyMap())
-                }
+                }.sortedWith(
+                    compareBy<ChatMessage> { it.createdAtMillis }
+                        .thenBy { it.timestamp }
+                        .thenBy { it.id }
+                )
                 trySend(msgs)
             }
         }
@@ -106,6 +111,7 @@ class FirestoreChatService(
         val convData = hashMapOf(
             "conversationId" to convId,
             "customerId" to customerId,
+            "customerName" to customerName,
             "assignedStaffId" to null,
             "orderId" to orderId,
             "title" to title,
@@ -121,6 +127,8 @@ class FirestoreChatService(
             "isOnline" to true,
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp(),
+            "createdAtMillis" to System.currentTimeMillis(),
+            "updatedAtMillis" to System.currentTimeMillis(),
             "createdIso" to isoNow
         )
 
@@ -150,6 +158,7 @@ class FirestoreChatService(
         val convData = hashMapOf<String, Any?>(
             "conversationId" to convId,
             "customerId" to customerId,
+            "customerName" to customerName,
             "assignedStaffId" to null,
             "orderId" to null,
             "title" to title,
@@ -165,6 +174,8 @@ class FirestoreChatService(
             "isOnline" to true,
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp(),
+            "createdAtMillis" to System.currentTimeMillis(),
+            "updatedAtMillis" to System.currentTimeMillis(),
             "createdIso" to isoNow
         )
 
@@ -244,6 +255,7 @@ class FirestoreChatService(
             convRef.set(newConvData).await()
         }
 
+        val nowMillis = System.currentTimeMillis()
         val msgDoc = hashMapOf(
             "messageId" to messageId,
             "conversationId" to conversationId,
@@ -256,7 +268,9 @@ class FirestoreChatService(
             "isRead" to false,
             "readAt" to null,
             "createdAt" to FieldValue.serverTimestamp(),
+            "createdAtMillis" to nowMillis,
             "updatedAt" to FieldValue.serverTimestamp(),
+            "updatedAtMillis" to nowMillis,
             "timeFormatted" to nowFormatted,
             "attachedFileName" to attachedFileName,
             "fileStoragePath" to fileStoragePath
@@ -275,7 +289,8 @@ class FirestoreChatService(
             "lastMessageText" to trimmed,
             "lastMessageAt" to nowFormatted,
             "lastMessageSenderId" to actualSenderId,
-            "updatedAt" to FieldValue.serverTimestamp()
+            "updatedAt" to FieldValue.serverTimestamp(),
+            "updatedAtMillis" to nowMillis
         )
         if (convCustomerId.isNotBlank()) {
             convUpdate["customerId"] = convCustomerId
@@ -380,12 +395,14 @@ class FirestoreChatService(
         } catch (_: Exception) {}
     }
 
-    private fun mapDocumentToConversation(id: String, data: Map<String, Any?>): ChatConversation {
+    private fun mapDocumentToConversation(id: String, data: Map<String, Any?>, isStaff: Boolean = false): ChatConversation {
         val title = data["title"] as? String ?: "Söhbət"
         val orderId = data["orderId"] as? String
         val customerId = (data["customerId"] as? String)?.takeIf { it.isNotBlank() }
             ?: (data["userId"] as? String)?.takeIf { it.isNotBlank() }
             ?: (if (id.startsWith("support_")) id.removePrefix("support_") else "")
+        val customerName = (data["customerName"] as? String)?.takeIf { it.isNotBlank() }
+        val customerPhone = (data["customerPhone"] as? String)?.takeIf { it.isNotBlank() }
         val assignedStaffId = data["assignedStaffId"] as? String
         val lastMsg = data["lastMessage"] as? String ?: (data["lastMessageText"] as? String ?: "")
         val lastMsgTime = data["lastMessageAt"] as? String ?: (data["lastMessageTime"] as? String ?: "İndicə")
@@ -398,9 +415,22 @@ class FirestoreChatService(
         val curatorRole = data["curatorRole"] as? String ?: "Elmi Məsləhətçi"
         val isOnline = data["isOnline"] as? Boolean ?: true
 
+        val createdTimestamp = data["createdAt"] as? com.google.firebase.Timestamp
+        val updatedTimestamp = data["updatedAt"] as? com.google.firebase.Timestamp
+        val createdMillis = (data["createdAtMillis"] as? Number)?.toLong()
+            ?: createdTimestamp?.toDate()?.time
+            ?: System.currentTimeMillis()
+        val updatedMillis = (data["updatedAtMillis"] as? Number)?.toLong()
+            ?: updatedTimestamp?.toDate()?.time
+            ?: createdMillis
+
+        val effectiveUnread = if (isStaff) unreadStf else unreadCust
+
         return ChatConversation(
             id = id,
             customerId = customerId,
+            customerName = customerName,
+            customerPhone = customerPhone,
             assignedStaffId = assignedStaffId,
             orderId = orderId,
             title = title,
@@ -412,7 +442,10 @@ class FirestoreChatService(
             status = status,
             curatorName = curatorName,
             curatorRole = curatorRole,
-            isOnline = isOnline
+            isOnline = isOnline,
+            createdAtMillis = createdMillis,
+            updatedAtMillis = updatedMillis,
+            unreadCount = effectiveUnread
         )
     }
 
@@ -440,6 +473,11 @@ class FirestoreChatService(
             else -> MessageDeliveryStatus.SENT
         }
 
+        val createdTimestamp = data["createdAt"] as? com.google.firebase.Timestamp
+        val createdMillis = (data["createdAtMillis"] as? Number)?.toLong()
+            ?: createdTimestamp?.toDate()?.time
+            ?: System.currentTimeMillis()
+
         return ChatMessage(
             id = id,
             conversationId = conversationId,
@@ -453,7 +491,8 @@ class FirestoreChatService(
             isFromUser = isFromUser,
             timestamp = timeFormatted,
             isRead = isRead,
-            status = status
+            status = status,
+            createdAtMillis = createdMillis
         )
     }
 }

@@ -897,17 +897,26 @@ private fun AdminSupportContent(
             ) {
                 items(conversations, key = { it.id }) { conv ->
                     val matchingUser = customers.find { it.id == conv.customerId }
-                    val displayTitle = conv.title.ifBlank { matchingUser?.fullName ?: "Müştəri" }
+                    val customerFullName = matchingUser?.fullName?.takeIf { it.isNotBlank() }
+                        ?: conv.customerName?.takeIf { it.isNotBlank() && !it.contains("Müştəri Xidmətləri", true) }
+                        ?: "Müştəri"
+                    val displayTitle = customerFullName
                     val subInfo = matchingUser?.phone?.takeIf { it.isNotBlank() }
                         ?: matchingUser?.university?.takeIf { it.isNotBlank() }
+                        ?: conv.customerPhone?.takeIf { it.isNotBlank() }
                         ?: "Canlı Müştəri Sorğusu"
+                    val adminUnread = conv.getEffectiveUnreadCount(isStaff = true)
 
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
                             .clickable { onOpenChat(conv) }
-                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(14.dp)),
+                            .border(
+                                1.dp,
+                                if (adminUnread > 0) BirbankRed else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                RoundedCornerShape(14.dp)
+                            ),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Row(
@@ -933,12 +942,16 @@ private fun AdminSupportContent(
                                     Text(
                                         text = displayTitle,
                                         style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
                                     )
                                     Text(
                                         text = conv.lastMessageTime,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
                                     )
                                 }
                                 Text(
@@ -951,12 +964,13 @@ private fun AdminSupportContent(
                                     text = conv.lastMessageText.ifBlank { "Yeni söhbət başlandı" },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
                             }
-                            if (conv.unreadCount > 0) {
+                            if (adminUnread > 0) {
                                 Badge(containerColor = BirbankRed, contentColor = Color.White) {
-                                    Text("${conv.unreadCount}", fontWeight = FontWeight.Bold)
+                                    Text("$adminUnread", fontWeight = FontWeight.Bold)
                                 }
                             }
                             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = BirbankRed)
@@ -1866,6 +1880,7 @@ private fun AdminOrderChatsContent(
                         ) {
                             Icon(Icons.Default.AssignmentInd, contentDescription = null, tint = BirbankRed)
                         }
+                        val adminUnread = conv.getEffectiveUnreadCount(isStaff = true)
                         Column(modifier = Modifier.weight(1f)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1875,12 +1890,16 @@ private fun AdminOrderChatsContent(
                                 Text(
                                     text = conv.title,
                                     style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
                                 )
                                 Text(
                                     text = conv.lastMessageTime,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
                                 )
                             }
                             Spacer(modifier = Modifier.height(4.dp))
@@ -1888,12 +1907,13 @@ private fun AdminOrderChatsContent(
                                 text = conv.lastMessageText.ifBlank { "Sifariş üzrə yeni mesaj" },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
                         }
-                        if (conv.unreadCount > 0) {
+                        if (adminUnread > 0) {
                             Badge(containerColor = BirbankRed, contentColor = Color.White) {
-                                Text("${conv.unreadCount}", fontWeight = FontWeight.Bold)
+                                Text("$adminUnread", fontWeight = FontWeight.Bold)
                             }
                         }
                     }

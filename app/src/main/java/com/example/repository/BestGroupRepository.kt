@@ -1341,7 +1341,9 @@ class BestGroupRepository(
     }
 
     suspend fun markConversationAsRead(conversationId: String) {
-        val isStaff = _currentUser.value?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR)
+        val isStaff = _currentUser.value?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
+                      FirebaseAuthService.isSuperAdminEmail(_currentUser.value?.email) ||
+                      FirebaseAuthService.isSuperAdminEmail(authService?.currentUser?.email)
         if (chatService != null) {
             try {
                 chatService.markConversationAsRead(conversationId, isStaff)
@@ -1349,8 +1351,19 @@ class BestGroupRepository(
         }
         _conversations.value = _conversations.value.map { conv ->
             if (conv.id == conversationId) {
-                if (isStaff) conv.copy(unreadForStaff = 0) else conv.copy(unreadForCustomer = 0)
+                if (isStaff) {
+                    conv.copy(unreadForStaff = 0, unreadCount = 0)
+                } else {
+                    conv.copy(unreadForCustomer = 0, unreadCount = 0)
+                }
             } else conv
+        }
+        // Mark messages as read in memory immediately
+        val msgs = _messages.value[conversationId]
+        if (!msgs.isNullOrEmpty()) {
+            val updatedMap = _messages.value.toMutableMap()
+            updatedMap[conversationId] = msgs.map { it.copy(isRead = true, status = MessageDeliveryStatus.READ) }
+            _messages.value = updatedMap
         }
     }
 
