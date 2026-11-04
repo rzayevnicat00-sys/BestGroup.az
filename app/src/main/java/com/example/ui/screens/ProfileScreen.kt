@@ -101,6 +101,7 @@ fun ProfileScreen(
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showRegisteredUsersDialog by remember { mutableStateOf(false) }
+    var showAppUpdateInfoDialog by remember { mutableStateOf(false) }
 
     val allRegisteredUsers by viewModel.allRegisteredUsers.collectAsState()
 
@@ -230,8 +231,11 @@ fun ProfileScreen(
                             shape = RoundedCornerShape(12.dp),
                             color = BirbankRedLight
                         ) {
+                            val roleText = user?.role?.title ?: "Müştəri"
+                            val uniText = user?.university?.takeIf { it.isNotBlank() } ?: "BestGroup.az"
+                            val displayUni = if (uniText.length > 28) "${uniText.take(28)}..." else uniText
                             Text(
-                                text = "${user?.role?.title} • ${user?.university?.take(28)}...",
+                                text = "$roleText • $displayUni",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = BirbankRed,
                                 fontWeight = FontWeight.SemiBold,
@@ -538,19 +542,22 @@ fun ProfileScreen(
                             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                         }
 
+                        val latestUpdate by viewModel.latestAppUpdate.collectAsState()
+                        val isUpdateAvail by viewModel.isUpdateAvailable.collectAsState()
+                        val currentVerName = viewModel.repository.currentAppVersionName
+                        val latestVerName = latestUpdate?.versionName ?: "2.0.0"
+                        val updateSubtitle = if (isUpdateAvail) {
+                            "Son versiya: v$latestVerName (Cari: v$currentVerName) • Yenilənmə var"
+                        } else {
+                            "Cari versiya: v$currentVerName • Serverdəki son versiya: v$latestVerName"
+                        }
+
                         ProfileMenuItem(
                             icon = Icons.Default.SystemUpdate,
                             title = "Tətbiq Yeniləməsi",
-                            subtitle = "v1.0 (Build 1) • Birbaşa yenilənmə",
+                            subtitle = updateSubtitle,
                             onClick = {
-                                val isAvail = viewModel.isUpdateAvailable.value
-                                if (isAvail) {
-                                    viewModel.checkOrShowUpdate()
-                                } else {
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar("Tətbiqiniz ən son versiyadadır (v1.0)")
-                                    }
-                                }
+                                showAppUpdateInfoDialog = true
                             },
                             tag = "profile_menu_update"
                         )
@@ -753,6 +760,253 @@ fun ProfileScreen(
             users = allRegisteredUsers,
             viewModel = viewModel,
             onDismiss = { showRegisteredUsersDialog = false }
+        )
+    }
+
+    // App Update Info Dialog
+    if (showAppUpdateInfoDialog) {
+        val latestUpdate by viewModel.latestAppUpdate.collectAsState()
+        val isUpdateAvail by viewModel.isUpdateAvailable.collectAsState()
+        val currentVerName = viewModel.repository.currentAppVersionName
+        val currentVerCode = viewModel.repository.currentAppVersionCode
+        val latestVerName = latestUpdate?.versionName ?: "2.0.0"
+        val latestVerCode = latestUpdate?.versionCode ?: 2L
+        val downloadProgress by com.example.services.update.InAppUpdateInstaller.downloadState.collectAsState()
+
+        AlertDialog(
+            onDismissRequest = {
+                if (!downloadProgress.isDownloading) {
+                    showAppUpdateInfoDialog = false
+                }
+            },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(BirbankRedLight),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SystemUpdate,
+                        contentDescription = "Tətbiq Yeniləməsi",
+                        tint = BirbankRed,
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
+            },
+            title = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = if (isUpdateAvail) "Yeni versiya mövcuddur!" else "Tətbiqiniz ən son versiyadadır",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        color = if (isUpdateAvail) BirbankRedLight else Color(0xFFF0FDF4),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = if (isUpdateAvail) {
+                                "Cari: v$currentVerName (Build $currentVerCode) → Yeni: v$latestVerName (Build $latestVerCode)"
+                            } else {
+                                "Versiya: v$currentVerName (Build $currentVerCode) • Ən son"
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (isUpdateAvail) BirbankRed else Color(0xFF15803D),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    val notes = latestUpdate?.effectiveReleaseNotes
+                        ?: "BestGroup.az platformasının ən son versiyası bütün təhlükəsizlik yeniliklərini və optimallaşdırmaları əhatə edir."
+                    Text(
+                        text = notes,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Surface(
+                        color = Color(0xFFF8FAFC),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    "Cari quraşdırılmış versiya:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = BirbankTextSecondary
+                                )
+                                Text(
+                                    "v$currentVerName ($currentVerCode)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    "Serverdəki ən son versiya:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = BirbankTextSecondary
+                                )
+                                Text(
+                                    "v$latestVerName ($latestVerCode)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BirbankRed
+                                )
+                            }
+                        }
+                    }
+
+                    // Download progress display
+                    if (downloadProgress.isDownloading) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { downloadProgress.progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            color = BirbankRed,
+                            trackColor = BirbankRedLight
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Yüklənir: ${(downloadProgress.progress * 100).toInt()}%",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = BirbankRed
+                            )
+                            val downloadedMb = downloadProgress.downloadedBytes / (1024.0 * 1024.0)
+                            val totalMb = if (downloadProgress.totalBytes > 0) {
+                                downloadProgress.totalBytes / (1024.0 * 1024.0)
+                            } else {
+                                latestUpdate?.apkSizeMb ?: 15.0
+                            }
+                            Text(
+                                text = "${String.format("%.1f", downloadedMb)} / ${String.format("%.1f", totalMb)} MB",
+                                fontSize = 11.sp,
+                                color = BirbankTextSecondary
+                            )
+                        }
+                    } else if (downloadProgress.isCompleted && downloadProgress.downloadedFile != null) {
+                        Surface(
+                            color = Color(0xFFEFF6FF),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp)
+                        ) {
+                            Text(
+                                text = "Paket hazırdır və yoxlanıldı! Aşağıdakı düyməyə toxunaraq quraşdırın.",
+                                fontSize = 11.sp,
+                                color = Color(0xFF1D4ED8),
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    } else if (downloadProgress.errorMessage != null) {
+                        Surface(
+                            color = BirbankRedLight,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 6.dp)
+                        ) {
+                            Text(
+                                text = downloadProgress.errorMessage ?: "Xəta baş verdi.",
+                                fontSize = 11.sp,
+                                color = BirbankRed,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (isUpdateAvail) {
+                    Button(
+                        onClick = {
+                            if (downloadProgress.isCompleted && downloadProgress.downloadedFile != null) {
+                                if (com.example.services.update.InAppUpdateInstaller.canInstallPackages(context)) {
+                                    com.example.services.update.InAppUpdateInstaller.installApk(context, downloadProgress.downloadedFile!!)
+                                } else {
+                                    com.example.services.update.InAppUpdateInstaller.requestInstallPermission(context)
+                                }
+                            } else {
+                                val url = latestUpdate?.apkDownloadUrl ?: ""
+                                coroutineScope.launch {
+                                    com.example.services.update.InAppUpdateInstaller.downloadApk(context, url)
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
+                        enabled = !downloadProgress.isDownloading,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = if (downloadProgress.isCompleted && downloadProgress.downloadedFile != null) {
+                                "Quraşdır"
+                            } else if (downloadProgress.isDownloading) {
+                                "Yüklənir..."
+                            } else {
+                                "İndi Yenilə"
+                            },
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            viewModel.repository.checkOrShowUpdate()
+                            showAppUpdateInfoDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Tamam", fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showAppUpdateInfoDialog = false },
+                    enabled = !downloadProgress.isDownloading
+                ) {
+                    Text(localizedString(StringKey.BTN_CLOSE))
+                }
+            }
         )
     }
 }

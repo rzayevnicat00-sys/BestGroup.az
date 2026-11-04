@@ -736,6 +736,13 @@ private fun Step5DeadlinePriority(state: com.example.viewmodel.OrderWizardUiStat
 
 @Composable
 private fun Step6FormattingNotes(state: com.example.viewmodel.OrderWizardUiState, viewModel: MainViewModel) {
+    val isThesisOrDissertation = state.selectedService in listOf(
+        ServiceType.DIPLOMA,
+        ServiceType.MASTER
+    ) || (state.selectedCatalogService?.serviceId in listOf("diploma", "master", "phd_dissertation")) ||
+         (state.selectedCatalogService?.nameAz?.contains("diplom", ignoreCase = true) == true) ||
+         (state.selectedCatalogService?.nameAz?.contains("dissertasiya", ignoreCase = true) == true)
+
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
             text = localizedString(StringKey.WIZARD_FORMAT_STANDARD_LABEL),
@@ -746,7 +753,12 @@ private fun Step6FormattingNotes(state: com.example.viewmodel.OrderWizardUiState
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        val standards = listOf("APA 7th Edition", "Harvard Reference", "AAK Standartı", "MLA 9th Edition", "IEEE Format")
+        // AAK Standartı yalnız Diplom işi və Dissertasiyalar üçün göstərilir
+        val standards = if (isThesisOrDissertation) {
+            listOf("AAK Standartı", "APA 7th Edition", "Harvard Reference", "MLA 9th Edition", "IEEE Format")
+        } else {
+            listOf("APA 7th Edition", "Harvard Reference", "MLA 9th Edition", "IEEE Format")
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -759,6 +771,88 @@ private fun Step6FormattingNotes(state: com.example.viewmodel.OrderWizardUiState
                     onClick = { viewModel.updateWizardState { it.copy(formattingStandard = std) } },
                     label = { Text(std, fontSize = 11.sp) }
                 )
+            }
+        }
+
+        if (standards.size > 3) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                standards.drop(3).forEach { std ->
+                    val isSel = state.formattingStandard == std
+                    FilterChip(
+                        selected = isSel,
+                        onClick = { viewModel.updateWizardState { it.copy(formattingStandard = std) } },
+                        label = { Text(std, fontSize = 11.sp) }
+                    )
+                }
+            }
+        }
+
+        // AAK Yoxlaması və Təsdiqi: YALNIZ Diplom işi və Dissertasiyalar üçün göstərilir
+        if (isThesisOrDissertation) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        viewModel.updateWizardState { it.copy(isAakVerification = !it.isAakVerification) }
+                    },
+                colors = CardDefaults.cardColors(
+                    containerColor = if (state.isAakVerification) com.example.ui.theme.BirbankRedLight else MaterialTheme.colorScheme.surfaceVariant
+                ),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (state.isAakVerification) com.example.ui.theme.BirbankRed else Color.Transparent
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Checkbox(
+                        checked = state.isAakVerification,
+                        onCheckedChange = { checked ->
+                            viewModel.updateWizardState { it.copy(isAakVerification = checked) }
+                        },
+                        colors = CheckboxDefaults.colors(checkedColor = com.example.ui.theme.BirbankRed)
+                    )
+                    Column {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "AAK Anti-plagiat və Metodik Yoxlaması",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = com.example.ui.theme.BirbankTextPrimary
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = com.example.ui.theme.BirbankRed
+                            ) {
+                                Text(
+                                    text = "Rəsmi",
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Yalnız Diplom işi və Dissertasiyalar üçün rəsmi Ali Attestasiya Komissiyası standartlarına uyğunluq və 0% plagiat hesabatı.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = com.example.ui.theme.BirbankTextSecondary
+                        )
+                    }
+                }
             }
         }
 

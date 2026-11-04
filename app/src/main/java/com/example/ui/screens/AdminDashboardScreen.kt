@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.BorderStroke
@@ -20,6 +21,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import kotlinx.coroutines.launch
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.provider.OpenableColumns
 import com.example.ui.theme.ThemeMode
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,6 +101,78 @@ fun AdminDashboardScreen(
     var selectedOrderForAdminAction by remember { mutableStateOf<Order?>(null) }
     var selectedCustomerForDetail by remember { mutableStateOf<User?>(null) }
     var orderFilterStatus by remember { mutableStateOf<OrderStatus?>(null) }
+    var showAdminLogoutDialog by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    var adminFileActionMessage by remember { mutableStateOf<String?>(null) }
+    var orderTargetForUpload by remember { mutableStateOf<String?>(null) }
+
+    val adminOrderFilePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        val targetOrderId = orderTargetForUpload
+        if (!uris.isNullOrEmpty() && targetOrderId != null) {
+            uris.forEach { uri ->
+                val cursor = context.contentResolver.query(uri, null, null, null, null)
+                var name = "admin_material_${System.currentTimeMillis()}"
+                var size = 0L
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val nameIdx = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        val sizeIdx = it.getColumnIndex(OpenableColumns.SIZE)
+                        if (nameIdx != -1) name = it.getString(nameIdx)
+                        if (sizeIdx != -1) size = it.getLong(sizeIdx)
+                    }
+                }
+                if (size <= 0L) {
+                    try {
+                        context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                            size = pfd.statSize
+                        }
+                    } catch (_: Throwable) {}
+                }
+                if (size <= 0L) size = 15000L
+                val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
+                viewModel.adminAttachFileToOrder(
+                    orderId = targetOrderId,
+                    uriString = uri.toString(),
+                    fileName = name,
+                    sizeBytes = size,
+                    mimeType = mime,
+                    onSuccess = {
+                        adminFileActionMessage = "Fayl sifarişə uğurla əlavə edildi: $name"
+                    },
+                    onError = { err ->
+                        adminFileActionMessage = "Xəta: $err"
+                    }
+                )
+            }
+        }
+    }
+
+    if (showAdminLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showAdminLogoutDialog = false },
+            title = { Text("Hesabdan çıxış", fontWeight = FontWeight.Bold) },
+            text = { Text("Hesabınızdan çıxış etmək istədiyinizə əminsiniz?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showAdminLogoutDialog = false
+                        viewModel.logout()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed)
+                ) {
+                    Text("Bəli, çıxış et")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAdminLogoutDialog = false }) {
+                    Text("Ləğv et")
+                }
+            }
+        )
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -130,6 +206,16 @@ fun AdminDashboardScreen(
                         modifier = Modifier.testTag("admin_broadcast_btn")
                     ) {
                         Icon(Icons.Default.Campaign, contentDescription = "Push Bildiriş", tint = BirbankRed)
+                    }
+                    IconButton(
+                        onClick = { showAdminLogoutDialog = true },
+                        modifier = Modifier.testTag("admin_dashboard_logout_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            contentDescription = "Hesabdan çıxış",
+                            tint = BirbankRed
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
@@ -516,6 +602,58 @@ fun AdminDashboardScreen(
                     Icon(Icons.Default.SendToMobile, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Müştəriyə SMS / WhatsApp ilə Mesaj Yaz", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Admin direct order file attachment
+                Button(
+                    onClick = {
+                        orderTargetForUpload = o.id
+                        adminFileActionMessage = null
+                        adminOrderFilePicker.launch(
+                            arrayOf(
+                                "application/pdf",
+                                "application/msword",
+                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                "application/vnd.ms-powerpoint",
+                                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                                "image/*",
+                                "video/mp4",
+                                "*/*"
+                            )
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth().height(46.dp).testTag("admin_order_attach_file_btn"),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B), contentColor = Color.White),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Sifarişə Fayl / Material Əlavə Et (${o.files.size} fayl)", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                if (viewModel.isAttachingFile.value && orderTargetForUpload == o.id) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = BirbankRed)
+                    Text("Fayl yüklənir və sifarişə əlavə olunur...", style = MaterialTheme.typography.labelSmall, color = BirbankRed)
+                }
+
+                if (adminFileActionMessage != null && orderTargetForUpload == o.id) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        color = Color(0xFFDCFCE7),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = adminFileActionMessage ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF15803D),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -1057,15 +1195,17 @@ fun AdminSupportChatDetailView(
                         tint = BirbankRed
                     )
                 }
-                Box(
+                val customerAvatar = matchingUser?.avatarUrl ?: conversation.customerAvatar
+                com.example.ui.components.SafeMediaImage(
+                    model = customerAvatar,
+                    contentDescription = customerDisplayName,
+                    isAvatar = true,
+                    fallbackInitial = customerDisplayName.firstOrNull()?.uppercase()?.toString() ?: "M",
                     modifier = Modifier
                         .size(42.dp)
                         .clip(CircleShape)
-                        .background(BirbankRedLight),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Person, contentDescription = null, tint = BirbankRed)
-                }
+                        .border(1.dp, BirbankBorder, CircleShape)
+                )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Müştəri ilə yazışın ($customerDisplayName)",

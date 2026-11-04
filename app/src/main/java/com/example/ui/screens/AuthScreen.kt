@@ -27,15 +27,28 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
+import com.example.model.User
 import com.example.localization.LocalizationManager
 import com.example.localization.StringKey
 import com.example.localization.localizedString
 import com.example.ui.components.BestGroupLogoBadge
 import com.example.ui.theme.*
 import com.example.viewmodel.MainViewModel
+
+private fun Context.findActivity(): Activity? {
+    var cur = this
+    while (cur is ContextWrapper) {
+        if (cur is Activity) return cur
+        cur = cur.baseContext
+    }
+    return null
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,7 +64,7 @@ fun AuthScreen(
     var loginEmail by remember { mutableStateOf("") }
     var loginPassword by remember { mutableStateOf("") }
     var loginPasswordVisible by remember { mutableStateOf(false) }
-    var rememberMe by remember { mutableStateOf(false) }
+    var rememberMe by remember { mutableStateOf(true) }
 
     // Register tab state - strictly initialized to empty
     var regFullName by remember { mutableStateOf("") }
@@ -63,14 +76,15 @@ fun AuthScreen(
     var regConfirmPassword by remember { mutableStateOf("") }
     var regPasswordVisible by remember { mutableStateOf(false) }
 
-    // Phone OTP Verification State
+    // Real Phone OTP Verification State (Firebase Phone Auth)
     var showOtpDialog by remember { mutableStateOf(false) }
     var otpInput by remember { mutableStateOf("") }
     var otpTimerSeconds by remember { mutableIntStateOf(60) }
     var otpAttempts by remember { mutableIntStateOf(0) }
     var otpError by remember { mutableStateOf<String?>(null) }
-    var generatedOtpCode by remember { mutableStateOf("") }
-    var otpGeneratedAt by remember { mutableLongStateOf(0L) }
+    var phoneVerificationId by remember { mutableStateOf("") }
+    var isSendingSms by remember { mutableStateOf(false) }
+    var isVerifyingOtp by remember { mutableStateOf(false) }
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showForgotPasswordDialog by remember { mutableStateOf(false) }
@@ -78,7 +92,7 @@ fun AuthScreen(
 
     val scrollState = rememberScrollState()
 
-    LaunchedEffect(showOtpDialog, otpGeneratedAt) {
+    LaunchedEffect(showOtpDialog) {
         if (showOtpDialog) {
             otpTimerSeconds = 60
             while (otpTimerSeconds > 0) {
@@ -104,25 +118,61 @@ fun AuthScreen(
         )
     }
 
+    fun startRegisterSmsVerification() {
+        val rawPhone = regPhone.trim().replace(" ", "").replace("-", "")
+        val cleanPhone = if (rawPhone.startsWith("+")) rawPhone else "+$rawPhone"
+        val activity = context.findActivity()
+        if (activity == null) {
+            performRegistration(phoneVerified = false)
+            return
+        }
+
+        isSendingSms = true
+        errorMessage = null
+        viewModel.startPhoneSmsVerification(
+            activity = activity,
+            phone = cleanPhone,
+            onCodeSent = { vId ->
+                isSendingSms = false
+                phoneVerificationId = vId
+                otpInput = ""
+                otpError = null
+                otpAttempts = 0
+                otpTimerSeconds = 60
+                showOtpDialog = true
+            },
+            onError = { err ->
+                isSendingSms = false
+                errorMessage = err
+            }
+        )
+    }
+
     fun validateAndProceed() {
         errorMessage = null
         if (isLogin) {
-            val emailClean = loginEmail.trim()
-            if (!emailClean.contains("@") || !emailClean.contains(".")) {
-                errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_EMAIL_INVALID)
-                return
-            }
+            val inputClean = loginEmail.trim()
             if (loginPassword.length < 6) {
                 errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_PASSWORD_SHORT)
                 return
             }
-            viewModel.login(
-                email = emailClean,
-                pass = loginPassword,
-                rememberMe = rememberMe,
-                onSuccess = onAuthSuccess,
-                onError = { err -> errorMessage = err }
-            )
+            if (inputClean.contains("@")) {
+                viewModel.login(
+                    email = inputClean,
+                    pass = loginPassword,
+                    rememberMe = rememberMe,
+                    onSuccess = onAuthSuccess,
+                    onError = { err -> errorMessage = err }
+                )
+            } else {
+                viewModel.loginWithPhone(
+                    phone = inputClean,
+                    pass = loginPassword,
+                    rememberMe = rememberMe,
+                    onSuccess = onAuthSuccess,
+                    onError = { err -> errorMessage = err }
+                )
+            }
         } else {
             if (regFullName.isBlank()) {
                 errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_NAME_REQUIRED)
@@ -133,14 +183,14 @@ fun AuthScreen(
                 errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_EMAIL_INVALID)
                 return
             }
-            val cleanPhone = regPhone.trim().replace(" ", "").replace("-", "")
-            if (cleanPhone.isBlank()) {
+            val rawPhone = regPhone.trim().replace(" ", "").replace("-", "")
+            if (rawPhone.isBlank()) {
                 errorMessage = LocalizationManager.getString(StringKey.AUTH_ERR_PHONE_REQUIRED)
                 return
             }
-            // Strict international phone format check (+994XXXXXXXXX or +[country_code][number])
-            val phoneRegex = Regex("^\\+[1-9]\\d{8,14}$")
-            if (!phoneRegex.matches(cleanPhone)) {
+            val cleanPhone = if (rawPhone.startsWith("+")) rawPhone else "+$rawPhone"
+            val digitsOnly = cleanPhone.filter { it.isDigit() }
+            if (digitsOnly.length < 9) {
                 errorMessage = "Telefon nömrəsi beynəlxalq formatda olmalıdır (məsələn: +994501234567)"
                 return
             }
@@ -153,14 +203,8 @@ fun AuthScreen(
                 return
             }
 
-            // Launch 6-digit OTP verification dialog
-            val code = (100000..999999).random().toString()
-            generatedOtpCode = code
-            otpGeneratedAt = System.currentTimeMillis()
-            otpInput = ""
-            otpError = null
-            otpAttempts = 0
-            showOtpDialog = true
+            // Real Firebase Phone Auth SMS dispatch
+            startRegisterSmsVerification()
         }
     }
 
@@ -562,7 +606,8 @@ fun AuthScreen(
 
         var phoneOtpSent by remember { mutableStateOf(false) }
         var phoneOtpInput by remember { mutableStateOf("") }
-        var phoneOtpGeneratedCode by remember { mutableStateOf("") }
+        var phoneVerificationId by remember { mutableStateOf("") }
+        var phoneResetUser by remember { mutableStateOf<User?>(null) }
         var phoneNewPassword by remember { mutableStateOf("") }
         var phoneNewPasswordConfirm by remember { mutableStateOf("") }
         var phoneResetSuccess by remember { mutableStateOf(false) }
@@ -648,7 +693,7 @@ fun AuthScreen(
                             )
                         }
                     } else {
-                        // --- SMS OTP RESET ---
+                        // --- REAL SMS OTP RESET ---
                         if (phoneResetSuccess) {
                             Surface(
                                 color = Color(0xFFF0FDF4),
@@ -667,75 +712,34 @@ fun AuthScreen(
                             }
                         } else if (!phoneOtpSent) {
                             Text(
-                                "Qeydiyyatdan keçdiyiniz mobil nömrənizi və ya e-mail ünvanınızı daxil edin. Təsdiq kodu təqdim ediləcək:",
+                                "Qeydiyyatdan keçdiyiniz mobil nömrənizi daxil edin. Mobil telefonunuza həqiqi SMS OTP kodu göndəriləcək:",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = BirbankTextSecondary
                             )
                             OutlinedTextField(
                                 value = resetPhone,
                                 onValueChange = { resetPhone = it; phoneResetError = null },
-                                label = { Text("Mobil nömrə və ya E-mail") },
-                                placeholder = { Text("+994 (50) 123-45-67 və ya ad@example.com") },
+                                label = { Text("Mobil nömrə") },
+                                placeholder = { Text("+994 (50) 123-45-67") },
                                 leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = BirbankRed) },
                                 singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.fillMaxWidth()
                             )
                         } else {
-                            // OTP is sent - enter code and new password
+                            // OTP is sent via SMS to phone - enter code and new password
                             Text(
-                                "Təsdiq kodu $resetPhone üçün hazırdır. Yeni şifrənizi təyin edin:",
+                                "6 rəqəmli OTP təsdiq kodu ${phoneResetUser?.phone?.ifBlank { resetPhone }} nömrəsinə SMS vasitəsilə göndərildi. Zəhmət olmasa daxil edin:",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = BirbankTextSecondary
                             )
-                            if (phoneOtpGeneratedCode.isNotBlank()) {
-                                Surface(
-                                    color = BirbankRedLight,
-                                    shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = BirbankRed, modifier = Modifier.size(20.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = "📩 SMS Təsdiq Kodu: $phoneOtpGeneratedCode",
-                                                fontWeight = FontWeight.Bold,
-                                                color = BirbankRed,
-                                                fontSize = 14.sp
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = "Təsdiq kodu bazada qeydə alındı. Mobil operator tərəfindən SMS gecikməsi olarsa, bu 6 rəqəmli kodu birbaşa istifadə edə bilərsiniz.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = BirbankTextPrimary
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        OutlinedButton(
-                                            onClick = {
-                                                val clean = resetPhone.trim().filter { it.isDigit() || it == '+' }
-                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:$clean?body=${Uri.encode("BestGroup.az şifrə bərpa kodu: $phoneOtpGeneratedCode")}"))
-                                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                try { context.startActivity(intent) } catch (_: Exception) {}
-                                            },
-                                            shape = RoundedCornerShape(8.dp),
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(Icons.Default.SendToMobile, contentDescription = null, modifier = Modifier.size(16.dp), tint = BirbankRed)
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("SMS tətbiqində aç / Göndər", fontSize = 12.sp, color = BirbankTextPrimary, fontWeight = FontWeight.SemiBold)
-                                        }
-                                    }
-                                }
-                            }
                             OutlinedTextField(
                                 value = phoneOtpInput,
                                 onValueChange = { if (it.length <= 6 && it.all { ch -> ch.isDigit() }) phoneOtpInput = it },
                                 label = { Text("6 rəqəmli OTP kodu") },
-                                placeholder = { Text("123456") },
+                                placeholder = { Text("SMS kodunu daxil edin") },
+                                leadingIcon = { Icon(Icons.Default.LockClock, contentDescription = null, tint = BirbankRed) },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                                 shape = RoundedCornerShape(10.dp),
@@ -784,22 +788,32 @@ fun AuthScreen(
                         } else {
                             if (phoneResetSuccess) {
                                 showForgotPasswordDialog = false
+                                if (phoneResetUser != null) {
+                                    loginEmail = phoneResetUser?.email?.ifBlank { phoneResetUser?.phone } ?: resetPhone
+                                }
+                                isLogin = true
                             } else if (!phoneOtpSent) {
                                 val rawInput = resetPhone.trim()
-                                val isEmail = rawInput.contains("@")
                                 val digits = rawInput.filter { it.isDigit() }
-                                if (!isEmail && digits.length < 7) {
-                                    phoneResetError = "Mobil nömrənizi və ya e-mail ünvanınızı düzgün daxil edin."
+                                if (digits.length < 7) {
+                                    phoneResetError = "Mobil nömrənizi düzgün daxil edin (məsələn: +994501234567)."
                                     return@Button
                                 }
-                                val clean = if (isEmail) rawInput else rawInput.filter { it.isDigit() || it == '+' }
+                                val activity = context.findActivity()
+                                if (activity == null) {
+                                    phoneResetError = "Tətbiq aktiv pəncərəsi tapılmadı."
+                                    return@Button
+                                }
                                 isResetSubmitting = true
-                                viewModel.requestPhoneResetOtp(
-                                    phone = clean,
-                                    onSent = { code ->
+                                phoneResetError = null
+                                viewModel.requestPhonePasswordResetSms(
+                                    activity = activity,
+                                    phoneOrEmail = rawInput,
+                                    onCodeSent = { vId, foundUser ->
+                                        phoneVerificationId = vId
+                                        phoneResetUser = foundUser
                                         phoneOtpSent = true
-                                        phoneOtpGeneratedCode = code
-                                        phoneOtpInput = code
+                                        phoneOtpInput = ""
                                         isResetSubmitting = false
                                     },
                                     onError = { err ->
@@ -809,7 +823,7 @@ fun AuthScreen(
                                 )
                             } else {
                                 if (phoneOtpInput.length < 6) {
-                                    phoneResetError = "6 rəqəmli OTP kodunu daxil edin."
+                                    phoneResetError = "6 rəqəmli SMS OTP kodunu daxil edin."
                                     return@Button
                                 }
                                 if (phoneNewPassword.length < 6) {
@@ -821,9 +835,11 @@ fun AuthScreen(
                                     return@Button
                                 }
                                 isResetSubmitting = true
+                                phoneResetError = null
                                 viewModel.completePhonePasswordReset(
-                                    phone = resetPhone,
-                                    enteredOtp = phoneOtpInput,
+                                    verificationId = phoneVerificationId,
+                                    enteredOtp = phoneOtpInput.trim(),
+                                    userId = phoneResetUser?.id ?: "",
                                     newPass = phoneNewPassword,
                                     onSuccess = {
                                         phoneResetSuccess = true
@@ -842,14 +858,18 @@ fun AuthScreen(
                     shape = RoundedCornerShape(10.dp),
                     enabled = !isResetSubmitting
                 ) {
-                    val btnText = when {
-                        resetMode == 0 && emailResetSent -> "Bağla"
-                        resetMode == 0 -> "E-mail ilə bərpa et"
-                        phoneResetSuccess -> "Girişə qayıt"
-                        !phoneOtpSent -> "SMS ilə kod göndər"
-                        else -> "Şifrəni yenilə"
+                    if (isResetSubmitting) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        val btnText = when {
+                            resetMode == 0 && emailResetSent -> "Bağla"
+                            resetMode == 0 -> "E-mail ilə bərpa et"
+                            phoneResetSuccess -> "Girişə qayıt"
+                            !phoneOtpSent -> "SMS ilə kod göndər"
+                            else -> "Şifrəni yenilə"
+                        }
+                        Text(btnText, fontWeight = FontWeight.Bold)
                     }
-                    Text(btnText, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -862,9 +882,10 @@ fun AuthScreen(
         )
     }
 
-    // Phone Verification (OTP) Modal
+    // Real Phone Verification (OTP) Modal for Registration
     if (showOtpDialog) {
-        val cleanPhone = regPhone.trim().replace(" ", "").replace("-", "")
+        val rawPhone = regPhone.trim().replace(" ", "").replace("-", "")
+        val cleanPhone = if (rawPhone.startsWith("+")) rawPhone else "+$rawPhone"
         AlertDialog(
             onDismissRequest = { /* Modal: require completion or explicit cancel */ },
             title = {
@@ -879,31 +900,9 @@ fun AuthScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "6 rəqəmli OTP təsdiq kodu $cleanPhone nömrəsinə göndərildi.",
+                        text = "6 rəqəmli OTP təsdiq kodu $cleanPhone nömrəsinə SMS vasitəsilə göndərildi. Zəhmət olmasa daxil edin:",
                         style = MaterialTheme.typography.bodyMedium
                     )
-
-                    // Information box regarding real SMS vs demo/sandbox environment
-                    Surface(
-                        color = BirbankRedLight,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = "🔒 Təhlükəsizlik Sistemi",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = BirbankRed
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Firebase Console-da SMS kvotası və Phone Auth aktivləşdirilənədək sandbox təhlükəsizlik kodu: $generatedOtpCode",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = BirbankTextPrimary
-                            )
-                        }
-                    }
 
                     if (otpError != null) {
                         Text(
@@ -923,7 +922,7 @@ fun AuthScreen(
                             }
                         },
                         label = { Text("6 rəqəmli OTP kodu") },
-                        placeholder = { Text("Məs: 123456") },
+                        placeholder = { Text("SMS kodunu daxil edin") },
                         leadingIcon = { Icon(Icons.Default.LockClock, contentDescription = null, tint = BirbankRed) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         singleLine = true,
@@ -944,17 +943,13 @@ fun AuthScreen(
                         TextButton(
                             onClick = {
                                 if (otpTimerSeconds == 0) {
-                                    val code = (100000..999999).random().toString()
-                                    generatedOtpCode = code
-                                    otpGeneratedAt = System.currentTimeMillis()
-                                    otpTimerSeconds = 60
-                                    otpError = null
+                                    startRegisterSmsVerification()
                                 }
                             },
-                            enabled = otpTimerSeconds == 0
+                            enabled = otpTimerSeconds == 0 && !isSendingSms
                         ) {
                             Text(
-                                "Yenidən göndər",
+                                if (isSendingSms) "Göndərilir..." else "Yenidən göndər",
                                 color = if (otpTimerSeconds == 0) BirbankRed else MaterialTheme.colorScheme.outline
                             )
                         }
@@ -964,29 +959,41 @@ fun AuthScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        val now = System.currentTimeMillis()
-                        if (now - otpGeneratedAt > 120_000L) {
-                            otpError = "OTP kodunun etibarlılıq vaxtı (2 dəq) bitib. Yenidən göndərin."
+                        if (otpInput.length < 6) {
+                            otpError = "6 rəqəmli SMS OTP kodunu tam daxil edin."
                             return@Button
                         }
                         if (otpAttempts >= 5) {
-                            otpError = "Çox sayda yanlış cəhd edildi. Zəhmət olmasa bir qədər sonra cəhd edin."
-                            return@Button
-                        }
-                        if (otpInput.trim() != generatedOtpCode) {
-                            otpAttempts += 1
-                            otpError = "Daxil edilən 6 rəqəmli kod yanlışdır. Qalan cəhdlər: ${5 - otpAttempts}"
+                            otpError = "Çox sayda yanlış cəhd edildi. Zəhmət olmasa yenidən kod tələb edin."
                             return@Button
                         }
 
-                        // OTP Verified successfully!
-                        showOtpDialog = false
-                        performRegistration(phoneVerified = true)
+                        isVerifyingOtp = true
+                        otpError = null
+                        viewModel.verifyPhoneSmsOtp(
+                            verificationId = phoneVerificationId,
+                            smsCode = otpInput.trim(),
+                            onSuccess = {
+                                isVerifyingOtp = false
+                                showOtpDialog = false
+                                performRegistration(phoneVerified = true)
+                            },
+                            onError = { err ->
+                                isVerifyingOtp = false
+                                otpAttempts += 1
+                                otpError = "$err Qalan cəhdlər: ${5 - otpAttempts}"
+                            }
+                        )
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
+                    enabled = !isVerifyingOtp,
                     modifier = Modifier.testTag("auth_otp_verify_btn")
                 ) {
-                    Text("Təsdiq et və Davam et")
+                    if (isVerifyingOtp) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Təsdiq et və Davam et")
+                    }
                 }
             },
             dismissButton = {

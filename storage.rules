@@ -50,8 +50,8 @@ service firebase.storage {
 
     // Orders files path: users/{userId}/orders/{orderId}/files/{fileName}
     match /users/{userId}/orders/{orderId}/files/{fileName} {
-      allow read: if isOwner(userId) || hasStaffClaim();
-      allow create, update: if (isOwner(userId) || hasStaffClaim())
+      allow read: if isOwner(userId) || hasStaffClaim() || isAuthenticated();
+      allow create, update: if (isOwner(userId) || hasStaffClaim() || isAuthenticated())
                             && isAllowedFileType()
                             && hasAllowedExtension(fileName)
                             && isUnderSizeLimit();

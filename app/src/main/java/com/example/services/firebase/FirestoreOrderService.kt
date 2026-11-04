@@ -71,7 +71,8 @@ class FirestoreOrderService(
         serviceCatalogItem: ServiceCatalogItem? = null,
         customerName: String = "",
         customerPhone: String = "",
-        customerEmail: String = ""
+        customerEmail: String = "",
+        isAakVerification: Boolean = false
     ): Order {
         if (userId.isBlank()) {
             throw IllegalStateException("İstifadəçi daxil olmayıb. Sifariş yaratmaq üçün giriş edin.")
@@ -173,6 +174,7 @@ class FirestoreOrderService(
             "deadline" to deadline,
             "priority" to priority.name.lowercase(),
             "formattingStandard" to formattingStandard,
+            "isAakVerification" to isAakVerification,
             "additionalNotes" to specialNotes,
             "notes" to specialNotes,
             "status" to "waiting",
@@ -492,7 +494,8 @@ class FirestoreOrderService(
                 estimatedPriceAzn = (data["estimatedPriceAzn"] as? Number)?.toInt() ?: 0,
                 customerName = data["customerName"] as? String ?: "",
                 customerPhone = data["customerPhone"] as? String ?: "",
-                customerEmail = data["customerEmail"] as? String ?: ""
+                customerEmail = data["customerEmail"] as? String ?: "",
+                isAakVerification = (data["isAakVerification"] as? Boolean) ?: false
             )
         } catch (e: Exception) {
             android.util.Log.e("FirestoreOrderService", "Failed to parse order doc $docId: ${e.message}", e)

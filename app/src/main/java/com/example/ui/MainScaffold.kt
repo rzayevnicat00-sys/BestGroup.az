@@ -47,7 +47,7 @@ fun MainApp(viewModel: MainViewModel) {
     val notifications by viewModel.notifications.collectAsState()
     val unreadNotifsCount = remember(notifications) { notifications.count { !it.isRead } }
     val currentUser by viewModel.currentUser.collectAsState()
-    val isUserLoggedIn = currentUser != null || viewModel.repository.isUserLoggedIn()
+    val isUserLoggedIn = currentUser != null && destination != AppDestination.AUTH && viewModel.repository.isUserLoggedIn()
 
     // Real-time presence heartbeat while user is active in foreground
     LaunchedEffect(currentUser) {

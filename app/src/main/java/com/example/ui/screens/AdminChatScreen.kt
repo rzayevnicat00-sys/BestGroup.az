@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.ChatConversation
 import com.example.ui.components.BestGroupLogoBadge
+import com.example.ui.components.SafeMediaImage
 import com.example.ui.theme.*
 import com.example.viewmodel.MainViewModel
 
@@ -42,6 +44,32 @@ fun AdminChatScreen(
     val customers by viewModel.allRegisteredUsers.collectAsState()
     val orders by viewModel.orders.collectAsState()
     val activeConvId by viewModel.activeConversationId.collectAsState()
+
+    var showAdminLogoutDialog by remember { mutableStateOf(false) }
+
+    if (showAdminLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showAdminLogoutDialog = false },
+            title = { Text("Hesabdan çıxış", fontWeight = FontWeight.Bold) },
+            text = { Text("Hesabınızdan çıxış etmək istədiyinizə əminsiniz?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showAdminLogoutDialog = false
+                        viewModel.logout()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed)
+                ) {
+                    Text("Bəli, çıxış et")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAdminLogoutDialog = false }) {
+                    Text("Ləğv et")
+                }
+            }
+        )
+    }
 
     var selectedConversation by remember { mutableStateOf<ChatConversation?>(null) }
     var selectedCategory by remember { mutableStateOf(AdminChatCategory.ALL) }
@@ -120,6 +148,18 @@ fun AdminChatScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+                        }
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = { showAdminLogoutDialog = true },
+                            modifier = Modifier.testTag("admin_chat_logout_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                contentDescription = "Hesabdan çıxış",
+                                tint = BirbankRed
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
@@ -268,19 +308,17 @@ fun AdminChatScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(46.dp)
-                                            .clip(CircleShape)
-                                            .background(BirbankRedLight),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isOrderChat) Icons.Default.Assignment else Icons.Default.SupportAgent,
-                                            contentDescription = null,
-                                            tint = BirbankRed
-                                        )
-                                    }
+                                val avatarUrl = matchingUser?.avatarUrl ?: conv.customerAvatar
+                                SafeMediaImage(
+                                    model = avatarUrl,
+                                    contentDescription = customerFullName,
+                                    isAvatar = true,
+                                    fallbackInitial = customerFullName.firstOrNull()?.uppercase()?.toString() ?: "M",
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .clip(CircleShape)
+                                        .border(1.dp, BirbankBorder, CircleShape)
+                                )
 
                                     Column(modifier = Modifier.weight(1f)) {
                                         Row(

@@ -110,10 +110,16 @@ data class Order(
     val estimatedPriceAzn: Int = 0,
     val customerName: String = "",
     val customerPhone: String = "",
-    val customerEmail: String = ""
+    val customerEmail: String = "",
+    val isAakVerification: Boolean = false
 ) {
     val orderId: String get() = id
     val customerId: String get() = userId
     val subject: String get() = topic
     val educationLevel: String get() = academicLevel
+    val isThesisOrDissertation: Boolean
+        get() = serviceType in listOf(ServiceType.DIPLOMA, ServiceType.MASTER) ||
+                serviceId in listOf("diploma", "master", "phd_dissertation") ||
+                serviceName.contains("diplom", ignoreCase = true) ||
+                serviceName.contains("dissertasiya", ignoreCase = true)
 }

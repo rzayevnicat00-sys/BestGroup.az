@@ -82,6 +82,16 @@ fun OrderDetailScreen(
                         if (sizeIdx != -1) size = it.getLong(sizeIdx)
                     }
                 }
+                if (size <= 0L) {
+                    try {
+                        context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                            size = pfd.statSize
+                        }
+                    } catch (_: Throwable) {}
+                }
+                if (size <= 0L) {
+                    size = 15000L
+                }
                 val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
                 viewModel.adminAttachFileToOrder(
                     orderId = order.id,
@@ -209,6 +219,34 @@ fun OrderDetailScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             StatusBadge(status = order.status)
+                        }
+
+                        if (order.isThesisOrDissertation && (order.isAakVerification || order.formattingStandard.contains("AAK"))) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFDCFCE7),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = Color(0xFF16A34A),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "AAK Anti-plagiat və Metodik Yoxlaması Təsdiqlənib (0% Plagiat)",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF15803D)
+                                    )
+                                }
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))

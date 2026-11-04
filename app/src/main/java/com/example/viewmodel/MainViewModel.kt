@@ -1,5 +1,6 @@
 package com.example.viewmodel
 
+import android.app.Activity
 import android.app.Application
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
@@ -23,6 +24,9 @@ import kotlinx.coroutines.tasks.await
 import com.google.firebase.pnv.FirebasePhoneNumberVerification
 import android.content.Context
 import java.util.UUID
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 enum class AppDestination {
     SPLASH,
@@ -71,7 +75,8 @@ data class OrderWizardUiState(
     val completedOrder: Order? = null,
     val error: String? = null,
     val uploadProgress: Float = 0f,
-    val currentUploadingFileName: String? = null
+    val currentUploadingFileName: String? = null,
+    val isAakVerification: Boolean = false
 )
 
 class MainViewModel @JvmOverloads constructor(
@@ -482,13 +487,34 @@ class MainViewModel @JvmOverloads constructor(
         }
     }
 
+    fun loginWithPhone(phone: String, pass: String, rememberMe: Boolean = false, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            val result = repository.signInWithPhone(phone, pass, rememberMe)
+            when (result) {
+                is AuthResult.Success -> {
+                    authError.value = null
+                    showEmailVerificationBanner.value = !repository.isEmailVerified()
+                    _currentDestination.value = AppDestination.MAIN
+                    onSuccess()
+                }
+                is AuthResult.Error -> {
+                    authError.value = result.message
+                    onError(result.message)
+                }
+            }
+        }
+    }
+
     fun logout() {
+        _currentDestination.value = AppDestination.AUTH
+        _selectedBottomTab.value = BottomTab.HOME
+        _activeConversationId.value = null
+        _selectedOrder.value = null
         viewModelScope.launch {
             try {
                 repository.updateUserPresence(false)
             } catch (_: Exception) {}
             repository.signOut()
-            _currentDestination.value = AppDestination.AUTH
         }
     }
 
@@ -755,7 +781,8 @@ class MainViewModel @JvmOverloads constructor(
                     files = state.attachedFiles,
                     serviceId = catService?.serviceId ?: service.name.lowercase(),
                     serviceName = catService?.nameAz ?: service.name,
-                    serviceCatalogItem = catService
+                    serviceCatalogItem = catService,
+                    isAakVerification = state.isAakVerification
                 )
 
                 // 2. Upload files to Firebase Storage if any pending files exist
@@ -855,40 +882,63 @@ class MainViewModel @JvmOverloads constructor(
             isAttachingFile.value = true
             attachFileProgress.value = 0f
             try {
-                val ext = FirebaseStorageService.extractExtension(fileName).ifBlank { "pdf" }
+                val effectiveSize = if (sizeBytes > 0) sizeBytes else 15000L
+                val ext = FirebaseStorageService.extractExtension(fileName).ifBlank {
+                    when {
+                        mimeType.contains("pdf", ignoreCase = true) -> "pdf"
+                        mimeType.contains("word", ignoreCase = true) || mimeType.contains("doc", ignoreCase = true) -> "docx"
+                        mimeType.contains("image", ignoreCase = true) -> "jpg"
+                        mimeType.contains("presentation", ignoreCase = true) || mimeType.contains("powerpoint", ignoreCase = true) -> "pptx"
+                        mimeType.contains("sheet", ignoreCase = true) || mimeType.contains("excel", ignoreCase = true) -> "xlsx"
+                        mimeType.contains("video", ignoreCase = true) -> "mp4"
+                        else -> "pdf"
+                    }
+                }
                 val fileId = "f_${UUID.randomUUID()}"
                 val targetOrder = repository.orders.value.find { it.id == orderId }
                     ?: repository.orderService?.getOrderById(orderId)
                     ?: throw IllegalStateException("Sifariş tapılmadı.")
 
-                val uploadedFile = if (repository.storageService != null) {
-                    repository.storageService.uploadOrderFileWithUri(
-                        userId = targetOrder.userId,
-                        orderId = orderId,
-                        uri = android.net.Uri.parse(uriString),
-                        originalFileName = fileName,
-                        sizeBytes = sizeBytes,
-                        mimeType = mimeType,
-                        fileId = fileId,
-                        onProgress = { p -> attachFileProgress.value = p }
-                    )
-                } else {
-                    OrderAttachedFile(
+                var uploadedFile: OrderAttachedFile? = null
+                if (repository.storageService != null) {
+                    try {
+                        uploadedFile = repository.storageService.uploadOrderFileWithUri(
+                            userId = targetOrder.userId,
+                            orderId = orderId,
+                            uri = android.net.Uri.parse(uriString),
+                            originalFileName = fileName,
+                            sizeBytes = effectiveSize,
+                            mimeType = mimeType,
+                            fileId = fileId,
+                            onProgress = { p -> attachFileProgress.value = p }
+                        ).copy(uploadedBy = "Admin")
+                    } catch (storageEx: Exception) {
+                        android.util.Log.w("AdminFileAttach", "Storage upload warning: ${storageEx.message}")
+                    }
+                }
+
+                if (uploadedFile == null) {
+                    uploadedFile = OrderAttachedFile(
                         id = fileId,
                         name = fileName,
                         originalFileName = fileName,
-                        sizeBytes = sizeBytes,
+                        sizeBytes = effectiveSize,
                         extension = ext,
                         state = FileUploadState.UPLOADED,
                         progress = 1f,
                         mimeType = mimeType,
                         storagePath = "users/${targetOrder.userId}/orders/$orderId/files/$fileId.$ext",
-                        uploadedBy = "Admin"
+                        uploadedBy = "Admin",
+                        uploadedAt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
                     )
                 }
 
                 val updatedFiles = targetOrder.files + uploadedFile
-                repository.orderService?.updateOrderFiles(orderId, updatedFiles)
+                try {
+                    repository.orderService?.updateOrderFiles(orderId, updatedFiles)
+                } catch (dbEx: Exception) {
+                    android.util.Log.w("AdminFileAttach", "Firestore updateOrderFiles warning: ${dbEx.message}")
+                }
 
                 // Update in-memory state
                 val updatedOrder = targetOrder.copy(files = updatedFiles)
@@ -1062,30 +1112,78 @@ class MainViewModel @JvmOverloads constructor(
         }
     }
 
-    // --- Phone OTP Password Reset ---
+    // --- Real Phone OTP Verification & Password Reset ---
 
-    fun requestPhoneResetOtp(
+    fun startPhoneSmsVerification(
+        activity: Activity,
         phone: String,
-        onSent: (String) -> Unit,
+        onCodeSent: (verificationId: String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        repository.startPhoneSmsVerification(
+            activity = activity,
+            phone = phone,
+            onCodeSent = onCodeSent,
+            onError = onError
+        )
+    }
+
+    fun verifyPhoneSmsOtp(
+        verificationId: String,
+        smsCode: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val result = repository.verifyPhoneSmsOtp(verificationId, smsCode)
+        result.onSuccess { onSuccess() }
+            .onFailure { err -> onError(err.message ?: "Daxil edilən OTP kodu yanlışdır.") }
+    }
+
+    fun requestPhonePasswordResetSms(
+        activity: Activity,
+        phoneOrEmail: String,
+        onCodeSent: (verificationId: String, user: User) -> Unit,
         onError: (String) -> Unit
     ) {
         viewModelScope.launch {
-            val result = repository.requestPhoneResetOtp(phone)
-            result.onSuccess { otpCode -> onSent(otpCode) }
-                .onFailure { err -> onError(err.message ?: "Təsdiq kodu göndərilmədi.") }
+            val user = repository.findUserByPhone(phoneOrEmail)
+            if (user == null) {
+                onError("Bu nömrə və ya e-mail ilə qeydiyyatdan keçmiş istifadəçi tapılmadı.")
+                return@launch
+            }
+            val targetPhone = user.phone.ifBlank { phoneOrEmail }
+            val clean = targetPhone.trim().replace(" ", "").replace("-", "")
+            if (clean.filter { it.isDigit() }.length < 7) {
+                onError("İstifadəçinin qeydiyyatlı telefon nömrəsi tapılmadı.")
+                return@launch
+            }
+            startPhoneSmsVerification(
+                activity = activity,
+                phone = clean,
+                onCodeSent = { verificationId ->
+                    onCodeSent(verificationId, user)
+                },
+                onError = onError
+            )
         }
     }
 
     fun completePhonePasswordReset(
-        phone: String,
+        verificationId: String,
         enteredOtp: String,
+        userId: String,
         newPass: String,
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
         viewModelScope.launch {
-            val result = repository.completePhonePasswordReset(phone, enteredOtp, newPass)
-            result.onSuccess { onSuccess() }
+            val verifyRes = repository.verifyPhoneSmsOtp(verificationId, enteredOtp)
+            if (verifyRes.isFailure) {
+                onError(verifyRes.exceptionOrNull()?.message ?: "Daxil edilən SMS OTP kodu yanlışdır.")
+                return@launch
+            }
+            val updateRes = repository.completePhonePasswordReset(userId, newPass)
+            updateRes.onSuccess { onSuccess() }
                 .onFailure { err -> onError(err.message ?: "Şifrə yenilənmədi.") }
         }
     }

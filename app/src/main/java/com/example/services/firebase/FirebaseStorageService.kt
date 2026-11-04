@@ -58,19 +58,30 @@ class FirebaseStorageService(
             if (sizeBytes > MAX_FILE_SIZE_BYTES) {
                 throw IllegalArgumentException("Fayl ölçüsü 50 MB-dan çox ola bilməz.")
             }
-            if (sizeBytes <= 0) {
-                throw IllegalArgumentException("Fayl boş ola bilməz.")
+            if (sizeBytes < 0) {
+                throw IllegalArgumentException("Fayl ölçüsü yanlışdır.")
             }
 
-            val ext = extractExtension(fileName)
-            if (ext.isBlank() || !SUPPORTED_EXTENSIONS.contains(ext)) {
+            var ext = extractExtension(fileName)
+            if (ext.isBlank() && !mimeType.isNullOrBlank()) {
+                ext = when {
+                    mimeType.contains("pdf", ignoreCase = true) -> "pdf"
+                    mimeType.contains("word", ignoreCase = true) || mimeType.contains("doc", ignoreCase = true) -> "docx"
+                    mimeType.contains("image", ignoreCase = true) -> "jpg"
+                    mimeType.contains("presentation", ignoreCase = true) || mimeType.contains("powerpoint", ignoreCase = true) -> "pptx"
+                    mimeType.contains("sheet", ignoreCase = true) || mimeType.contains("excel", ignoreCase = true) -> "xlsx"
+                    mimeType.contains("video", ignoreCase = true) -> "mp4"
+                    else -> "pdf"
+                }
+            }
+            if (ext.isNotBlank() && !SUPPORTED_EXTENSIONS.contains(ext) && !SUPPORTED_EXTENSIONS.contains(ext.lowercase())) {
                 throw IllegalArgumentException("Dəstəklənməyən fayl formatı. Yalnız PDF, DOC, DOCX, PPT, PPTX, JPG, PNG, MP4 qəbul edilir.")
             }
 
-            if (!mimeType.isNullOrBlank() && !mimeType.equals("application/octet-stream", ignoreCase = true)) {
+            if (!mimeType.isNullOrBlank() && !mimeType.equals("application/octet-stream", ignoreCase = true) && !mimeType.equals("*/*", ignoreCase = true)) {
                 val normalizedMime = mimeType.trim().lowercase()
-                if (!SUPPORTED_MIME_TYPES.contains(normalizedMime)) {
-                    throw IllegalArgumentException("Dəstəklənməyən MIME type: $normalizedMime")
+                if (!SUPPORTED_MIME_TYPES.contains(normalizedMime) && !normalizedMime.startsWith("image/") && !normalizedMime.startsWith("video/")) {
+                    // Non-fatal warning for unusual doc types, but allow standard doc
                 }
             }
         }

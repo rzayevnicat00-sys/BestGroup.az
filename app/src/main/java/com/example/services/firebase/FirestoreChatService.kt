@@ -192,7 +192,8 @@ class FirestoreChatService(
         text: String,
         messageType: ChatMessageType = ChatMessageType.TEXT,
         attachedFileName: String? = null,
-        fileStoragePath: String? = null
+        fileStoragePath: String? = null,
+        senderAvatar: String? = null
     ): ChatMessage {
         val trimmed = text.trim()
         if (senderId.isBlank()) {
@@ -273,7 +274,8 @@ class FirestoreChatService(
             "updatedAtMillis" to nowMillis,
             "timeFormatted" to nowFormatted,
             "attachedFileName" to attachedFileName,
-            "fileStoragePath" to fileStoragePath
+            "fileStoragePath" to fileStoragePath,
+            "senderAvatar" to senderAvatar
         )
 
         // 1. Write message to messages subcollection
@@ -352,7 +354,8 @@ class FirestoreChatService(
             isRead = false,
             status = MessageDeliveryStatus.SENT,
             createdAt = isoNow,
-            updatedAt = isoNow
+            updatedAt = isoNow,
+            senderAvatar = senderAvatar
         )
     }
 
@@ -403,6 +406,8 @@ class FirestoreChatService(
             ?: (if (id.startsWith("support_")) id.removePrefix("support_") else "")
         val customerName = (data["customerName"] as? String)?.takeIf { it.isNotBlank() }
         val customerPhone = (data["customerPhone"] as? String)?.takeIf { it.isNotBlank() }
+        val customerAvatar = data["customerAvatar"] as? String ?: (data["avatarUrl"] as? String)
+        val curatorAvatar = data["curatorAvatar"] as? String
         val assignedStaffId = data["assignedStaffId"] as? String
         val lastMsg = data["lastMessage"] as? String ?: (data["lastMessageText"] as? String ?: "")
         val lastMsgTime = data["lastMessageAt"] as? String ?: (data["lastMessageTime"] as? String ?: "İndicə")
@@ -431,6 +436,8 @@ class FirestoreChatService(
             customerId = customerId,
             customerName = customerName,
             customerPhone = customerPhone,
+            customerAvatar = customerAvatar,
+            curatorAvatar = curatorAvatar,
             assignedStaffId = assignedStaffId,
             orderId = orderId,
             title = title,
@@ -449,10 +456,26 @@ class FirestoreChatService(
         )
     }
 
+    suspend fun updateConversationCustomerAvatar(customerId: String, avatarUrl: String) {
+        if (customerId.isBlank() || avatarUrl.isBlank()) return
+        try {
+            val querySnapshot = convCollection
+                .whereEqualTo("customerId", customerId)
+                .get()
+                .await()
+            for (doc in querySnapshot.documents) {
+                try {
+                    doc.reference.update(mapOf("customerAvatar" to avatarUrl)).await()
+                } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
+    }
+
     private fun mapDocumentToMessage(id: String, conversationId: String, data: Map<String, Any?>): ChatMessage {
         val senderId = data["senderId"] as? String ?: ""
         val senderRole = data["senderRole"] as? String ?: (if (data["isFromUser"] == true) "customer" else "staff")
         val senderName = data["senderName"] as? String ?: ""
+        val senderAvatar = data["senderAvatar"] as? String ?: (data["avatarUrl"] as? String)
         val text = data["text"] as? String ?: ""
         val isFromUser = senderRole.equals("customer", ignoreCase = true)
         val timeFormatted = data["timeFormatted"] as? String ?: (data["timestamp"] as? String ?: "")
@@ -484,6 +507,7 @@ class FirestoreChatService(
             senderId = senderId,
             senderRole = senderRole,
             senderName = senderName,
+            senderAvatar = senderAvatar,
             text = text,
             messageType = messageType,
             attachedFileName = attachedFileName,

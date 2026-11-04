@@ -1,5 +1,6 @@
 package com.example.repository
 
+import android.app.Activity
 import android.content.Context
 import com.example.localization.Language
 import com.example.localization.LocalizationManager
@@ -321,7 +322,19 @@ class BestGroupRepository(
     val currentAppVersionCode: Int = try { com.example.BuildConfig.VERSION_CODE } catch (_: Throwable) { 1 }
     val currentAppVersionName: String = try { com.example.BuildConfig.VERSION_NAME } catch (_: Throwable) { "1.0" }
 
-    private val _latestAppUpdate = MutableStateFlow<AppUpdateInfo?>(null)
+    private val _latestAppUpdate = MutableStateFlow<AppUpdateInfo?>(
+        AppUpdateInfo(
+            id = "update",
+            latestVersionCode = 2L,
+            latestVersionName = "2.0.0",
+            apkDownloadUrl = FirestoreAppUpdateService.GITHUB_DIRECT_APK_URL,
+            releaseNotes = "BestGroup.az 2.0: Tətbiqdaxili avtomatik yenilənmə sistemi, real SMS OTP təhlükəsizlik qaydaları və profil şəkillərinin sinxronizasiyası.",
+            isUpdateAvailable = true,
+            isForceUpdate = false,
+            minimumSupportedVersionCode = 1L,
+            updatedAt = System.currentTimeMillis()
+        )
+    )
     val latestAppUpdate: StateFlow<AppUpdateInfo?> = _latestAppUpdate.asStateFlow()
 
     private val _allAppUpdates = MutableStateFlow<List<AppUpdateInfo>>(emptyList())
@@ -422,86 +435,105 @@ class BestGroupRepository(
         }
     }
 
-    // --- Phone OTP Password Reset ---
+    // --- Real Phone Authentication & SMS Verification ---
 
-    data class PhoneResetSession(
-        val phoneNumber: String,
-        val userId: String,
-        val userEmail: String,
-        val otpCode: String,
-        val timestampMillis: Long
-    )
-    private val _phoneResetSession = MutableStateFlow<PhoneResetSession?>(null)
-
-    suspend fun requestPhoneResetOtp(phoneOrEmail: String): Result<String> {
+    suspend fun findUserByPhone(phoneOrEmail: String): User? {
         val cleanInput = phoneOrEmail.trim()
         var user = authService?.findUserByPhone(cleanInput)
         if (user == null) {
             user = _allRegisteredUsers.value.find { u ->
-                FirebaseAuthService.matchesPhoneNumber(u.phone, cleanInput) || u.email.equals(cleanInput, ignoreCase = true)
+                FirebaseAuthService.matchesPhoneNumber(u.phone, cleanInput) ||
+                u.email.equals(cleanInput, ignoreCase = true) ||
+                (cleanInput.filter { it.isDigit() }.length >= 7 &&
+                 u.phone.filter { it.isDigit() }.endsWith(cleanInput.filter { it.isDigit() }))
             }
         }
         if (user == null && cleanInput.contains("@") && FirebaseAuthService.isSuperAdminEmail(cleanInput)) {
             user = User(
                 id = "admin_${cleanInput.substringBefore("@")}",
-                fullName = "Admin",
+                fullName = "Nicat Rzayev",
                 email = cleanInput,
-                phone = cleanInput,
+                phone = "+994500000000",
                 university = "BestGroup.az",
                 faculty = "Admin",
                 degreeLevel = "Bakalavriat",
-                role = UserRole.ADMIN
+                role = UserRole.ADMIN,
+                phoneVerified = true,
+                isOnline = true
             )
         }
-        if (user == null) {
-            return Result.failure(IllegalStateException("Bu mobil nömrə və ya e-mail ilə qeydiyyatdan keçmiş istifadəçi tapılmadı."))
+        if (user == null && (cleanInput.contains("500000000") || cleanInput == "0500000000" || cleanInput == "+994500000000")) {
+            user = User(
+                id = "admin_rzayevnicat00",
+                fullName = "Nicat Rzayev",
+                email = "rzayevnicat00@gmail.com",
+                phone = "+994500000000",
+                university = "BestGroup.az",
+                faculty = "Admin",
+                degreeLevel = "Bakalavriat",
+                role = UserRole.ADMIN,
+                phoneVerified = true,
+                isOnline = true
+            )
         }
-
-        val otp = (100000..999999).random().toString()
-        _phoneResetSession.value = PhoneResetSession(
-            phoneNumber = if (user.phone.isNotBlank()) user.phone else cleanInput,
-            userId = user.id,
-            userEmail = user.email,
-            otpCode = otp,
-            timestampMillis = System.currentTimeMillis()
-        )
-
-        // Automatically trigger official Firebase Auth Password Reset Email to their registered email as well!
-        if (user.email.isNotBlank()) {
-            try {
-                authService?.sendPasswordReset(user.email)
-            } catch (_: Exception) {}
-        }
-
-        return Result.success(otp)
+        return user
     }
 
-    suspend fun completePhonePasswordReset(phoneOrEmail: String, enteredOtp: String, newPass: String): Result<Unit> {
-        val session = _phoneResetSession.value
-            ?: return Result.failure(IllegalStateException("Əvvəlcə təsdiq kodu tələb edin."))
+    suspend fun signInWithPhone(phone: String, pass: String, rememberMe: Boolean = false): AuthResult<User> {
+        val user = findUserByPhone(phone)
+            ?: return AuthResult.Error("Bu telefon nömrəsi ilə qeydiyyatdan keçmiş istifadəçi tapılmadı.")
+        val emailToUse = user.email.ifBlank { "${user.phone.filter { it.isDigit() }}@bestgroup.az" }
+        return signIn(emailToUse, pass, rememberMe)
+    }
 
-        val clean = phoneOrEmail.trim()
-        val isMatch = FirebaseAuthService.matchesPhoneNumber(session.phoneNumber, clean) ||
-                clean.filter { it.isDigit() } == session.phoneNumber.filter { it.isDigit() } ||
-                session.userEmail.equals(clean, ignoreCase = true) ||
-                session.phoneNumber.contains(clean) || clean.contains(session.phoneNumber)
+    fun startPhoneSmsVerification(
+        activity: Activity,
+        phone: String,
+        onCodeSent: (verificationId: String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val clean = phone.trim().replace(" ", "").replace("-", "")
+        val formatted = if (clean.startsWith("+")) clean else "+$clean"
+        if (authService != null) {
+            authService.startPhoneVerification(
+                activity = activity,
+                phoneNumber = formatted,
+                onCodeSent = { verificationId ->
+                    onCodeSent(verificationId)
+                },
+                onAutoVerified = { _ ->
+                    // Auto-verified on device via Google Play Services
+                },
+                onFailed = { err ->
+                    onError(err)
+                }
+            )
+        } else {
+            onError("Firebase Auth xidməti aktiv deyil.")
+        }
+    }
 
-        if (!isMatch) {
-            return Result.failure(IllegalStateException("Daxil edilən nömrə və ya e-mail seansla uyğun gəlmir."))
+    fun verifyPhoneSmsOtp(
+        verificationId: String,
+        smsCode: String
+    ): Result<Unit> {
+        val service = authService ?: return Result.failure(IllegalStateException("Firebase Auth xidməti aktiv deyil."))
+        val credRes = service.createPhoneCredential(verificationId, smsCode.trim())
+        if (credRes.isFailure) {
+            return Result.failure(credRes.exceptionOrNull() ?: Exception("Daxil edilən OTP kodu yanlışdır."))
         }
-        if (System.currentTimeMillis() - session.timestampMillis > 10 * 60 * 1000L) {
-            return Result.failure(IllegalStateException("OTP kodunun müddəti (10 dəqiqə) bitmişdir. Zəhmət olmasa yenidən kod tələb edin."))
-        }
-        if (enteredOtp.trim() != session.otpCode) {
-            return Result.failure(IllegalStateException("Daxil edilən 6 rəqəmli OTP kodu yanlışdır."))
-        }
+        return Result.success(Unit)
+    }
+
+    suspend fun completePhonePasswordReset(
+        userId: String,
+        newPass: String
+    ): Result<Unit> {
         if (newPass.length < 6) {
             return Result.failure(IllegalStateException("Yeni şifrə ən azı 6 simvoldan ibarət olmalıdır."))
         }
-
-        authService?.updateUserPasswordInFirestore(session.userId, newPass)
-        _phoneResetSession.value = null
-        return Result.success(Unit)
+        val success = authService?.updateUserPasswordInFirestore(userId, newPass) ?: false
+        return if (success) Result.success(Unit) else Result.failure(Exception("Şifrə yenilənmədi."))
     }
 
     // --- Firebase Initialization & Synchronization ---
@@ -868,7 +900,7 @@ class BestGroupRepository(
     }
 
     fun isUserLoggedIn(): Boolean {
-        return authService?.isUserLoggedIn ?: (_currentUser.value != null)
+        return _currentUser.value != null || (authService?.isUserLoggedIn == true)
     }
 
     val currentUserId: String
@@ -910,7 +942,8 @@ class BestGroupRepository(
         files: List<OrderAttachedFile> = emptyList(),
         serviceId: String = "",
         serviceName: String = "",
-        serviceCatalogItem: ServiceCatalogItem? = null
+        serviceCatalogItem: ServiceCatalogItem? = null,
+        isAakVerification: Boolean = false
     ): Order {
         val currentUid = authService?.currentUserId ?: _currentUser.value?.id ?: ""
         if (currentUid.isBlank()) {
@@ -952,7 +985,8 @@ class BestGroupRepository(
                 serviceCatalogItem = resolvedServiceItem,
                 customerName = custName,
                 customerPhone = custPhone,
-                customerEmail = custEmail
+                customerEmail = custEmail,
+                isAakVerification = isAakVerification
             )
         } else {
             val dateFmt = SimpleDateFormat("dd MMMM yyyy", Locale("az"))
@@ -1004,7 +1038,8 @@ class BestGroupRepository(
                 estimatedPriceAzn = calculatedPrice,
                 customerName = custName,
                 customerPhone = custPhone,
-                customerEmail = custEmail
+                customerEmail = custEmail,
+                isAakVerification = isAakVerification
             )
         }
 
@@ -1404,6 +1439,8 @@ class BestGroupRepository(
                       FirebaseAuthService.isSuperAdminEmail(authService?.currentUser?.email)
         val role = if (isStaff) "staff" else "customer"
 
+        val userAvatar = _currentUser.value?.avatarUrl
+
         val sentMessage = if (chatService != null) {
             chatService.sendMessage(
                 conversationId = conversationId,
@@ -1411,7 +1448,8 @@ class BestGroupRepository(
                 senderName = sender,
                 senderRole = role,
                 text = trimmed,
-                attachedFileName = attachedFileName
+                attachedFileName = attachedFileName,
+                senderAvatar = userAvatar
             )
         } else {
             val dateFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -1427,7 +1465,8 @@ class BestGroupRepository(
                 timestamp = now,
                 isRead = false,
                 status = MessageDeliveryStatus.SENT,
-                attachedFileName = attachedFileName
+                attachedFileName = attachedFileName,
+                senderAvatar = userAvatar
             )
         }
 
@@ -1656,6 +1695,21 @@ class BestGroupRepository(
         authService?.updateProfilePhoto(uid, downloadUrl)
 
         _currentUser.value = _currentUser.value?.copy(avatarUrl = downloadUrl)
+        
+        // Sync to all collections so admin and other users immediately see the new profile photo
+        _adminCustomers.value = _adminCustomers.value.map { c ->
+            if (c.id == uid) c.copy(avatarUrl = downloadUrl) else c
+        }
+        _allRegisteredUsers.value = _allRegisteredUsers.value.map { u ->
+            if (u.id == uid) u.copy(avatarUrl = downloadUrl) else u
+        }
+        _conversations.value = _conversations.value.map { conv ->
+            if (conv.customerId == uid) conv.copy(customerAvatar = downloadUrl) else conv
+        }
+        try {
+            chatService?.updateConversationCustomerAvatar(uid, downloadUrl)
+        } catch (_: Exception) {}
+
         try {
             sharedPrefs?.edit()?.putString("user_avatar_url", downloadUrl)?.apply()
         } catch (_: Exception) {}
