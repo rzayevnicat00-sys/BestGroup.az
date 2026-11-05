@@ -28,6 +28,8 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.localization.StringKey
 import com.example.localization.localizedString
 import com.example.ui.screens.*
+import com.example.ui.screens.security.*
+import com.example.ui.screens.ecosystem.*
 import com.example.ui.theme.BestGroupTheme
 import com.example.ui.theme.BirbankBorder
 import com.example.ui.theme.BirbankRed
@@ -64,7 +66,8 @@ fun MainApp(viewModel: MainViewModel) {
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            if (destination != AppDestination.SPLASH &&
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (destination != AppDestination.SPLASH &&
                 destination != AppDestination.AUTH &&
                 destination != AppDestination.ONBOARDING &&
                 !isUserLoggedIn
@@ -135,6 +138,71 @@ fun MainApp(viewModel: MainViewModel) {
                             viewModel.navigateTo(AppDestination.MAIN)
                         }
                     }
+                }
+
+                AppDestination.SECURITY_SETTINGS -> {
+                    BackHandler {
+                        viewModel.navigateTo(AppDestination.MAIN)
+                    }
+                    SecuritySettingsScreen(
+                        viewModel = viewModel,
+                        onBack = { viewModel.navigateTo(AppDestination.MAIN) }
+                    )
+                }
+
+                AppDestination.ACTIVE_DEVICES -> {
+                    BackHandler {
+                        viewModel.navigateTo(AppDestination.SECURITY_SETTINGS)
+                    }
+                    ActiveDevicesScreen(
+                        viewModel = viewModel,
+                        onBack = { viewModel.navigateTo(AppDestination.SECURITY_SETTINGS) }
+                    )
+                }
+
+                AppDestination.LOGIN_HISTORY -> {
+                    BackHandler {
+                        viewModel.navigateTo(AppDestination.SECURITY_SETTINGS)
+                    }
+                    LoginHistoryScreen(
+                        viewModel = viewModel,
+                        onBack = { viewModel.navigateTo(AppDestination.SECURITY_SETTINGS) }
+                    )
+                }
+
+                AppDestination.BESTGROUP_AI -> {
+                    BackHandler { viewModel.navigateTo(AppDestination.MAIN) }
+                    BestGroupAiScreen(viewModel = viewModel, onBack = { viewModel.navigateTo(AppDestination.MAIN) })
+                }
+
+                AppDestination.ACADEMIC_TOOLS -> {
+                    BackHandler { viewModel.navigateTo(AppDestination.MAIN) }
+                    AcademicToolsScreen(viewModel = viewModel, onBack = { viewModel.navigateTo(AppDestination.MAIN) })
+                }
+
+                AppDestination.PRICE_CALCULATOR -> {
+                    BackHandler { viewModel.navigateTo(AppDestination.MAIN) }
+                    PriceCalculatorScreen(viewModel = viewModel, onBack = { viewModel.navigateTo(AppDestination.MAIN) })
+                }
+
+                AppDestination.ACADEMY -> {
+                    BackHandler { viewModel.navigateTo(AppDestination.MAIN) }
+                    AcademyScreen(viewModel = viewModel, onBack = { viewModel.navigateTo(AppDestination.MAIN) })
+                }
+
+                AppDestination.ACADEMIC_CABINET -> {
+                    BackHandler { viewModel.navigateTo(AppDestination.MAIN) }
+                    AcademicCabinetScreen(viewModel = viewModel, onBack = { viewModel.navigateTo(AppDestination.MAIN) })
+                }
+
+                AppDestination.BESTGROUP_CLUB -> {
+                    BackHandler { viewModel.navigateTo(AppDestination.MAIN) }
+                    BestGroupClubScreen(viewModel = viewModel, onBack = { viewModel.navigateTo(AppDestination.MAIN) })
+                }
+
+                AppDestination.AI_DOC_ASSISTANT -> {
+                    BackHandler { viewModel.navigateTo(AppDestination.MAIN) }
+                    AiDocAssistantScreen(viewModel = viewModel, onBack = { viewModel.navigateTo(AppDestination.MAIN) })
                 }
 
                 AppDestination.MAIN -> {
@@ -301,6 +369,13 @@ fun MainApp(viewModel: MainViewModel) {
                 }
             }
         }
+
+        val isAppLocked by viewModel.isAppLocked.collectAsState()
+        if (isAppLocked && currentUser != null && destination != AppDestination.AUTH && destination != AppDestination.SPLASH) {
+            AppLockScreen(viewModel = viewModel)
+        }
+    }
+}
 
         // Birbank-style App Update Dialog (In-Place Auto Updater)
         val isUpdateAvailable by viewModel.isUpdateAvailable.collectAsState()
@@ -589,5 +664,4 @@ fun MainApp(viewModel: MainViewModel) {
             )
         }
     }
-}
 }

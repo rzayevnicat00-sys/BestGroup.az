@@ -87,6 +87,24 @@ service cloud.firestore {
         allow read: if isOwner(userId) || isStaff();
         allow write: if isOwner(userId) || isAdmin();
       }
+
+      // Active Device Sessions
+      match /sessions/{sessionId} {
+        allow read: if isOwner(userId) || isStaff();
+        allow write: if isOwner(userId) || isStaff();
+      }
+
+      // Login History
+      match /login_history/{historyId} {
+        allow read: if isOwner(userId) || isStaff();
+        allow create: if isOwner(userId) || isStaff();
+        allow update, delete: if isAdmin();
+      }
+
+      // 2FA Security Tokens
+      match /two_factor_tokens/{tokenId} {
+        allow read, write: if isOwner(userId) || isStaff();
+      }
     }
 
     // Orders Collection
@@ -268,6 +286,13 @@ service cloud.firestore {
     match /stories/{storyId} {
       allow read: if true;
       allow create, delete, update: if isAuthenticated();
+    }
+
+    // Admin Security & Audit Logs (Audited operations by staff/admins)
+    match /admin_audit_logs/{logId} {
+      allow read: if isStaff() || isAdmin();
+      allow create: if isStaff() || isAdmin();
+      allow update, delete: if isSuperAdmin();
     }
   }
 }

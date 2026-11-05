@@ -446,6 +446,102 @@ fun HomeScreen(
         }
 
         // ========================================================
+        // 4.1. BESTGROUP 2.0 ECOSYSTEM HUB
+        // ========================================================
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Rəqəmsal Ekosistem",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = BirbankTextPrimary
+                    )
+                    Surface(color = BirbankRedLight, shape = RoundedCornerShape(8.dp)) {
+                        Text(
+                            text = "2.0 AI",
+                            color = BirbankRed,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EcosystemFeatureCard(
+                        title = "BestGroup AI",
+                        subtitle = "Ağıllı köməkçi",
+                        icon = Icons.Default.AutoAwesome,
+                        iconTint = BirbankRed,
+                        modifier = Modifier.weight(1f),
+                        onClick = { viewModel.navigateTo(AppDestination.BESTGROUP_AI) }
+                    )
+                    EcosystemFeatureCard(
+                        title = "Akademik Alətlər",
+                        subtitle = "İstinad və sayğac",
+                        icon = Icons.Default.Handyman,
+                        iconTint = Color(0xFF2563EB),
+                        modifier = Modifier.weight(1f),
+                        onClick = { viewModel.navigateTo(AppDestination.ACADEMIC_TOOLS) }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EcosystemFeatureCard(
+                        title = "Kalkulyator",
+                        subtitle = "Dərhal qiymət al",
+                        icon = Icons.Default.Calculate,
+                        iconTint = Color(0xFFD97706),
+                        modifier = Modifier.weight(1f),
+                        onClick = { viewModel.navigateTo(AppDestination.PRICE_CALCULATOR) }
+                    )
+                    EcosystemFeatureCard(
+                        title = "Akademiya",
+                        subtitle = "Elmi bələdçi",
+                        icon = Icons.Default.School,
+                        iconTint = Color(0xFF059669),
+                        modifier = Modifier.weight(1f),
+                        onClick = { viewModel.navigateTo(AppDestination.ACADEMY) }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EcosystemFeatureCard(
+                        title = "BestGroup Club",
+                        subtitle = "Bonus & Loyallıq",
+                        icon = Icons.Default.WorkspacePremium,
+                        iconTint = Color(0xFF7C3AED),
+                        modifier = Modifier.weight(1f),
+                        onClick = { viewModel.navigateTo(AppDestination.BESTGROUP_CLUB) }
+                    )
+                    EcosystemFeatureCard(
+                        title = "Şəxsi Kabinet",
+                        subtitle = "Qeydlər & sənədlər",
+                        icon = Icons.Default.FolderSpecial,
+                        iconTint = Color(0xFFDB2777),
+                        modifier = Modifier.weight(1f),
+                        onClick = { viewModel.navigateTo(AppDestination.ACADEMIC_CABINET) }
+                    )
+                }
+            }
+        }
+
+        // ========================================================
         // 5. IF STAFF: ADMIN DASHBOARD METRICS & SHORTCUTS
         // ========================================================
         if (isStaff) {
@@ -1122,6 +1218,61 @@ private fun AdminMiniMetricCard(
                 color = BirbankTextSecondary,
                 maxLines = 1
             )
+        }
+    }
+}
+
+@Composable
+fun EcosystemFeatureCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    iconTint: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .border(1.dp, BirbankBorder, RoundedCornerShape(14.dp)),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(iconTint.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = BirbankTextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = BirbankTextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }

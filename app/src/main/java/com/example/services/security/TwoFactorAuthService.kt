@@ -52,7 +52,7 @@ class TwoFactorAuthService(
         onCodeSent: (verificationId: String) -> Unit,
         onError: (String) -> Unit
     ) {
-        val cleanPhone = if (phoneNumber.startsWith("+")) phoneNumber else "+$phoneNumber"
+        val cleanPhone = com.example.services.firebase.FirebaseAuthService.formatToE164(phoneNumber)
         val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
             override fun onVerificationCompleted(credential: PhoneAuthCredential) {
                 // Auto-retrieval on device

@@ -531,6 +531,17 @@ fun ProfileScreen(
                             onClick = { showPrivacyDialog = true },
                             tag = "profile_menu_privacy"
                         )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                        ProfileMenuItem(
+                            icon = Icons.Default.Security,
+                            title = localizedString(StringKey.PROFILE_SECURITY_TITLE),
+                            subtitle = "Barmaq izi, PIN kod, 2FA, aktiv cihazlar",
+                            onClick = { viewModel.navigateTo(AppDestination.SECURITY_SETTINGS) },
+                            tag = "profile_menu_security"
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
                         if (isAuthorizedStaff) {
                             ProfileMenuItem(
                                 icon = Icons.Default.PeopleAlt,

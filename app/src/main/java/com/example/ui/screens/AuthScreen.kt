@@ -38,6 +38,8 @@ import com.example.localization.LocalizationManager
 import com.example.localization.StringKey
 import com.example.localization.localizedString
 import com.example.ui.components.BestGroupLogoBadge
+import com.example.model.TwoFactorMethod
+import com.example.ui.screens.security.TwoFactorVerificationDialog
 import com.example.ui.theme.*
 import com.example.viewmodel.MainViewModel
 
@@ -119,8 +121,7 @@ fun AuthScreen(
     }
 
     fun startRegisterSmsVerification() {
-        val rawPhone = regPhone.trim().replace(" ", "").replace("-", "")
-        val cleanPhone = if (rawPhone.startsWith("+")) rawPhone else "+$rawPhone"
+        val cleanPhone = com.example.services.firebase.FirebaseAuthService.formatToE164(regPhone)
         val activity = context.findActivity()
         if (activity == null) {
             performRegistration(phoneVerified = false)
@@ -1000,6 +1001,51 @@ fun AuthScreen(
                 TextButton(onClick = { showOtpDialog = false }) {
                     Text("Ləğv et", color = MaterialTheme.colorScheme.outline)
                 }
+            }
+        )
+    }
+
+    val is2FaVerificationActive = viewModel.is2FaVerificationActive.value
+    val pending2FaUser = viewModel.pending2FaUser.value
+    val pending2FaMethod = viewModel.pending2FaMethod.value
+
+    if (is2FaVerificationActive && pending2FaUser != null) {
+        val destinationMasked = if (pending2FaMethod == TwoFactorMethod.SMS) {
+            val phone = pending2FaUser.phone.ifBlank { "+994500000000" }
+            if (phone.length > 6) {
+                "${phone.take(4)}***${phone.takeLast(2)}"
+            } else phone
+        } else {
+            val email = pending2FaUser.email
+            val parts = email.split("@")
+            if (parts.size == 2 && parts[0].length > 2) {
+                "${parts[0].take(2)}***@${parts[1]}"
+            } else email
+        }
+
+        TwoFactorVerificationDialog(
+            method = pending2FaMethod,
+            destinationMasked = destinationMasked,
+            onDismiss = {
+                viewModel.cancel2FaVerification()
+            },
+            onVerify = { code, onError ->
+                viewModel.verify2FaCode(
+                    code = code,
+                    onSuccess = {
+                        onAuthSuccess()
+                    },
+                    onError = { err ->
+                        onError(err)
+                    }
+                )
+            },
+            onResend = {
+                val act = context.findActivity()
+                viewModel.resend2FaCode(
+                    activity = act,
+                    onError = { /* handled */ }
+                )
             }
         )
     }

@@ -17,6 +17,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import androidx.fragment.app.FragmentActivity
+import com.example.services.security.*
+import com.example.model.AutoLockTimeout
+import com.example.model.DeviceSession
+import com.example.model.LoginHistoryItem
+import com.example.model.TwoFactorMethod
+import com.example.model.AdminAuditLog
 
 private const val UPDATE_SNOOZE_DURATION_MS = 24 * 60 * 60 * 1000L
 
@@ -58,6 +65,68 @@ class BestGroupRepository(
     // Current User Session
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
+
+    // Security & Session Services
+    val securityManager by lazy {
+        context?.let { AppSecurityManager(it) }
+    }
+
+    val sessionService by lazy {
+        authService?.firestoreInstance?.let { DeviceSessionService(it) }
+    }
+
+    val loginHistoryService by lazy {
+        authService?.firestoreInstance?.let { LoginHistoryService(it) }
+    }
+
+    val twoFactorService by lazy {
+        if (authService != null) {
+            val fbAuth = com.google.firebase.auth.FirebaseAuth.getInstance()
+            TwoFactorAuthService(fbAuth, authService.firestoreInstance)
+        } else null
+    }
+
+    val adminAuditService by lazy {
+        authService?.firestoreInstance?.let { AdminAuditService(it) }
+    }
+
+    val academicToolsService = com.example.services.academic.AcademicToolsService()
+    val priceCalculatorService = com.example.services.academic.PriceCalculatorService()
+    val aiService = com.example.services.ai.BestGroupAiService()
+
+    val academyService by lazy {
+        val fs = authService?.firestoreInstance ?: com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        com.example.services.academy.AcademyService(fs)
+    }
+
+    val clubService by lazy {
+        val fs = authService?.firestoreInstance ?: com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        com.example.services.club.BestGroupClubService(fs)
+    }
+
+    val crmService by lazy {
+        val fs = authService?.firestoreInstance ?: com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        com.example.services.admin.CrmAndStaffService(fs)
+    }
+
+    private val _activeDeviceSessions = MutableStateFlow<List<DeviceSession>>(emptyList())
+    val activeDeviceSessions: StateFlow<List<DeviceSession>> = _activeDeviceSessions.asStateFlow()
+
+    private val _loginHistory = MutableStateFlow<List<LoginHistoryItem>>(emptyList())
+    val loginHistory: StateFlow<List<LoginHistoryItem>> = _loginHistory.asStateFlow()
+
+    private val _isTwoFactorEnabled = MutableStateFlow(
+        sharedPrefs?.getBoolean("two_factor_enabled", false) ?: false
+    )
+    val isTwoFactorEnabled: StateFlow<Boolean> = _isTwoFactorEnabled.asStateFlow()
+
+    private val _twoFactorMethod = MutableStateFlow(
+        run {
+            val saved = sharedPrefs?.getString("two_factor_method", TwoFactorMethod.SMS.name)
+            try { TwoFactorMethod.valueOf(saved ?: TwoFactorMethod.SMS.name) } catch (_: Exception) { TwoFactorMethod.SMS }
+        }
+    )
+    val twoFactorMethod: StateFlow<TwoFactorMethod> = _twoFactorMethod.asStateFlow()
 
     // Auth state loading
     private val _isAuthLoading = MutableStateFlow(false)
@@ -492,8 +561,7 @@ class BestGroupRepository(
         onCodeSent: (verificationId: String) -> Unit,
         onError: (String) -> Unit
     ) {
-        val clean = phone.trim().replace(" ", "").replace("-", "")
-        val formatted = if (clean.startsWith("+")) clean else "+$clean"
+        val formatted = com.example.services.firebase.FirebaseAuthService.formatToE164(phone)
         if (authService != null) {
             authService.startPhoneVerification(
                 activity = activity,
@@ -677,6 +745,32 @@ class BestGroupRepository(
                 }
             }
 
+            val sessService = sessionService
+            if (sessService != null) {
+                val currentSessionId = securityManager?.getDeviceSessionId() ?: ""
+                launch {
+                    try {
+                        sessService.getActiveSessionsFlow(userId, currentSessionId).collect { sessions ->
+                            _activeDeviceSessions.value = sessions
+                        }
+                    } catch (_: Exception) {}
+                }
+                sessService.startListeningToCurrentSession(userId, currentSessionId, onSessionRevoked = {
+                    signOut()
+                })
+            }
+
+            val histService = loginHistoryService
+            if (histService != null) {
+                launch {
+                    try {
+                        histService.getLoginHistoryFlow(userId).collect { history ->
+                            _loginHistory.value = history
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+
             // Load all registered users and customers from the configured Firestore users collection
             if (authService != null) {
                 launch {
@@ -693,7 +787,62 @@ class BestGroupRepository(
                     } catch (_: Exception) {}
                 }
             }
+
+            launch {
+                try {
+                    clubService.loadClubData(userId)
+                    academyService.loadUserProgress(userId)
+                } catch (_: Exception) {}
+            }
         }
+    }
+
+    suspend fun addOrderDocumentVersion(
+        orderId: String,
+        fileName: String,
+        fileUrl: String,
+        sizeBytes: Long,
+        notes: String,
+        uploaderName: String,
+        isStaff: Boolean
+    ) {
+        val version = OrderDocumentVersion(
+            id = java.util.UUID.randomUUID().toString(),
+            orderId = orderId,
+            fileName = fileName,
+            fileUrl = fileUrl,
+            fileSizeBytes = sizeBytes,
+            fileExtension = fileName.substringAfterLast('.', "docx"),
+            uploadedBy = uploaderName,
+            uploaderRole = if (isStaff) "admin" else "customer",
+            uploadedAt = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date()),
+            uploadedAtEpoch = System.currentTimeMillis(),
+            isLatest = true,
+            isArchived = false,
+            changeNotes = notes
+        )
+        orderService?.addDocumentVersion(orderId, version)
+    }
+
+    suspend fun updateOrderLiveStage(
+        orderId: String,
+        stage: OrderStage,
+        note: String,
+        actorName: String
+    ) {
+        orderService?.updateLiveStage(orderId, stage, note, actorName)
+    }
+
+    suspend fun assignOrderStaff(orderId: String, staffId: String, staffName: String) {
+        crmService.assignOrderToStaff(orderId, staffId, staffName)
+    }
+
+    suspend fun addOrderTask(orderId: String, title: String, staffName: String, deadline: String) {
+        crmService.addTaskToOrder(orderId, title, staffName, deadline)
+    }
+
+    suspend fun toggleOrderTask(orderId: String, taskId: String, currentStatus: Boolean) {
+        crmService.toggleTaskCompletion(orderId, taskId, currentStatus)
     }
 
     private fun recalculateAdminStats() {
@@ -822,6 +971,12 @@ class BestGroupRepository(
                     val isSuperAdmin = FirebaseAuthService.isSuperAdminEmail(res.data.email)
                     val finalUser = if (isSuperAdmin) res.data.copy(role = UserRole.ADMIN) else res.data
                     _currentUser.value = finalUser
+
+                    val sessionId = securityManager?.getDeviceSessionId() ?: UUID.randomUUID().toString()
+                    val devName = DeviceSessionService.getDeviceDisplayName()
+                    sessionService?.registerOrUpdateSession(finalUser.id, sessionId)
+                    loginHistoryService?.recordLoginEvent(finalUser.id, devName, "Uğurlu giriş")
+                    loginHistoryService?.checkAndAlertIfNewDevice(finalUser.id, devName, sessionId)
                 }
                 res
             } else {
@@ -838,6 +993,10 @@ class BestGroupRepository(
                     role = if (isSuperAdmin) UserRole.ADMIN else UserRole.CUSTOMER
                 )
                 _currentUser.value = fallbackUser
+                val sessionId = securityManager?.getDeviceSessionId() ?: UUID.randomUUID().toString()
+                val devName = DeviceSessionService.getDeviceDisplayName()
+                sessionService?.registerOrUpdateSession(fallbackUser.id, sessionId)
+                loginHistoryService?.recordLoginEvent(fallbackUser.id, devName, "Uğurlu giriş")
                 AuthResult.Success(fallbackUser)
             }
         } finally {
@@ -861,6 +1020,10 @@ class BestGroupRepository(
                 val res = authService.signUp(email, pass, fullName, phone, university, faculty, educationLevel, phoneVerified)
                 if (res is AuthResult.Success) {
                     _currentUser.value = res.data
+                    val sessionId = securityManager?.getDeviceSessionId() ?: UUID.randomUUID().toString()
+                    val devName = DeviceSessionService.getDeviceDisplayName()
+                    sessionService?.registerOrUpdateSession(res.data.id, sessionId)
+                    loginHistoryService?.recordLoginEvent(res.data.id, devName, "Yeni qeydiyyat və giriş")
                 }
                 res
             } else {
@@ -876,6 +1039,10 @@ class BestGroupRepository(
                     phoneVerified = phoneVerified
                 )
                 _currentUser.value = fallbackUser
+                val sessionId = securityManager?.getDeviceSessionId() ?: UUID.randomUUID().toString()
+                val devName = DeviceSessionService.getDeviceDisplayName()
+                sessionService?.registerOrUpdateSession(fallbackUser.id, sessionId)
+                loginHistoryService?.recordLoginEvent(fallbackUser.id, devName, "Yeni qeydiyyat və giriş")
                 AuthResult.Success(fallbackUser)
             }
         } finally {
@@ -907,6 +1074,7 @@ class BestGroupRepository(
         get() = _currentUser.value?.id ?: authService?.currentUserId ?: ""
 
     fun signOut() {
+        sessionService?.stopListeningToCurrentSession()
         val uid = _currentUser.value?.id ?: authService?.currentUserId
         if (uid != null && authService != null) {
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
@@ -922,6 +1090,125 @@ class BestGroupRepository(
         _conversations.value = emptyList()
         _adminCustomers.value = emptyList()
         _allRegisteredUsers.value = emptyList()
+        _activeDeviceSessions.value = emptyList()
+        _loginHistory.value = emptyList()
+    }
+
+    suspend fun setTwoFactorEnabled(enabled: Boolean) {
+        sharedPrefs?.edit()?.putBoolean("two_factor_enabled", enabled)?.apply()
+        _isTwoFactorEnabled.value = enabled
+        val uid = _currentUser.value?.id ?: authService?.currentUserId
+        if (uid != null && authService != null) {
+            try {
+                authService.firestoreInstance.collection("users").document(uid)
+                    .set(mapOf("isTwoFactorEnabled" to enabled), com.google.firebase.firestore.SetOptions.merge())
+                    .await()
+            } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun setTwoFactorMethod(method: TwoFactorMethod) {
+        sharedPrefs?.edit()?.putString("two_factor_method", method.name)?.apply()
+        _twoFactorMethod.value = method
+        val uid = _currentUser.value?.id ?: authService?.currentUserId
+        if (uid != null && authService != null) {
+            try {
+                authService.firestoreInstance.collection("users").document(uid)
+                    .set(mapOf("twoFactorMethod" to method.name), com.google.firebase.firestore.SetOptions.merge())
+                    .await()
+            } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun changePassword(oldPass: String, newPass: String): Result<Unit> {
+        val uid = _currentUser.value?.id ?: authService?.currentUserId ?: return Result.failure(IllegalStateException("İstifadəçi tapılmadı."))
+        val email = _currentUser.value?.email ?: authService?.currentUser?.email ?: ""
+        if (newPass.length < 6) {
+            return Result.failure(IllegalArgumentException("Yeni şifrə ən azı 6 simvoldan ibarət olmalıdır."))
+        }
+
+        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+        val fbUser = auth.currentUser
+        if (fbUser != null && email.isNotBlank()) {
+            try {
+                val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(email, oldPass)
+                fbUser.reauthenticate(credential).await()
+                fbUser.updatePassword(newPass).await()
+            } catch (e: Exception) {
+                return Result.failure(Exception(e.localizedMessage ?: "Cari şifrə yanlışdır və ya şifrə yenilənmədi."))
+            }
+        }
+
+        authService?.updateUserPasswordInFirestore(uid, newPass)
+        loginHistoryService?.recordLoginEvent(
+            userId = uid,
+            deviceName = DeviceSessionService.getDeviceDisplayName(),
+            status = "Şifrə uğurla yeniləndi",
+            eventType = "PASSWORD_CHANGED"
+        )
+        return Result.success(Unit)
+    }
+
+    suspend fun revokeDeviceSession(sessionId: String): Result<Unit> {
+        val uid = _currentUser.value?.id ?: authService?.currentUserId ?: return Result.failure(IllegalStateException("İstifadəçi tapılmadı."))
+        val res = sessionService?.revokeSession(uid, sessionId) ?: Result.success(Unit)
+        if (res.isSuccess) {
+            _activeDeviceSessions.value = _activeDeviceSessions.value.filter { it.sessionId != sessionId }
+        }
+        return res
+    }
+
+    suspend fun revokeAllOtherSessions(): Result<Int> {
+        val uid = _currentUser.value?.id ?: authService?.currentUserId ?: return Result.failure(IllegalStateException("İstifadəçi tapılmadı."))
+        val currentSessionId = securityManager?.getDeviceSessionId() ?: ""
+        val res = sessionService?.revokeAllOtherSessions(uid, currentSessionId) ?: Result.success(0)
+        if (res.isSuccess) {
+            _activeDeviceSessions.value = _activeDeviceSessions.value.filter { it.sessionId == currentSessionId }
+        }
+        return res
+    }
+
+    suspend fun logoutAllDevices(): Result<Unit> {
+        val uid = _currentUser.value?.id ?: authService?.currentUserId ?: return Result.failure(IllegalStateException("İstifadəçi tapılmadı."))
+        sessionService?.revokeAllSessions(uid)
+        securityManager?.removePin()
+        securityManager?.setBiometricEnabled(false)
+        loginHistoryService?.recordLoginEvent(
+            userId = uid,
+            deviceName = DeviceSessionService.getDeviceDisplayName(),
+            status = "Bütün cihazlardan çıxış",
+            eventType = "LOGOUT_ALL"
+        )
+        signOut()
+        return Result.success(Unit)
+    }
+
+    suspend fun verifyPasswordAndResetPin(password: String): Result<Unit> {
+        val email = _currentUser.value?.email ?: authService?.currentUser?.email ?: ""
+        if (email.isBlank()) {
+            securityManager?.removePin()
+            securityManager?.resetLockout()
+            return Result.success(Unit)
+        }
+        return try {
+            val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+            val fbUser = auth.currentUser
+            if (fbUser != null) {
+                val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(email, password)
+                fbUser.reauthenticate(credential).await()
+            }
+            securityManager?.removePin()
+            securityManager?.resetLockout()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(Exception("Daxil edilən hesab şifrəsi yanlışdır."))
+        }
+    }
+
+    suspend fun logAdminAction(action: String, targetUserId: String? = null, details: String = "") {
+        val adminId = _currentUser.value?.id ?: authService?.currentUserId ?: "admin"
+        val adminEmail = _currentUser.value?.email ?: authService?.currentUser?.email ?: "admin@bestgroup.az"
+        adminAuditService?.logAction(adminId, adminEmail, action, targetUserId, details)
     }
 
     // --- Order Operations ---

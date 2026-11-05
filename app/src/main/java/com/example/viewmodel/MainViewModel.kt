@@ -27,6 +27,13 @@ import java.util.UUID
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.fragment.app.FragmentActivity
+import com.example.services.security.*
+import com.example.model.AutoLockTimeout
+import com.example.model.DeviceSession
+import com.example.model.LoginHistoryItem
+import com.example.model.TwoFactorMethod
+import com.example.model.AdminAuditLog
 
 enum class AppDestination {
     SPLASH,
@@ -36,7 +43,17 @@ enum class AppDestination {
     ORDER_WIZARD,
     ORDER_DETAIL,
     SUPPORT_CENTER,
-    ADMIN_DASHBOARD
+    ADMIN_DASHBOARD,
+    SECURITY_SETTINGS,
+    ACTIVE_DEVICES,
+    LOGIN_HISTORY,
+    BESTGROUP_AI,
+    ACADEMIC_TOOLS,
+    PRICE_CALCULATOR,
+    ACADEMY,
+    ACADEMIC_CABINET,
+    BESTGROUP_CLUB,
+    AI_DOC_ASSISTANT
 }
 
 enum class BottomTab {
@@ -148,6 +165,35 @@ class MainViewModel @JvmOverloads constructor(
     val adminCustomers = repository.adminCustomers
     val currentLanguage = LocalizationManager.currentLanguage
 
+    // Security & Login System State
+    val isAppLocked: StateFlow<Boolean> = repository.securityManager?.isAppLocked ?: MutableStateFlow(false).asStateFlow()
+    val isBiometricEnabled: StateFlow<Boolean> = repository.securityManager?.isBiometricEnabled ?: MutableStateFlow(false).asStateFlow()
+    val isPinConfigured: StateFlow<Boolean> = repository.securityManager?.isPinEnabled ?: MutableStateFlow(false).asStateFlow()
+    val autoLockTimeout: StateFlow<AutoLockTimeout> = repository.securityManager?.autoLockTimeout ?: MutableStateFlow(AutoLockTimeout.ONE_MINUTE).asStateFlow()
+    val isScreenSecurityEnabled: StateFlow<Boolean> = repository.securityManager?.isScreenSecurityEnabled ?: MutableStateFlow(false).asStateFlow()
+
+    val isTwoFactorEnabled = repository.isTwoFactorEnabled
+    val twoFactorMethod = repository.twoFactorMethod
+    val activeDeviceSessions = repository.activeDeviceSessions
+    val loginHistory = repository.loginHistory
+
+    // Ecosystem 2.0 State
+    val clubMembership = repository.clubService.membership
+    val bonusTransactions = repository.clubService.bonusTransactions
+    val academyMaterials = repository.academyService.materials
+    val bookmarkedAcademyIds = repository.academyService.bookmarkedIds
+    val readAcademyIds = repository.academyService.readMaterialIds
+    val aiChatMessages = repository.aiService.chatMessages
+    val staffMembers = repository.crmService.staffMembers
+    val cannedResponses = repository.crmService.cannedResponses
+
+    // 2FA Verification Flow State
+    val is2FaVerificationActive = mutableStateOf(false)
+    val pending2FaUser = mutableStateOf<User?>(null)
+    val pending2FaMethod = mutableStateOf(TwoFactorMethod.SMS)
+    val pending2FaDestination = mutableStateOf("")
+    val pending2FaVerificationId = mutableStateOf("")
+
     val isServicesLoading = MutableStateFlow(false)
     val servicesError = MutableStateFlow<String?>(null)
 
@@ -211,6 +257,108 @@ class MainViewModel @JvmOverloads constructor(
 
     fun setThemeMode(mode: ThemeMode) {
         repository.setThemeMode(mode)
+    }
+
+    // --- BestGroup AI ---
+    fun sendAiMessage(prompt: String) {
+        val userOrders = orders.value.filter { it.userId == currentUser.value?.id }
+        repository.aiService.sendMessage(prompt, userOrders) {}
+    }
+
+    fun analyzeDocument(title: String, content: String): com.example.model.AiDocumentReport {
+        return repository.aiService.analyzeDocument(title, content)
+    }
+
+    // --- Price Calculator ---
+    fun calculateEstimate(
+        serviceType: com.example.model.ServiceType,
+        pageCount: Int,
+        language: String,
+        deadlineDays: Int,
+        isUrgent: Boolean,
+        isAakCheck: Boolean
+    ): com.example.model.PriceCalculationEstimate {
+        val userTier = clubMembership.value.tier
+        return repository.priceCalculatorService.calculateEstimate(
+            serviceType, pageCount, language, deadlineDays, isUrgent, isAakCheck, userTier
+        )
+    }
+
+    // --- Academy ---
+    fun toggleAcademyBookmark(materialId: String) {
+        viewModelScope.launch {
+            val uid = currentUser.value?.id ?: ""
+            repository.academyService.toggleBookmark(uid, materialId)
+        }
+    }
+
+    fun markAcademyAsRead(materialId: String) {
+        viewModelScope.launch {
+            val uid = currentUser.value?.id ?: ""
+            repository.academyService.markAsRead(uid, materialId)
+        }
+    }
+
+    // --- Club / Loyalty ---
+    fun applyClubBonus(amount: Double, orderId: String? = null) {
+        viewModelScope.launch {
+            val uid = currentUser.value?.id ?: ""
+            repository.clubService.addTransaction(
+                userId = uid,
+                amount = amount,
+                isCredit = false,
+                description = "Sifariş üçün bonus endirimi istifadə edildi",
+                orderId = orderId
+            )
+        }
+    }
+
+    // --- Document Versioning & Live Stages ---
+    fun addOrderDocumentVersion(
+        orderId: String,
+        fileName: String,
+        fileUrl: String,
+        sizeBytes: Long,
+        notes: String
+    ) {
+        viewModelScope.launch {
+            val isStaff = currentUser.value?.role in listOf(
+                com.example.model.UserRole.ADMIN,
+                com.example.model.UserRole.MANAGER,
+                com.example.model.UserRole.OPERATOR
+            )
+            val uploaderName = currentUser.value?.fullName ?: "İstifadəçi"
+            repository.addOrderDocumentVersion(orderId, fileName, fileUrl, sizeBytes, notes, uploaderName, isStaff)
+        }
+    }
+
+    fun updateOrderLiveStage(
+        orderId: String,
+        stage: com.example.model.OrderStage,
+        note: String
+    ) {
+        viewModelScope.launch {
+            val actorName = currentUser.value?.fullName ?: "Admin"
+            repository.updateOrderLiveStage(orderId, stage, note, actorName)
+        }
+    }
+
+    fun assignOrderStaff(orderId: String, staffId: String, staffName: String) {
+        viewModelScope.launch {
+            repository.assignOrderStaff(orderId, staffId, staffName)
+        }
+    }
+
+    fun addOrderTask(orderId: String, title: String, staffName: String, deadline: String) {
+        viewModelScope.launch {
+            repository.addOrderTask(orderId, title, staffName, deadline)
+        }
+    }
+
+    fun toggleOrderTask(orderId: String, taskId: String, currentStatus: Boolean) {
+        viewModelScope.launch {
+            repository.toggleOrderTask(orderId, taskId, currentStatus)
+        }
     }
 
     fun toggleFavoriteService(serviceId: String) {
@@ -419,9 +567,32 @@ class MainViewModel @JvmOverloads constructor(
             when (result) {
                 is AuthResult.Success -> {
                     authError.value = null
-                    showEmailVerificationBanner.value = !repository.isEmailVerified()
-                    _currentDestination.value = AppDestination.MAIN
-                    onSuccess()
+                    val user = result.data
+                    val isSuperAdmin = FirebaseAuthService.isSuperAdminEmail(user.email)
+                    val isStaff = user.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) || isSuperAdmin
+                    val requires2Fa = isStaff || repository.isTwoFactorEnabled.value
+
+                    if (requires2Fa) {
+                        pending2FaUser.value = user
+                        val method = repository.twoFactorMethod.value
+                        pending2FaMethod.value = method
+                        val dest = if (method == TwoFactorMethod.SMS) {
+                            val phone = user.phone.ifBlank { "+994500000000" }
+                            phone.take(4) + " *** ** " + phone.takeLast(2)
+                        } else {
+                            val em = user.email
+                            em.take(3) + "***@" + em.substringAfter("@")
+                        }
+                        pending2FaDestination.value = dest
+                        is2FaVerificationActive.value = true
+                        if (method == TwoFactorMethod.EMAIL) {
+                            repository.twoFactorService?.sendEmailTwoFactor(user.id, user.email)
+                        }
+                    } else {
+                        showEmailVerificationBanner.value = !repository.isEmailVerified()
+                        _currentDestination.value = AppDestination.MAIN
+                        onSuccess()
+                    }
                 }
                 is AuthResult.Error -> {
                     authError.value = result.message
@@ -493,9 +664,32 @@ class MainViewModel @JvmOverloads constructor(
             when (result) {
                 is AuthResult.Success -> {
                     authError.value = null
-                    showEmailVerificationBanner.value = !repository.isEmailVerified()
-                    _currentDestination.value = AppDestination.MAIN
-                    onSuccess()
+                    val user = result.data
+                    val isSuperAdmin = FirebaseAuthService.isSuperAdminEmail(user.email)
+                    val isStaff = user.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) || isSuperAdmin
+                    val requires2Fa = isStaff || repository.isTwoFactorEnabled.value
+
+                    if (requires2Fa) {
+                        pending2FaUser.value = user
+                        val method = repository.twoFactorMethod.value
+                        pending2FaMethod.value = method
+                        val dest = if (method == TwoFactorMethod.SMS) {
+                            val ph = user.phone.ifBlank { phone }
+                            ph.take(4) + " *** ** " + ph.takeLast(2)
+                        } else {
+                            val em = user.email
+                            em.take(3) + "***@" + em.substringAfter("@")
+                        }
+                        pending2FaDestination.value = dest
+                        is2FaVerificationActive.value = true
+                        if (method == TwoFactorMethod.EMAIL) {
+                            repository.twoFactorService?.sendEmailTwoFactor(user.id, user.email)
+                        }
+                    } else {
+                        showEmailVerificationBanner.value = !repository.isEmailVerified()
+                        _currentDestination.value = AppDestination.MAIN
+                        onSuccess()
+                    }
                 }
                 is AuthResult.Error -> {
                     authError.value = result.message
@@ -515,6 +709,220 @@ class MainViewModel @JvmOverloads constructor(
                 repository.updateUserPresence(false)
             } catch (_: Exception) {}
             repository.signOut()
+        }
+    }
+
+    // --- Security & Login Delegate Actions ---
+
+    fun isBiometricSupported(): Boolean = repository.securityManager?.isBiometricSupported() ?: false
+
+    fun setBiometricEnabled(enabled: Boolean) {
+        repository.securityManager?.setBiometricEnabled(enabled)
+    }
+
+    fun setPin(pin: String): Boolean {
+        return repository.securityManager?.setPin(pin) ?: false
+    }
+
+    fun removePin(): Boolean {
+        return repository.securityManager?.removePin() ?: false
+    }
+
+    fun validatePin(pin: String): PinValidationResult {
+        return repository.securityManager?.validatePin(pin) ?: PinValidationResult.Success
+    }
+
+    fun authenticateBiometric(
+        activity: FragmentActivity,
+        title: String = "BestGroup.az Təhlükəsiz Giriş",
+        subtitle: String = "Daxil olmaq üçün barmaq izinizi təsdiqləyin",
+        negativeButtonText: String = "PIN kod ilə daxil ol",
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        repository.securityManager?.showBiometricPrompt(activity, title, subtitle, negativeButtonText, onSuccess, onError)
+            ?: onError("Biometrik menecer aktiv deyil.")
+    }
+
+    fun setAutoLockTimeout(timeout: AutoLockTimeout) {
+        repository.securityManager?.setAutoLockTimeout(timeout)
+    }
+
+    fun setScreenSecurityEnabled(enabled: Boolean, activity: FragmentActivity?) {
+        repository.securityManager?.setScreenSecurityEnabled(enabled, activity)
+    }
+
+    fun cancel2FaVerification() {
+        is2FaVerificationActive.value = false
+        pending2FaUser.value = null
+        pending2FaVerificationId.value = ""
+    }
+
+    fun setTwoFactorEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.setTwoFactorEnabled(enabled)
+        }
+    }
+
+    fun setTwoFactorMethod(method: TwoFactorMethod) {
+        viewModelScope.launch {
+            repository.setTwoFactorMethod(method)
+        }
+    }
+
+    fun verify2FaCode(
+        code: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val user = pending2FaUser.value ?: currentUser.value
+        if (user == null) {
+            onError("İstifadəçi sessiyası tapılmadı.")
+            return
+        }
+
+        val method = pending2FaMethod.value
+        viewModelScope.launch {
+            val service = repository.twoFactorService
+            if (service == null) {
+                is2FaVerificationActive.value = false
+                _currentDestination.value = AppDestination.MAIN
+                onSuccess()
+                return@launch
+            }
+
+            if (method == TwoFactorMethod.SMS) {
+                val vId = pending2FaVerificationId.value
+                val res = service.verifySmsTwoFactor(vId, code)
+                res.fold(
+                    onSuccess = {
+                        is2FaVerificationActive.value = false
+                        pending2FaUser.value = null
+                        _currentDestination.value = AppDestination.MAIN
+                        onSuccess()
+                    },
+                    onFailure = { err ->
+                        onError(err.localizedMessage ?: "SMS kodu yanlışdır.")
+                    }
+                )
+            } else {
+                val res = service.verifyEmailTwoFactor(user.id, code)
+                res.fold(
+                    onSuccess = {
+                        is2FaVerificationActive.value = false
+                        pending2FaUser.value = null
+                        _currentDestination.value = AppDestination.MAIN
+                        onSuccess()
+                    },
+                    onFailure = { err ->
+                        onError(err.localizedMessage ?: "Təsdiq kodu yanlışdır.")
+                    }
+                )
+            }
+        }
+    }
+
+    fun resend2FaCode(activity: Activity?, onError: (String) -> Unit) {
+        val user = pending2FaUser.value ?: currentUser.value ?: return
+        val method = pending2FaMethod.value
+        val service = repository.twoFactorService ?: return
+
+        if (!service.canResendCode()) {
+            onError("Yenidən kod göndərmək üçün ${service.getResendCooldownSeconds()} saniyə gözləyin.")
+            return
+        }
+
+        if (method == TwoFactorMethod.SMS) {
+            if (activity != null) {
+                val phone = user.phone.ifBlank { "+994500000000" }
+                service.sendSmsTwoFactor(
+                    activity = activity,
+                    phoneNumber = phone,
+                    onCodeSent = { vId ->
+                        pending2FaVerificationId.value = vId
+                    },
+                    onError = { err -> onError(err) }
+                )
+            } else {
+                onError("SMS göndərmək üçün aktiv fəaliyyət tapılmadı.")
+            }
+        } else {
+            viewModelScope.launch {
+                val res = service.sendEmailTwoFactor(user.id, user.email)
+                res.onFailure { err -> onError(err.localizedMessage ?: "Kod göndərilmədi.") }
+            }
+        }
+    }
+
+    fun changePassword(oldPass: String, newPass: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            val res = repository.changePassword(oldPass, newPass)
+            res.fold(
+                onSuccess = { onSuccess() },
+                onFailure = { err -> onError(err.localizedMessage ?: "Şifrə yenilənmədi.") }
+            )
+        }
+    }
+
+    fun revokeDeviceSession(sessionId: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            val res = repository.revokeDeviceSession(sessionId)
+            res.fold(
+                onSuccess = { onSuccess() },
+                onFailure = { err -> onError(err.localizedMessage ?: "Sessiyanı ləğv etmək mümkün olmadı.") }
+            )
+        }
+    }
+
+    fun revokeAllOtherSessions(onSuccess: (Int) -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            val res = repository.revokeAllOtherSessions()
+            res.fold(
+                onSuccess = { count -> onSuccess(count) },
+                onFailure = { err -> onError(err.localizedMessage ?: "Cihazları ləğv etmək mümkün olmadı.") }
+            )
+        }
+    }
+
+    fun logoutAllDevices() {
+        _currentDestination.value = AppDestination.AUTH
+        _selectedBottomTab.value = BottomTab.HOME
+        _activeConversationId.value = null
+        _selectedOrder.value = null
+        viewModelScope.launch {
+            repository.logoutAllDevices()
+        }
+    }
+
+    fun verifyPasswordAndResetPin(password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            val res = repository.verifyPasswordAndResetPin(password)
+            res.fold(
+                onSuccess = { onSuccess() },
+                onFailure = { err -> onError(err.localizedMessage ?: "Şifrə yanlışdır.") }
+            )
+        }
+    }
+
+    fun onAppBackgrounded() {
+        repository.securityManager?.onAppBackgrounded()
+    }
+
+    fun onAppForegrounded() {
+        repository.securityManager?.onAppForegrounded()
+    }
+
+    fun lockApp() {
+        repository.securityManager?.lockApp()
+    }
+
+    fun unlockApp() {
+        repository.securityManager?.unlockApp()
+    }
+
+    fun logAdminAudit(action: String, targetUserId: String? = null, details: String = "") {
+        viewModelScope.launch {
+            repository.logAdminAction(action, targetUserId, details)
         }
     }
 
@@ -1151,8 +1559,8 @@ class MainViewModel @JvmOverloads constructor(
                 onError("Bu nömrə və ya e-mail ilə qeydiyyatdan keçmiş istifadəçi tapılmadı.")
                 return@launch
             }
-            val targetPhone = user.phone.ifBlank { phoneOrEmail }
-            val clean = targetPhone.trim().replace(" ", "").replace("-", "")
+            val targetPhone = if (phoneOrEmail.filter { it.isDigit() }.length >= 7) phoneOrEmail else user.phone
+            val clean = com.example.services.firebase.FirebaseAuthService.formatToE164(targetPhone)
             if (clean.filter { it.isDigit() }.length < 7) {
                 onError("İstifadəçinin qeydiyyatlı telefon nömrəsi tapılmadı.")
                 return@launch

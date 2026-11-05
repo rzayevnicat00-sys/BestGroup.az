@@ -111,7 +111,12 @@ data class Order(
     val customerName: String = "",
     val customerPhone: String = "",
     val customerEmail: String = "",
-    val isAakVerification: Boolean = false
+    val isAakVerification: Boolean = false,
+    val documentVersions: List<OrderDocumentVersion> = emptyList(),
+    val liveStages: List<OrderLiveStage> = emptyList(),
+    val tasks: List<OrderTask> = emptyList(),
+    val assignedStaffName: String = "",
+    val currentStage: OrderStage = OrderStage.CREATED
 ) {
     val orderId: String get() = id
     val customerId: String get() = userId

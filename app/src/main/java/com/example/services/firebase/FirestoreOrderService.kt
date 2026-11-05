@@ -464,6 +464,68 @@ class FirestoreOrderService(
                 }
             }
 
+            @Suppress("UNCHECKED_CAST")
+            val versionsRaw = (data["documentVersions"] as? List<Map<String, Any>>) ?: emptyList()
+            val documentVersions = versionsRaw.map { v ->
+                OrderDocumentVersion(
+                    id = v["id"] as? String ?: UUID.randomUUID().toString(),
+                    orderId = docId,
+                    versionNumber = (v["versionNumber"] as? Number)?.toInt() ?: 1,
+                    fileName = v["fileName"] as? String ?: "Sənəd.docx",
+                    fileUrl = v["fileUrl"] as? String ?: "",
+                    fileSizeBytes = (v["fileSizeBytes"] as? Number)?.toLong() ?: 0L,
+                    fileExtension = v["fileExtension"] as? String ?: "docx",
+                    uploadedBy = v["uploadedBy"] as? String ?: "Admin",
+                    uploaderRole = v["uploaderRole"] as? String ?: "admin",
+                    uploadedAt = v["uploadedAt"] as? String ?: "",
+                    uploadedAtEpoch = (v["uploadedAtEpoch"] as? Number)?.toLong() ?: 0L,
+                    isLatest = (v["isLatest"] as? Boolean) ?: true,
+                    isArchived = (v["isArchived"] as? Boolean) ?: false,
+                    changeNotes = v["changeNotes"] as? String ?: ""
+                )
+            }
+
+            @Suppress("UNCHECKED_CAST")
+            val stagesRaw = (data["liveStages"] as? List<Map<String, Any>>) ?: emptyList()
+            val liveStages = stagesRaw.map { s ->
+                val stageIdx = (s["stageIndex"] as? Number)?.toInt() ?: 0
+                val stg = OrderStage.entries.find { it.stageIndex == stageIdx } ?: OrderStage.CREATED
+                OrderLiveStage(
+                    stage = stg,
+                    timestamp = s["timestamp"] as? String ?: "",
+                    timestampEpoch = (s["timestampEpoch"] as? Number)?.toLong() ?: 0L,
+                    note = s["note"] as? String ?: "",
+                    actorName = s["actorName"] as? String ?: "Sistem"
+                )
+            }
+
+            @Suppress("UNCHECKED_CAST")
+            val tasksRaw = (data["tasks"] as? List<Map<String, Any>>) ?: emptyList()
+            val tasks = tasksRaw.map { t ->
+                OrderTask(
+                    id = t["id"] as? String ?: UUID.randomUUID().toString(),
+                    orderId = docId,
+                    title = t["title"] as? String ?: "",
+                    assignedStaffId = t["assignedStaffId"] as? String ?: "",
+                    assignedStaffName = t["assignedStaffName"] as? String ?: "",
+                    deadline = t["deadline"] as? String ?: "",
+                    isCompleted = (t["isCompleted"] as? Boolean) ?: false,
+                    orderIndex = (t["orderIndex"] as? Number)?.toInt() ?: 0
+                )
+            }
+
+            val currentStage = when (data["currentStage"] as? String ?: status.name) {
+                "CREATED" -> OrderStage.CREATED
+                "WAITING_APPROVAL" -> OrderStage.WAITING_APPROVAL
+                "ACCEPTED" -> OrderStage.ACCEPTED
+                "IN_PROGRESS" -> OrderStage.IN_PROGRESS
+                "IN_REVIEW" -> OrderStage.IN_REVIEW
+                "READY" -> OrderStage.READY
+                "COMPLETED" -> OrderStage.COMPLETED
+                "CANCELLED" -> OrderStage.CANCELLED
+                else -> OrderStage.CREATED
+            }
+
             Order(
                 id = docId,
                 orderNumber = data["orderNumber"] as? String ?: "#BG-2026",
@@ -495,11 +557,71 @@ class FirestoreOrderService(
                 customerName = data["customerName"] as? String ?: "",
                 customerPhone = data["customerPhone"] as? String ?: "",
                 customerEmail = data["customerEmail"] as? String ?: "",
-                isAakVerification = (data["isAakVerification"] as? Boolean) ?: false
+                isAakVerification = (data["isAakVerification"] as? Boolean) ?: false,
+                documentVersions = documentVersions,
+                liveStages = liveStages,
+                tasks = tasks,
+                assignedStaffName = data["assignedStaffName"] as? String ?: "",
+                currentStage = currentStage
             )
         } catch (e: Exception) {
             android.util.Log.e("FirestoreOrderService", "Failed to parse order doc $docId: ${e.message}", e)
             null
         }
+    }
+
+    suspend fun addDocumentVersion(orderId: String, version: OrderDocumentVersion) {
+        val docRef = ordersCollection.document(orderId)
+        val snapshot = docRef.get().await()
+        val existing = (snapshot.get("documentVersions") as? List<*>)?.mapNotNull { it as? Map<*, *> } ?: emptyList()
+        val archivedExisting = existing.map { v ->
+            v.toMutableMap().apply { put("isLatest", false) }
+        }
+        val newVerMap = mapOf(
+            "id" to version.id,
+            "orderId" to version.orderId,
+            "versionNumber" to (existing.size + 1),
+            "fileName" to version.fileName,
+            "fileUrl" to version.fileUrl,
+            "fileSizeBytes" to version.fileSizeBytes,
+            "fileExtension" to version.fileExtension,
+            "uploadedBy" to version.uploadedBy,
+            "uploaderRole" to version.uploaderRole,
+            "uploadedAt" to version.uploadedAt,
+            "uploadedAtEpoch" to version.uploadedAtEpoch,
+            "isLatest" to true,
+            "isArchived" to false,
+            "changeNotes" to version.changeNotes
+        )
+        docRef.update("documentVersions", archivedExisting + newVerMap).await()
+    }
+
+    suspend fun updateLiveStage(orderId: String, stage: OrderStage, note: String, actorName: String) {
+        val docRef = ordersCollection.document(orderId)
+        val snapshot = docRef.get().await()
+        val existing = (snapshot.get("liveStages") as? List<*>)?.mapNotNull { it as? Map<*, *> } ?: emptyList()
+        val nowStr = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date())
+        val stageMap = mapOf(
+            "stageIndex" to stage.stageIndex,
+            "timestamp" to nowStr,
+            "timestampEpoch" to System.currentTimeMillis(),
+            "note" to note,
+            "actorName" to actorName
+        )
+        val mappedStatus = when (stage) {
+            OrderStage.ACCEPTED -> "accepted"
+            OrderStage.IN_PROGRESS, OrderStage.IN_REVIEW -> "in_progress"
+            OrderStage.READY, OrderStage.COMPLETED -> "ready"
+            OrderStage.CANCELLED -> "cancelled"
+            else -> "pending"
+        }
+        docRef.update(
+            mapOf(
+                "currentStage" to stage.name,
+                "status" to mappedStatus,
+                "liveStages" to (existing + stageMap),
+                "updatedAt" to nowStr
+            )
+        ).await()
     }
 }

@@ -304,8 +304,7 @@ class FirebaseAuthService(
         onFailed: (String) -> Unit
     ) {
         try {
-            val clean = phoneNumber.trim().replace(" ", "").replace("-", "")
-            val formatted = if (clean.startsWith("+")) clean else "+$clean"
+            val formatted = formatToE164(phoneNumber)
             val options = PhoneAuthOptions.newBuilder(auth)
                 .setPhoneNumber(formatted)
                 .setTimeout(60L, TimeUnit.SECONDS)
@@ -613,6 +612,18 @@ class FirebaseAuthService(
     companion object {
         val SUPER_ADMIN_EMAILS = setOf("elmarmmdov1@gmail.com", "rzayevnicat00@gmail.com")
 
+        fun formatToE164(raw: String): String {
+            val clean = raw.trim().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+            val digits = clean.filter { it.isDigit() }
+            return when {
+                clean.startsWith("+") -> clean
+                digits.startsWith("994") && digits.length >= 12 -> "+$digits"
+                digits.startsWith("0") && digits.length == 10 -> "+994" + digits.substring(1)
+                digits.length == 9 -> "+994$digits"
+                else -> if (clean.startsWith("+")) clean else "+$clean"
+            }
+        }
+
         fun normalizePhoneDigits(raw: String): String {
             val digits = raw.filter { it.isDigit() }
             return when {
@@ -644,10 +655,22 @@ class FirebaseAuthService(
                     "ERROR_WEAK_PASSWORD" -> "Şifrə çox zəifdir. Ən azı 6 simvoldan ibarət olmalıdır."
                     "ERROR_USER_DISABLED" -> "Bu istifadəçi hesabı sistem tərəfindən deaktiv edilib."
                     "ERROR_TOO_MANY_REQUESTS" -> "Çox sayda uğursuz cəhd edildi. Zəhmət olmasa bir qədər sonra yenidən cəhd edin."
-                    "ERROR_OPERATION_NOT_ALLOWED" -> "E-mail/şifrə ilə giriş Firebase Console-da aktivləşdirilməyib."
+                    "ERROR_OPERATION_NOT_ALLOWED" -> "SMS və ya E-mail ilə giriş Firebase Console-da aktivləşdirilməyib."
+                    "ERROR_INVALID_PHONE_NUMBER" -> "Telefon nömrəsi formatı düzgün deyil (+994XXXXXXXXX formatında daxil edin)."
+                    "ERROR_QUOTA_EXCEEDED" -> "Gündəlik SMS limiti tükənmişdir. Zəhmət olmasa e-mail ilə şifrə sıfırlamadan istifadə edin."
                     "ERROR_NETWORK_REQUEST_FAILED" -> "İnternet bağlantısı yoxdur. Şəbəkə əlaqənizi yoxlayın."
                     else -> "Autentifikasiya xətası: ${e.localizedMessage ?: e.errorCode}"
                 }
+                msg.contains("invalid-phone-number", ignoreCase = true) ||
+                msg.contains("format of the phone number", ignoreCase = true) ->
+                    "Telefon nömrəsinin formatı düzgün deyil (+994XXXXXXXXX formatında daxil edin)."
+                msg.contains("quota-exceeded", ignoreCase = true) ||
+                msg.contains("quota exceeded", ignoreCase = true) ||
+                msg.contains("sms quota", ignoreCase = true) ->
+                    "SMS limiti dolmuşdur. Zəhmət olmasa E-mail ilə şifrə sıfırlamadan istifadə edin."
+                msg.contains("app-not-authorized", ignoreCase = true) ||
+                msg.contains("App not authorized to use Firebase Authentication", ignoreCase = true) ->
+                    "Tətbiqin təhlükəsizlik sertifikatı yoxlanılır. Zəhmət olmasa E-mail ilə şifrə sıfırlama seçin."
                 msg.contains("The email address is already in use", ignoreCase = true) ->
                     "Bu e-mail ünvanı ilə artıq başqa bir hesab qeydiyyatdan keçib."
                 msg.contains("The email address is badly formatted", ignoreCase = true) ||
