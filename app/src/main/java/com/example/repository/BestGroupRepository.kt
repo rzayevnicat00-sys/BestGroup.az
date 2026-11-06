@@ -431,21 +431,7 @@ class BestGroupRepository(
         if (!updateInfo.isUpdateAvailable) return false
         val hasNewer = updateInfo.versionCode > currentAppVersionCode
         if (!hasNewer) return false
-
-        // Mandatory updates can NEVER be dismissed or snoozed
-        if (isMandatoryUpdate(updateInfo)) return true
-
-        // For optional updates: check if dismissed within 24 hours
-        val prefs = context?.getSharedPreferences("bestgroup_prefs", Context.MODE_PRIVATE)
-        val lastDismissedCode = prefs?.getInt("dismissed_update_version_code", -1) ?: -1
-        val lastDismissedTime = prefs?.getLong("dismissed_update_timestamp", 0L) ?: 0L
-
-        if (lastDismissedCode == updateInfo.versionCode) {
-            val elapsed = System.currentTimeMillis() - lastDismissedTime
-            if (elapsed < UPDATE_SNOOZE_DURATION_MS) {
-                return false
-            }
-        }
+        if (_isUpdateDismissed.value && !isMandatoryUpdate(updateInfo)) return false
         return true
     }
 

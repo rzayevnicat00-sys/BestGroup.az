@@ -49,8 +49,6 @@ fun SecuritySettingsScreen(
     val isPinConfigured by viewModel.isPinConfigured.collectAsState()
     val autoLockTimeout by viewModel.autoLockTimeout.collectAsState()
     val isScreenSecurityEnabled by viewModel.isScreenSecurityEnabled.collectAsState()
-    val isTwoFactorEnabled by viewModel.isTwoFactorEnabled.collectAsState()
-    val twoFactorMethod by viewModel.twoFactorMethod.collectAsState()
     val activeSessions by viewModel.activeDeviceSessions.collectAsState()
 
     val coroutineScope = rememberCoroutineScope()
@@ -58,7 +56,6 @@ fun SecuritySettingsScreen(
 
     var showPinSetupDialog by remember { mutableStateOf(false) }
     var showAutoLockDialog by remember { mutableStateOf(false) }
-    var show2FaMethodDialog by remember { mutableStateOf(false) }
     var showChangePasswordDialog by remember { mutableStateOf(false) }
     var showLogoutAllDialog by remember { mutableStateOf(false) }
     var showRemovePinConfirmDialog by remember { mutableStateOf(false) }
@@ -244,43 +241,6 @@ fun SecuritySettingsScreen(
                 }
             }
 
-            // Section 2: İki Mərhələli Təsdiqləmə (2FA)
-            item {
-                SecuritySectionCard(title = "İKİ MƏRHƏLƏLİ TƏSDİQLƏMƏ (2FA)") {
-                    SecurityToggleItem(
-                        icon = Icons.Default.Security,
-                        title = "İki mərhələli təsdiqləmə (2FA)",
-                        subtitle = if (isStaff) {
-                            "Admin və kurator heyəti üçün 2FA məcburidir"
-                        } else {
-                            "Yeni cihazdan daxil olduqda SMS və ya Email ilə təsdiq tələb et"
-                        },
-                        checked = if (isStaff) true else isTwoFactorEnabled,
-                        enabled = !isStaff,
-                        onCheckedChange = { enable ->
-                            viewModel.setTwoFactorEnabled(enable)
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar(
-                                    if (enable) "2FA aktivləşdirildi." else "2FA deaktiv edildi."
-                                )
-                            }
-                        },
-                        tag = "toggle_2fa"
-                    )
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
-
-                    SecurityNavigationItem(
-                        icon = Icons.Default.Message,
-                        title = "2FA Təsdiqləmə üsulu",
-                        subtitle = if (twoFactorMethod == TwoFactorMethod.SMS) "Mobil nömrəyə real SMS OTP kodu ilə" else "E-poçt ünvanına təsdiq kodu ilə",
-                        badge = twoFactorMethod.name,
-                        badgeColor = BirbankRed,
-                        onClick = { show2FaMethodDialog = true },
-                        tag = "menu_2fa_method"
-                    )
-                }
-            }
 
             // Section 3: Cihazlar və Giriş Tarixçəsi
             item {
@@ -427,53 +387,6 @@ fun SecuritySettingsScreen(
         )
     }
 
-    // 2FA Method Selector Dialog
-    if (show2FaMethodDialog) {
-        AlertDialog(
-            onDismissRequest = { show2FaMethodDialog = false },
-            title = { Text("2FA Təsdiqləmə Metodu", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TwoFactorMethod.values().forEach { method ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable {
-                                    viewModel.setTwoFactorMethod(method)
-                                    show2FaMethodDialog = false
-                                }
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text(
-                                    text = method.titleAz,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = if (method == twoFactorMethod) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (method == twoFactorMethod) BirbankRed else BirbankTextPrimary
-                                )
-                                Text(
-                                    text = if (method == TwoFactorMethod.SMS) "Firebase Phone Auth vasitəsilə" else "Hesabınızın e-poçt ünvanına",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = BirbankTextSecondary
-                                )
-                            }
-                            if (method == twoFactorMethod) {
-                                Icon(Icons.Default.Check, contentDescription = null, tint = BirbankRed)
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { show2FaMethodDialog = false }) {
-                    Text("Bağla")
-                }
-            }
-        )
-    }
 
     // Change Password Dialog
     if (showChangePasswordDialog) {

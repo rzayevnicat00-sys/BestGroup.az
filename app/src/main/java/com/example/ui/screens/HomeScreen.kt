@@ -538,6 +538,19 @@ fun HomeScreen(
                         onClick = { viewModel.navigateTo(AppDestination.ACADEMIC_CABINET) }
                     )
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EcosystemFeatureCard(
+                        title = "AI Sənəd Analizi",
+                        subtitle = "Qrammatika, struktur və format yoxlaması",
+                        icon = Icons.Default.Description,
+                        iconTint = Color(0xFF0284C7),
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { viewModel.navigateTo(AppDestination.AI_DOC_ASSISTANT) }
+                    )
+                }
             }
         }
 

@@ -567,32 +567,9 @@ class MainViewModel @JvmOverloads constructor(
             when (result) {
                 is AuthResult.Success -> {
                     authError.value = null
-                    val user = result.data
-                    val isSuperAdmin = FirebaseAuthService.isSuperAdminEmail(user.email)
-                    val isStaff = user.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) || isSuperAdmin
-                    val requires2Fa = isStaff || repository.isTwoFactorEnabled.value
-
-                    if (requires2Fa) {
-                        pending2FaUser.value = user
-                        val method = repository.twoFactorMethod.value
-                        pending2FaMethod.value = method
-                        val dest = if (method == TwoFactorMethod.SMS) {
-                            val phone = user.phone.ifBlank { "+994500000000" }
-                            phone.take(4) + " *** ** " + phone.takeLast(2)
-                        } else {
-                            val em = user.email
-                            em.take(3) + "***@" + em.substringAfter("@")
-                        }
-                        pending2FaDestination.value = dest
-                        is2FaVerificationActive.value = true
-                        if (method == TwoFactorMethod.EMAIL) {
-                            repository.twoFactorService?.sendEmailTwoFactor(user.id, user.email)
-                        }
-                    } else {
-                        showEmailVerificationBanner.value = !repository.isEmailVerified()
-                        _currentDestination.value = AppDestination.MAIN
-                        onSuccess()
-                    }
+                    showEmailVerificationBanner.value = !repository.isEmailVerified()
+                    _currentDestination.value = AppDestination.MAIN
+                    onSuccess()
                 }
                 is AuthResult.Error -> {
                     authError.value = result.message
@@ -664,32 +641,9 @@ class MainViewModel @JvmOverloads constructor(
             when (result) {
                 is AuthResult.Success -> {
                     authError.value = null
-                    val user = result.data
-                    val isSuperAdmin = FirebaseAuthService.isSuperAdminEmail(user.email)
-                    val isStaff = user.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) || isSuperAdmin
-                    val requires2Fa = isStaff || repository.isTwoFactorEnabled.value
-
-                    if (requires2Fa) {
-                        pending2FaUser.value = user
-                        val method = repository.twoFactorMethod.value
-                        pending2FaMethod.value = method
-                        val dest = if (method == TwoFactorMethod.SMS) {
-                            val ph = user.phone.ifBlank { phone }
-                            ph.take(4) + " *** ** " + ph.takeLast(2)
-                        } else {
-                            val em = user.email
-                            em.take(3) + "***@" + em.substringAfter("@")
-                        }
-                        pending2FaDestination.value = dest
-                        is2FaVerificationActive.value = true
-                        if (method == TwoFactorMethod.EMAIL) {
-                            repository.twoFactorService?.sendEmailTwoFactor(user.id, user.email)
-                        }
-                    } else {
-                        showEmailVerificationBanner.value = !repository.isEmailVerified()
-                        _currentDestination.value = AppDestination.MAIN
-                        onSuccess()
-                    }
+                    showEmailVerificationBanner.value = !repository.isEmailVerified()
+                    _currentDestination.value = AppDestination.MAIN
+                    onSuccess()
                 }
                 is AuthResult.Error -> {
                     authError.value = result.message
@@ -1277,12 +1231,13 @@ class MainViewModel @JvmOverloads constructor(
     val isAttachingFile = mutableStateOf(false)
     val attachFileProgress = mutableStateOf(0f)
 
-    fun adminAttachFileToOrder(
+    fun attachFileToOrder(
         orderId: String,
         uriString: String,
         fileName: String,
         sizeBytes: Long,
         mimeType: String,
+        uploaderName: String = "Admin",
         onSuccess: () -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
@@ -1307,6 +1262,8 @@ class MainViewModel @JvmOverloads constructor(
                     ?: repository.orderService?.getOrderById(orderId)
                     ?: throw IllegalStateException("Sifariş tapılmadı.")
 
+                val isStaffUploader = uploaderName.contains("admin", true) || uploaderName.contains("kurator", true) || uploaderName.contains("staff", true)
+
                 var uploadedFile: OrderAttachedFile? = null
                 if (repository.storageService != null) {
                     try {
@@ -1319,13 +1276,13 @@ class MainViewModel @JvmOverloads constructor(
                             mimeType = mimeType,
                             fileId = fileId,
                             onProgress = { p -> attachFileProgress.value = p }
-                        ).copy(uploadedBy = "Admin")
+                        ).copy(uploadedBy = uploaderName)
                     } catch (storageEx: Exception) {
-                        android.util.Log.w("AdminFileAttach", "Storage upload warning: ${storageEx.message}")
+                        android.util.Log.w("FileAttach", "Storage upload warning: ${storageEx.message}")
                     }
                 }
 
-                if (uploadedFile == null) {
+                if (uploadedFile == null || uploadedFile.state == FileUploadState.FAILED) {
                     uploadedFile = OrderAttachedFile(
                         id = fileId,
                         name = fileName,
@@ -1336,7 +1293,7 @@ class MainViewModel @JvmOverloads constructor(
                         progress = 1f,
                         mimeType = mimeType,
                         storagePath = "users/${targetOrder.userId}/orders/$orderId/files/$fileId.$ext",
-                        uploadedBy = "Admin",
+                        uploadedBy = uploaderName,
                         uploadedAt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
                     )
                 }
@@ -1345,29 +1302,68 @@ class MainViewModel @JvmOverloads constructor(
                 try {
                     repository.orderService?.updateOrderFiles(orderId, updatedFiles)
                 } catch (dbEx: Exception) {
-                    android.util.Log.w("AdminFileAttach", "Firestore updateOrderFiles warning: ${dbEx.message}")
+                    android.util.Log.w("FileAttach", "Firestore updateOrderFiles warning: ${dbEx.message}")
+                }
+
+                // Add to document versions history for version tracking
+                val docVer = OrderDocumentVersion(
+                    id = "ver_${UUID.randomUUID()}",
+                    orderId = orderId,
+                    versionNumber = targetOrder.documentVersions.size + 1,
+                    fileName = fileName,
+                    fileUrl = uploadedFile.downloadUrl ?: "",
+                    fileSizeBytes = effectiveSize,
+                    fileExtension = ext,
+                    uploadedBy = uploaderName,
+                    uploaderRole = if (isStaffUploader) "admin" else "customer",
+                    uploadedAt = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date()),
+                    uploadedAtEpoch = System.currentTimeMillis(),
+                    isLatest = true,
+                    isArchived = false,
+                    changeNotes = if (isStaffUploader) "Admin/Kurator tərəfindən material əlavə edildi" else "Müştəri tərəfindən material yükləndi"
+                )
+
+                try {
+                    repository.orderService?.addDocumentVersion(orderId, docVer)
+                } catch (verEx: Exception) {
+                    android.util.Log.w("FileAttach", "Firestore addDocumentVersion warning: ${verEx.message}")
                 }
 
                 // Update in-memory state
-                val updatedOrder = targetOrder.copy(files = updatedFiles)
+                val updatedVersions = targetOrder.documentVersions.map { it.copy(isLatest = false) } + docVer
+                val updatedOrder = targetOrder.copy(files = updatedFiles, documentVersions = updatedVersions)
                 repository.setOrdersDirectly(repository.orders.value.map { if (it.id == orderId) updatedOrder else it })
                 if (_selectedOrder.value?.id == orderId) {
                     _selectedOrder.value = updatedOrder
                 }
 
-                // Send notification strictly to the customer
-                repository.addNotification(
-                    NotificationItem(
-                        id = "notif_${UUID.randomUUID()}",
-                        title = "Sifarişinizə yeni fayl əlavə edildi (${targetOrder.orderNumber})",
-                        body = "Admin/Kurator tərəfindən material əlavə olundu: $fileName",
-                        category = NotificationCategory.ORDERS,
-                        timestamp = "İndicə",
-                        targetOrderId = orderId,
-                        forAdmin = false,
-                        targetUserId = targetOrder.userId
+                // Send notification
+                if (isStaffUploader) {
+                    repository.addNotification(
+                        NotificationItem(
+                            id = "notif_${UUID.randomUUID()}",
+                            title = "Sifarişinizə yeni fayl əlavə edildi (${targetOrder.orderNumber})",
+                            body = "Admin tərəfindən yeni material əlavə olundu: $fileName",
+                            category = NotificationCategory.ORDERS,
+                            timestamp = "İndicə",
+                            targetOrderId = orderId,
+                            forAdmin = false,
+                            targetUserId = targetOrder.userId
+                        )
                     )
-                )
+                } else {
+                    repository.addNotification(
+                        NotificationItem(
+                            id = "notif_${UUID.randomUUID()}",
+                            title = "Müştəri sifarişə yeni fayl yüklədi (${targetOrder.orderNumber})",
+                            body = "${targetOrder.customerName.ifBlank { "Müştəri" }} material əlavə etdi: $fileName",
+                            category = NotificationCategory.ORDERS,
+                            timestamp = "İndicə",
+                            targetOrderId = orderId,
+                            forAdmin = true
+                        )
+                    )
+                }
 
                 onSuccess()
             } catch (e: Exception) {
@@ -1376,6 +1372,27 @@ class MainViewModel @JvmOverloads constructor(
                 isAttachingFile.value = false
             }
         }
+    }
+
+    fun adminAttachFileToOrder(
+        orderId: String,
+        uriString: String,
+        fileName: String,
+        sizeBytes: Long,
+        mimeType: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        attachFileToOrder(
+            orderId = orderId,
+            uriString = uriString,
+            fileName = fileName,
+            sizeBytes = sizeBytes,
+            mimeType = mimeType,
+            uploaderName = "Admin",
+            onSuccess = onSuccess,
+            onError = onError
+        )
     }
 
     fun adminDeleteOrderFile(

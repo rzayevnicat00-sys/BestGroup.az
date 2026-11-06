@@ -319,6 +319,7 @@ class FirebaseAuthService(
                     }
 
                     override fun onVerificationFailed(e: FirebaseException) {
+                        android.util.Log.e("PhoneAuth", "Firebase Phone Auth onVerificationFailed: code=${(e as? FirebaseAuthException)?.errorCode}, msg=${e.message}", e)
                         onFailed(mapFirebaseError(e))
                     }
                 })
@@ -664,13 +665,20 @@ class FirebaseAuthService(
                 msg.contains("invalid-phone-number", ignoreCase = true) ||
                 msg.contains("format of the phone number", ignoreCase = true) ->
                     "Telefon nömrəsinin formatı düzgün deyil (+994XXXXXXXXX formatında daxil edin)."
+                msg.contains("SMS region policy", ignoreCase = true) ||
+                msg.contains("blocked country", ignoreCase = true) ->
+                    "Firebase Console -> Authentication -> Settings -> SMS Region Policy bölməsində Azərbaycan (+994) üçün SMS icazəsi aktiv edilməlidir."
                 msg.contains("quota-exceeded", ignoreCase = true) ||
                 msg.contains("quota exceeded", ignoreCase = true) ||
                 msg.contains("sms quota", ignoreCase = true) ->
-                    "SMS limiti dolmuşdur. Zəhmət olmasa E-mail ilə şifrə sıfırlamadan istifadə edin."
+                    "SMS göndəriş limiti dolmuşdur. Zəhmət olmasa E-mail ilə şifrə sıfırlamadan istifadə edin."
+                msg.contains("billing", ignoreCase = true) ||
+                msg.contains("billing account", ignoreCase = true) ->
+                    "Firebase layihəsində beynəlxalq SMS göndərişi üçün Google Cloud Billing (Blaze planı) tələb olunur."
                 msg.contains("app-not-authorized", ignoreCase = true) ||
-                msg.contains("App not authorized to use Firebase Authentication", ignoreCase = true) ->
-                    "Tətbiqin təhlükəsizlik sertifikatı yoxlanılır. Zəhmət olmasa E-mail ilə şifrə sıfırlama seçin."
+                msg.contains("App not authorized to use Firebase Authentication", ignoreCase = true) ||
+                msg.contains("Play Integrity", ignoreCase = true) ->
+                    "Tətbiqin SHA-256 sertifikatı Firebase Console-da qeydiyyatdan keçməyib. Zəhmət olmasa E-mail ilə bərpa üsulunu seçin."
                 msg.contains("The email address is already in use", ignoreCase = true) ->
                     "Bu e-mail ünvanı ilə artıq başqa bir hesab qeydiyyatdan keçib."
                 msg.contains("The email address is badly formatted", ignoreCase = true) ||

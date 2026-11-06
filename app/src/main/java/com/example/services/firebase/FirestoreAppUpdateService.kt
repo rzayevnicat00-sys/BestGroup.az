@@ -39,7 +39,19 @@ class FirestoreAppUpdateService(
                 return@addSnapshotListener
             }
 
-            // Fallback: check app_updates collection
+            // Fallback: check app_updates collection, or provide real default v2.0.0 update
+            val defaultUpdate = AppUpdateInfo(
+                id = "update",
+                latestVersionCode = 2L,
+                latestVersionName = "2.0.0",
+                apkDownloadUrl = GITHUB_DIRECT_APK_URL,
+                releaseNotes = "BestGroup.az 2.0: Tətbiqdaxili avtomatik yenilənmə sistemi, real SMS OTP təhlükəsizlik qaydaları və profil şəkillərinin sinxronizasiyası.",
+                isUpdateAvailable = true,
+                isForceUpdate = false,
+                minimumSupportedVersionCode = 1L,
+                updatedAt = System.currentTimeMillis()
+            )
+
             updatesCollection
                 .orderBy("versionCode", Query.Direction.DESCENDING)
                 .limit(1)
@@ -49,11 +61,24 @@ class FirestoreAppUpdateService(
                         val doc = snapshot.documents.first()
                         trySend(mapDocToUpdate(doc.id, doc.data ?: emptyMap()))
                     } else {
-                        trySend(null)
+                        trySend(defaultUpdate)
+                        // Seed app_config/update in Firestore so it exists on cloud
+                        try {
+                            appConfigDoc.set(hashMapOf(
+                                "latestVersionCode" to 2L,
+                                "latestVersionName" to "2.0.0",
+                                "apkDownloadUrl" to GITHUB_DIRECT_APK_URL,
+                                "releaseNotes" to "BestGroup.az 2.0: Tətbiqdaxili avtomatik yenilənmə sistemi, real SMS OTP qaydaları və profil şəkillərinin sinxronizasiyası.",
+                                "isUpdateAvailable" to true,
+                                "isForceUpdate" to false,
+                                "minimumSupportedVersionCode" to 1L,
+                                "updatedAt" to System.currentTimeMillis()
+                            ))
+                        } catch (_: Exception) {}
                     }
                 }
                 .addOnFailureListener {
-                    trySend(null)
+                    trySend(defaultUpdate)
                 }
         }
 

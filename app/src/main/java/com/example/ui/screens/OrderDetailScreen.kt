@@ -93,12 +93,14 @@ fun OrderDetailScreen(
                     size = 15000L
                 }
                 val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
-                viewModel.adminAttachFileToOrder(
+                val uploaderTitle = if (isStaff) "Admin" else (currentUser?.fullName?.ifBlank { "Müştəri" } ?: "Müştəri")
+                viewModel.attachFileToOrder(
                     orderId = order.id,
                     uriString = uri.toString(),
                     fileName = name,
                     sizeBytes = size,
                     mimeType = mime,
+                    uploaderName = uploaderTitle,
                     onSuccess = {
                         coroutineScope.launch { snackbarHostState.showSnackbar("Fayl uğurla əlavə edildi: $name") }
                     },
@@ -448,32 +450,32 @@ fun OrderDetailScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
 
-                            if (isStaff) {
-                                Button(
-                                    onClick = {
-                                        filePickerLauncher.launch(
-                                            arrayOf(
-                                                "application/pdf",
-                                                "application/msword",
-                                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                                "application/vnd.ms-powerpoint",
-                                                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                                                "image/*",
-                                                "video/mp4",
-                                                "*/*"
-                                            )
+                            Button(
+                                onClick = {
+                                    filePickerLauncher.launch(
+                                        arrayOf(
+                                            "application/pdf",
+                                            "application/msword",
+                                            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                            "application/vnd.ms-excel",
+                                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                            "application/vnd.ms-powerpoint",
+                                            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                                            "image/*",
+                                            "video/*",
+                                            "*/*"
                                         )
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier
-                                        .height(36.dp)
-                                        .testTag("admin_attach_file_btn")
-                                ) {
-                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Fayl əlavə et", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
+                                    )
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = BirbankRed, contentColor = Color.White),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .height(36.dp)
+                                    .testTag("attach_file_btn")
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Fayl əlavə et", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
 

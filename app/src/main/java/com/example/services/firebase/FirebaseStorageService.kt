@@ -28,7 +28,7 @@ class FirebaseStorageService(
         const val MAX_FILES_PER_ORDER: Int = 15
 
         val SUPPORTED_EXTENSIONS = setOf(
-            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "jpg", "jpeg", "png", "mp4"
+            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "jpg", "jpeg", "png", "webp", "gif", "mp4", "mov", "avi", "mkv", "zip", "rar", "7z", "txt", "csv"
         )
 
         val SUPPORTED_MIME_TYPES = setOf(
@@ -168,21 +168,42 @@ class FirebaseStorageService(
 
             uploadTask.addOnSuccessListener {
                 activeUploads.remove(fileId)
-                val uploadedFile = OrderAttachedFile(
-                    id = fileId,
-                    name = originalFileName,
-                    originalFileName = originalFileName,
-                    sizeBytes = sizeBytes,
-                    extension = ext,
-                    progress = 1.0f,
-                    state = FileUploadState.UPLOADED,
-                    storagePath = storagePath,
-                    mimeType = mimeType,
-                    uploadedAt = isoNow,
-                    uploadedBy = userId
-                )
-                if (continuation.isActive) {
-                    continuation.resume(uploadedFile)
+                storageRef.downloadUrl.addOnSuccessListener { dlUri ->
+                    val uploadedFile = OrderAttachedFile(
+                        id = fileId,
+                        name = originalFileName,
+                        originalFileName = originalFileName,
+                        sizeBytes = sizeBytes,
+                        extension = ext,
+                        progress = 1.0f,
+                        state = FileUploadState.UPLOADED,
+                        storagePath = storagePath,
+                        downloadUrl = dlUri.toString(),
+                        mimeType = mimeType,
+                        uploadedAt = isoNow,
+                        uploadedBy = userId
+                    )
+                    if (continuation.isActive) {
+                        continuation.resume(uploadedFile)
+                    }
+                }.addOnFailureListener {
+                    val uploadedFile = OrderAttachedFile(
+                        id = fileId,
+                        name = originalFileName,
+                        originalFileName = originalFileName,
+                        sizeBytes = sizeBytes,
+                        extension = ext,
+                        progress = 1.0f,
+                        state = FileUploadState.UPLOADED,
+                        storagePath = storagePath,
+                        downloadUrl = null,
+                        mimeType = mimeType,
+                        uploadedAt = isoNow,
+                        uploadedBy = userId
+                    )
+                    if (continuation.isActive) {
+                        continuation.resume(uploadedFile)
+                    }
                 }
             }
 
@@ -254,21 +275,42 @@ class FirebaseStorageService(
 
             uploadTask.addOnSuccessListener {
                 activeUploads.remove(fileId)
-                val uploadedFile = OrderAttachedFile(
-                    id = fileId,
-                    name = originalFileName,
-                    originalFileName = originalFileName,
-                    sizeBytes = fileBytes.size.toLong(),
-                    extension = ext,
-                    progress = 1.0f,
-                    state = FileUploadState.UPLOADED,
-                    storagePath = storagePath,
-                    mimeType = mimeType,
-                    uploadedAt = isoNow,
-                    uploadedBy = userId
-                )
-                if (continuation.isActive) {
-                    continuation.resume(uploadedFile)
+                storageRef.downloadUrl.addOnSuccessListener { dlUri ->
+                    val uploadedFile = OrderAttachedFile(
+                        id = fileId,
+                        name = originalFileName,
+                        originalFileName = originalFileName,
+                        sizeBytes = fileBytes.size.toLong(),
+                        extension = ext,
+                        progress = 1.0f,
+                        state = FileUploadState.UPLOADED,
+                        storagePath = storagePath,
+                        downloadUrl = dlUri.toString(),
+                        mimeType = mimeType,
+                        uploadedAt = isoNow,
+                        uploadedBy = userId
+                    )
+                    if (continuation.isActive) {
+                        continuation.resume(uploadedFile)
+                    }
+                }.addOnFailureListener {
+                    val uploadedFile = OrderAttachedFile(
+                        id = fileId,
+                        name = originalFileName,
+                        originalFileName = originalFileName,
+                        sizeBytes = fileBytes.size.toLong(),
+                        extension = ext,
+                        progress = 1.0f,
+                        state = FileUploadState.UPLOADED,
+                        storagePath = storagePath,
+                        downloadUrl = null,
+                        mimeType = mimeType,
+                        uploadedAt = isoNow,
+                        uploadedBy = userId
+                    )
+                    if (continuation.isActive) {
+                        continuation.resume(uploadedFile)
+                    }
                 }
             }
 

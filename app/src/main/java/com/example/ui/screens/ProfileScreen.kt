@@ -534,9 +534,27 @@ fun ProfileScreen(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
 
                         ProfileMenuItem(
+                            icon = Icons.Default.WorkspacePremium,
+                            title = "BestGroup Club",
+                            subtitle = "Loyallıq səviyyəsi, bonus balansı və referal dəvət",
+                            onClick = { viewModel.navigateTo(AppDestination.BESTGROUP_CLUB) },
+                            tag = "profile_menu_club"
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                        ProfileMenuItem(
+                            icon = Icons.Default.FolderSpecial,
+                            title = "Şəxsi Akademik Kabinet",
+                            subtitle = "Mənim materiallarım, sənədlər və qeydlər",
+                            onClick = { viewModel.navigateTo(AppDestination.ACADEMIC_CABINET) },
+                            tag = "profile_menu_cabinet"
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+
+                        ProfileMenuItem(
                             icon = Icons.Default.Security,
                             title = localizedString(StringKey.PROFILE_SECURITY_TITLE),
-                            subtitle = "Barmaq izi, PIN kod, 2FA, aktiv cihazlar",
+                            subtitle = "Barmaq izi, 4 rəqəmli PIN kod, avtomatik kilid, aktiv cihazlar",
                             onClick = { viewModel.navigateTo(AppDestination.SECURITY_SETTINGS) },
                             tag = "profile_menu_security"
                         )

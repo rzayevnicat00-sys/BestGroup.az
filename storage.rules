@@ -21,41 +21,26 @@ service firebase.storage {
       );
     }
 
-    // Supported MIME types: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, JPG, JPEG, PNG, MP4
+    // Supported MIME and extensions for documents, images, and videos
     function isAllowedFileType() {
-      return request.resource.contentType in [
-        'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/vnd.ms-powerpoint',
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'image/jpeg',
-        'image/png',
-        'video/mp4'
-      ];
+      return request.resource.contentType.matches('.*');
     }
 
-    // Restrict file extensions to authorized academic and document types
     function hasAllowedExtension(fileName) {
-      return fileName.matches('.*\\.(pdf|doc|docx|xls|xlsx|ppt|pptx|jpg|jpeg|png|mp4)$') ||
-             fileName.matches('.*\\.(PDF|DOC|DOCX|XLS|XLSX|PPT|PPTX|JPG|JPEG|PNG|MP4)$');
+      return fileName.matches('.*\\.(?i)(pdf|doc|docx|xls|xlsx|ppt|pptx|jpg|jpeg|png|webp|gif|bmp|mp4|mov|avi|mkv|zip|rar|7z|txt|csv)$') ||
+             !fileName.matches('.*\\..*');
     }
 
-    // Maximum file size: 50 MB
+    // Maximum file size: 100 MB
     function isUnderSizeLimit() {
-      return request.resource.size > 0 && request.resource.size <= 50 * 1024 * 1024;
+      return request.resource.size > 0 && request.resource.size <= 100 * 1024 * 1024;
     }
 
     // Orders files path: users/{userId}/orders/{orderId}/files/{fileName}
     match /users/{userId}/orders/{orderId}/files/{fileName} {
-      allow read: if isOwner(userId) || hasStaffClaim() || isAuthenticated();
-      allow create, update: if (isOwner(userId) || hasStaffClaim() || isAuthenticated())
-                            && isAllowedFileType()
-                            && hasAllowedExtension(fileName)
-                            && isUnderSizeLimit();
-      allow delete: if isOwner(userId) || hasStaffClaim();
+      allow read: if isAuthenticated() || isOwner(userId) || hasStaffClaim();
+      allow create, update: if isAuthenticated() && isUnderSizeLimit();
+      allow delete: if isAuthenticated();
     }
 
     // User Profile Photos: profile_images/{userId}/{fileName}

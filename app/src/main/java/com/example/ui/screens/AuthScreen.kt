@@ -998,54 +998,20 @@ fun AuthScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showOtpDialog = false }) {
-                    Text("Ləğv et", color = MaterialTheme.colorScheme.outline)
-                }
-            }
-        )
-    }
-
-    val is2FaVerificationActive = viewModel.is2FaVerificationActive.value
-    val pending2FaUser = viewModel.pending2FaUser.value
-    val pending2FaMethod = viewModel.pending2FaMethod.value
-
-    if (is2FaVerificationActive && pending2FaUser != null) {
-        val destinationMasked = if (pending2FaMethod == TwoFactorMethod.SMS) {
-            val phone = pending2FaUser.phone.ifBlank { "+994500000000" }
-            if (phone.length > 6) {
-                "${phone.take(4)}***${phone.takeLast(2)}"
-            } else phone
-        } else {
-            val email = pending2FaUser.email
-            val parts = email.split("@")
-            if (parts.size == 2 && parts[0].length > 2) {
-                "${parts[0].take(2)}***@${parts[1]}"
-            } else email
-        }
-
-        TwoFactorVerificationDialog(
-            method = pending2FaMethod,
-            destinationMasked = destinationMasked,
-            onDismiss = {
-                viewModel.cancel2FaVerification()
-            },
-            onVerify = { code, onError ->
-                viewModel.verify2FaCode(
-                    code = code,
-                    onSuccess = {
-                        onAuthSuccess()
-                    },
-                    onError = { err ->
-                        onError(err)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    TextButton(onClick = {
+                        showOtpDialog = false
+                        performRegistration(phoneVerified = false)
+                    }) {
+                        Text("SMS gəlmədi? E-poçtla tamamla", fontSize = 11.sp, color = BirbankRed)
                     }
-                )
-            },
-            onResend = {
-                val act = context.findActivity()
-                viewModel.resend2FaCode(
-                    activity = act,
-                    onError = { /* handled */ }
-                )
+                    TextButton(onClick = { showOtpDialog = false }) {
+                        Text("Ləğv et", color = MaterialTheme.colorScheme.outline)
+                    }
+                }
             }
         )
     }
