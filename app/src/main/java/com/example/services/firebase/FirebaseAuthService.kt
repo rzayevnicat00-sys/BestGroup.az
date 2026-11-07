@@ -646,63 +646,70 @@ class FirebaseAuthService(
         }
 
         fun mapFirebaseError(e: Exception): String {
-            val msg = e.message ?: ""
-            return when {
-                e is FirebaseAuthException -> when (e.errorCode) {
-                    "ERROR_USER_NOT_FOUND" -> "Bu e-mail ilə qeydiyyatdan keçmiş istifadəçi tapılmadı."
-                    "ERROR_WRONG_PASSWORD" -> "Daxil edilən şifrə yanlışdır."
-                    "ERROR_INVALID_EMAIL" -> "Daxil edilən e-mail ünvanının formatı düzgün deyil."
-                    "ERROR_EMAIL_ALREADY_IN_USE" -> "Bu e-mail ünvanı ilə artıq başqa bir hesab qeydiyyatdan keçib."
-                    "ERROR_WEAK_PASSWORD" -> "Şifrə çox zəifdir. Ən azı 6 simvoldan ibarət olmalıdır."
-                    "ERROR_USER_DISABLED" -> "Bu istifadəçi hesabı sistem tərəfindən deaktiv edilib."
-                    "ERROR_TOO_MANY_REQUESTS" -> "Çox sayda uğursuz cəhd edildi. Zəhmət olmasa bir qədər sonra yenidən cəhd edin."
-                    "ERROR_OPERATION_NOT_ALLOWED" -> "SMS və ya E-mail ilə giriş Firebase Console-da aktivləşdirilməyib."
-                    "ERROR_INVALID_PHONE_NUMBER" -> "Telefon nömrəsi formatı düzgün deyil (+994XXXXXXXXX formatında daxil edin)."
-                    "ERROR_QUOTA_EXCEEDED" -> "Gündəlik SMS limiti tükənmişdir. Zəhmət olmasa e-mail ilə şifrə sıfırlamadan istifadə edin."
-                    "ERROR_NETWORK_REQUEST_FAILED" -> "İnternet bağlantısı yoxdur. Şəbəkə əlaqənizi yoxlayın."
-                    else -> "Autentifikasiya xətası: ${e.localizedMessage ?: e.errorCode}"
-                }
-                msg.contains("invalid-phone-number", ignoreCase = true) ||
-                msg.contains("format of the phone number", ignoreCase = true) ->
-                    "Telefon nömrəsinin formatı düzgün deyil (+994XXXXXXXXX formatında daxil edin)."
-                msg.contains("SMS region policy", ignoreCase = true) ||
-                msg.contains("blocked country", ignoreCase = true) ->
-                    "Firebase Console -> Authentication -> Settings -> SMS Region Policy bölməsində Azərbaycan (+994) üçün SMS icazəsi aktiv edilməlidir."
-                msg.contains("quota-exceeded", ignoreCase = true) ||
-                msg.contains("quota exceeded", ignoreCase = true) ||
-                msg.contains("sms quota", ignoreCase = true) ->
-                    "SMS göndəriş limiti dolmuşdur. Zəhmət olmasa E-mail ilə şifrə sıfırlamadan istifadə edin."
+            val msg = (e.message ?: "") + " " + (e.localizedMessage ?: "")
+            val code = (e as? FirebaseAuthException)?.errorCode ?: ""
+
+            // Google Cloud Billing constraint for Phone SMS OTP
+            if (msg.contains("BILLING_NOT_ENABLED", ignoreCase = true) ||
                 msg.contains("billing", ignoreCase = true) ||
-                msg.contains("billing account", ignoreCase = true) ->
-                    "Firebase layihəsində beynəlxalq SMS göndərişi üçün Google Cloud Billing (Blaze planı) tələb olunur."
-                msg.contains("app-not-authorized", ignoreCase = true) ||
-                msg.contains("App not authorized to use Firebase Authentication", ignoreCase = true) ||
-                msg.contains("Play Integrity", ignoreCase = true) ->
-                    "Tətbiqin SHA-256 sertifikatı Firebase Console-da qeydiyyatdan keçməyib. Zəhmət olmasa E-mail ilə bərpa üsulunu seçin."
-                msg.contains("The email address is already in use", ignoreCase = true) ->
-                    "Bu e-mail ünvanı ilə artıq başqa bir hesab qeydiyyatdan keçib."
-                msg.contains("The email address is badly formatted", ignoreCase = true) ||
-                msg.contains("invalid email", ignoreCase = true) ->
-                    "Daxil edilən e-mail ünvanının formatı düzgün deyil."
-                msg.contains("There is no user record", ignoreCase = true) ->
-                    "Bu e-mail ilə qeydiyyatdan keçmiş istifadəçi tapılmadı."
-                msg.contains("INVALID_LOGIN_CREDENTIALS", ignoreCase = true) ||
-                msg.contains("wrong password", ignoreCase = true) ||
-                msg.contains("invalid credential", ignoreCase = true) ->
-                    "Daxil edilən e-mail və ya şifrə yanlışdır."
-                msg.contains("Password should be at least 6 characters", ignoreCase = true) ||
-                msg.contains("weak-password", ignoreCase = true) ->
-                    "Şifrə ən azı 6 simvoldan ibarət olmalıdır."
-                msg.contains("network error", ignoreCase = true) ||
-                msg.contains("network-request-failed", ignoreCase = true) ->
-                    "İnternet bağlantısı yoxdur. Şəbəkə bağlantınızı yoxlayın."
-                msg.contains("too many requests", ignoreCase = true) ||
-                msg.contains("too-many-requests", ignoreCase = true) ->
-                    "Çox sayda uğursuz cəhd edildi. Zəhmət olmasa bir qədər sonra yenidən cəhd edin."
-                msg.contains("user-disabled", ignoreCase = true) ->
-                    "Bu istifadəçi hesabı sistem tərəfindən deaktiv edilib."
-                else -> e.localizedMessage ?: "Əməliyyat zamanı xəta baş verdi. Zəhmət olmasa yenidən cəhd edin."
+                code.contains("BILLING_NOT_ENABLED", ignoreCase = true)
+            ) {
+                return "SMS göndərişi üçün Firebase layihənizdə Google Cloud Billing (Blaze planı) aktiv edilməlidir (hər ay 10 000 SMS tam pulsuzdur) və ya sınaq üçün bu nömrə Firebase Console -> Authentication -> Sign-in method -> Phone -> 'Phone numbers for testing' bölməsindən əlavə edilməlidir."
             }
+
+            if (msg.contains("SMS region policy", ignoreCase = true) || msg.contains("blocked country", ignoreCase = true)) {
+                return "Firebase Console -> Authentication -> Settings -> SMS Region Policy bölməsində Azərbaycan (+994) üçün SMS icazəsi aktiv edilməlidir."
+            }
+
+            if (code == "ERROR_QUOTA_EXCEEDED" || msg.contains("quota", ignoreCase = true)) {
+                return "Gündəlik SMS limiti tükənmişdir. Zəhmət olmasa E-mail ilə şifrə sıfırlamadan istifadə edin."
+            }
+
+            if (code == "ERROR_INVALID_PHONE_NUMBER" || msg.contains("invalid-phone-number", ignoreCase = true) || msg.contains("format of the phone number", ignoreCase = true)) {
+                return "Telefon nömrəsinin formatı düzgün deyil (+994XXXXXXXXX formatında daxil edin)."
+            }
+
+            if (msg.contains("app-not-authorized", ignoreCase = true) || msg.contains("Play Integrity", ignoreCase = true) || msg.contains("reCAPTCHA", ignoreCase = true)) {
+                return "Tətbiqin SHA-256 sertifikatı və ya Play Integrity/reCAPTCHA Firebase Console-da təsdiqlənməlidir. Zəhmət olmasa E-mail ilə bərpa üsulunu seçin."
+            }
+
+            if (code == "ERROR_USER_NOT_FOUND" || msg.contains("There is no user record", ignoreCase = true)) {
+                return "Bu istifadəçi məlumatı ilə qeydiyyatdan keçmiş hesab tapılmadı."
+            }
+
+            if (code == "ERROR_WRONG_PASSWORD" || msg.contains("wrong password", ignoreCase = true) || msg.contains("invalid credential", ignoreCase = true) || msg.contains("INVALID_LOGIN_CREDENTIALS", ignoreCase = true)) {
+                return "Daxil edilən e-mail və ya şifrə yanlışdır."
+            }
+
+            if (code == "ERROR_INVALID_EMAIL" || msg.contains("badly formatted", ignoreCase = true) || msg.contains("invalid email", ignoreCase = true)) {
+                return "Daxil edilən e-mail ünvanının formatı düzgün deyil."
+            }
+
+            if (code == "ERROR_EMAIL_ALREADY_IN_USE" || msg.contains("already in use", ignoreCase = true)) {
+                return "Bu e-mail ünvanı ilə artıq başqa bir hesab qeydiyyatdan keçib."
+            }
+
+            if (code == "ERROR_WEAK_PASSWORD" || msg.contains("Password should be at least", ignoreCase = true) || msg.contains("weak-password", ignoreCase = true)) {
+                return "Şifrə çox zəifdir. Ən azı 6 simvoldan ibarət olmalıdır."
+            }
+
+            if (code == "ERROR_USER_DISABLED" || msg.contains("user-disabled", ignoreCase = true)) {
+                return "Bu istifadəçi hesabı sistem tərəfindən deaktiv edilib."
+            }
+
+            if (code == "ERROR_TOO_MANY_REQUESTS" || msg.contains("too many requests", ignoreCase = true) || msg.contains("too-many-requests", ignoreCase = true)) {
+                return "Çox sayda uğursuz cəhd edildi. Zəhmət olmasa bir qədər sonra yenidən cəhd edin."
+            }
+
+            if (code == "ERROR_OPERATION_NOT_ALLOWED") {
+                return "SMS və ya E-mail ilə giriş Firebase Console-da aktivləşdirilməyib."
+            }
+
+            if (code == "ERROR_NETWORK_REQUEST_FAILED" || msg.contains("network error", ignoreCase = true) || msg.contains("network-request-failed", ignoreCase = true)) {
+                return "İnternet bağlantısı yoxdur. Şəbəkə əlaqənizi yoxlayın."
+            }
+
+            return e.localizedMessage ?: "Əməliyyat zamanı xəta baş verdi. Zəhmət olmasa yenidən cəhd edin."
         }
     }
 }

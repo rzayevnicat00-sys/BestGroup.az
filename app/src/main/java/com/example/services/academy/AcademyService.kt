@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.tasks.await
 
-class AcademyService(private val firestore: FirebaseFirestore) {
+class AcademyService(private val firestore: FirebaseFirestore? = null) {
 
     private val _materials = MutableStateFlow<List<AcademyMaterial>>(getInitialMaterials())
     val materials: StateFlow<List<AcademyMaterial>> = _materials.asStateFlow()
@@ -22,8 +22,9 @@ class AcademyService(private val firestore: FirebaseFirestore) {
 
     suspend fun loadUserProgress(userId: String) {
         if (userId.isBlank()) return
+        val fs = firestore ?: return
         try {
-            val doc = firestore.collection("users").document(userId)
+            val doc = fs.collection("users").document(userId)
                 .collection("academy_progress").document("user_state").get().await()
             if (doc.exists()) {
                 val bookmarks = (doc.get("bookmarks") as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet()
@@ -54,8 +55,9 @@ class AcademyService(private val firestore: FirebaseFirestore) {
 
     private suspend fun saveUserProgress(userId: String) {
         if (userId.isBlank()) return
+        val fs = firestore ?: return
         try {
-            firestore.collection("users").document(userId)
+            fs.collection("users").document(userId)
                 .collection("academy_progress").document("user_state")
                 .set(
                     mapOf(

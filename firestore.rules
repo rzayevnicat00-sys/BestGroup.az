@@ -105,6 +105,24 @@ service cloud.firestore {
       match /two_factor_tokens/{tokenId} {
         allow read, write: if isOwner(userId) || isStaff();
       }
+
+      // BestGroup Club Membership & Preferences
+      match /club/{docId} {
+        allow read: if true;
+        allow write: if isOwner(userId) || isStaff();
+      }
+
+      // Bonus Transactions History
+      match /bonus_transactions/{txId} {
+        allow read: if isOwner(userId) || isStaff();
+        allow write: if isOwner(userId) || isStaff();
+      }
+
+      // Club Referrals (Friends invited by user)
+      match /club_referrals/{refId} {
+        allow read: if isOwner(userId) || isStaff();
+        allow write: if isAuthenticated() || isStaff();
+      }
     }
 
     // Orders Collection
@@ -293,6 +311,23 @@ service cloud.firestore {
       allow read: if isStaff() || isAdmin();
       allow create: if isStaff() || isAdmin();
       allow update, delete: if isSuperAdmin();
+    }
+
+    // BestGroup Club Tier Configurations (Configurable by admin, readable by all)
+    match /club_config/{docId} {
+      allow read: if true;
+      allow write: if isStaff() || isAdmin();
+    }
+
+    // BestGroup Club Campaigns (Managed by admin, readable by all)
+    match /club_campaigns/{campId} {
+      allow read: if true;
+      allow write: if isStaff() || isAdmin();
+    }
+
+    // Collection Group query for referral lookup
+    match /{path=**}/club/{docId} {
+      allow read: if true;
     }
   }
 }

@@ -29,9 +29,14 @@ class FirebaseService(private val context: Context) {
 
     val storage: FirebaseStorage by lazy {
         try {
-            FirebaseStorage.getInstance()
-        } catch (e: Exception) {
-            FirebaseStorage.getInstance()
+            val app = FirebaseApp.getInstance()
+            FirebaseStorage.getInstance(app, "gs://gen-lang-client-0453632710.firebasestorage.app")
+        } catch (_: Exception) {
+            try {
+                FirebaseStorage.getInstance("gs://gen-lang-client-0453632710.firebasestorage.app")
+            } catch (_: Exception) {
+                FirebaseStorage.getInstance()
+            }
         }
     }
 }

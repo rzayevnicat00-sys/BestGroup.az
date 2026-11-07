@@ -95,17 +95,17 @@ class BestGroupRepository(
     val aiService = com.example.services.ai.BestGroupAiService()
 
     val academyService by lazy {
-        val fs = authService?.firestoreInstance ?: com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        val fs = authService?.firestoreInstance ?: try { com.google.firebase.firestore.FirebaseFirestore.getInstance() } catch (_: Throwable) { null }
         com.example.services.academy.AcademyService(fs)
     }
 
     val clubService by lazy {
-        val fs = authService?.firestoreInstance ?: com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        val fs = authService?.firestoreInstance ?: try { com.google.firebase.firestore.FirebaseFirestore.getInstance() } catch (_: Throwable) { null }
         com.example.services.club.BestGroupClubService(fs)
     }
 
     val crmService by lazy {
-        val fs = authService?.firestoreInstance ?: com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        val fs = authService?.firestoreInstance ?: try { com.google.firebase.firestore.FirebaseFirestore.getInstance() } catch (_: Throwable) { null }
         com.example.services.admin.CrmAndStaffService(fs)
     }
 
@@ -616,8 +616,9 @@ class BestGroupRepository(
                 if (fbUser != null) {
                     val isSuperAdmin = FirebaseAuthService.isSuperAdminEmail(fbUser.email)
                     val profile = authService.fetchUserProfile(fbUser.uid)
+                    val isAdmin = isSuperAdmin || profile?.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR)
                     if (profile != null) {
-                        _currentUser.value = if (isSuperAdmin) profile.copy(role = UserRole.ADMIN) else profile
+                        _currentUser.value = if (isAdmin) profile.copy(role = UserRole.ADMIN, isTwoFactorEnabled = false) else profile
                     } else {
                         _currentUser.value = User(
                             id = fbUser.uid,
@@ -627,8 +628,13 @@ class BestGroupRepository(
                             university = "",
                             faculty = "",
                             degreeLevel = "Bakalavriat",
-                            role = if (isSuperAdmin) UserRole.ADMIN else UserRole.CUSTOMER
+                            role = if (isAdmin) UserRole.ADMIN else UserRole.CUSTOMER,
+                            isTwoFactorEnabled = false
                         )
+                    }
+                    if (isAdmin) {
+                        _isTwoFactorEnabled.value = false
+                        sharedPrefs?.edit()?.putBoolean("two_factor_enabled", false)?.commit()
                     }
                     // Register FCM push token for this user safely
                     try {
@@ -955,7 +961,12 @@ class BestGroupRepository(
                 if (res is AuthResult.Success) {
                     setRememberMe(rememberMe)
                     val isSuperAdmin = FirebaseAuthService.isSuperAdminEmail(res.data.email)
-                    val finalUser = if (isSuperAdmin) res.data.copy(role = UserRole.ADMIN) else res.data
+                    val isAdmin = isSuperAdmin || res.data.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR)
+                    val finalUser = if (isAdmin) res.data.copy(role = UserRole.ADMIN, isTwoFactorEnabled = false) else res.data
+                    if (isAdmin) {
+                        _isTwoFactorEnabled.value = false
+                        sharedPrefs?.edit()?.putBoolean("two_factor_enabled", false)?.commit()
+                    }
                     _currentUser.value = finalUser
 
                     val sessionId = securityManager?.getDeviceSessionId() ?: UUID.randomUUID().toString()
@@ -968,6 +979,7 @@ class BestGroupRepository(
             } else {
                 setRememberMe(rememberMe)
                 val isSuperAdmin = FirebaseAuthService.isSuperAdminEmail(email)
+                val isAdmin = isSuperAdmin || email.endsWith("@bestgroup.az") || email.contains("admin")
                 val fallbackUser = User(
                     id = "usr_${UUID.randomUUID()}",
                     fullName = email.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
@@ -976,8 +988,13 @@ class BestGroupRepository(
                     university = "",
                     faculty = "",
                     degreeLevel = "Bakalavriat",
-                    role = if (isSuperAdmin) UserRole.ADMIN else UserRole.CUSTOMER
+                    role = if (isAdmin) UserRole.ADMIN else UserRole.CUSTOMER,
+                    isTwoFactorEnabled = false
                 )
+                if (isAdmin) {
+                    _isTwoFactorEnabled.value = false
+                    sharedPrefs?.edit()?.putBoolean("two_factor_enabled", false)?.commit()
+                }
                 _currentUser.value = fallbackUser
                 val sessionId = securityManager?.getDeviceSessionId() ?: UUID.randomUUID().toString()
                 val devName = DeviceSessionService.getDeviceDisplayName()
@@ -1500,6 +1517,16 @@ class BestGroupRepository(
 
         val targetOrder = _orders.value.find { it.id == orderId }
         if (targetOrder != null) {
+            if (newStatus == OrderStatus.READY) {
+                try {
+                    val estimatedAmount = (targetOrder.pageCount * 5.0).coerceAtLeast(35.0)
+                    clubService.awardOrderCompletionBonus(
+                        userId = targetOrder.userId,
+                        orderId = targetOrder.id,
+                        orderAmountAzn = estimatedAmount
+                    )
+                } catch (_: Exception) {}
+            }
             // Notification for customer only
             addNotification(
                 NotificationItem(

@@ -204,8 +204,15 @@ fun AuthScreen(
                 return
             }
 
-            // Real Firebase Phone Auth SMS dispatch
-            startRegisterSmsVerification()
+            // Admin hesablarına giriş və qeydiyyat zamanı 2FA / SMS OTP tələbi ləğv edilir
+            val isStaffUser = com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(emailClean) ||
+                              emailClean.endsWith("@bestgroup.az") ||
+                              emailClean.contains("admin")
+            if (isStaffUser) {
+                performRegistration(phoneVerified = true)
+            } else {
+                startRegisterSmsVerification()
+            }
         }
     }
 
@@ -651,15 +658,73 @@ fun AuthScreen(
                     if (phoneResetError != null) {
                         Surface(
                             color = MaterialTheme.colorScheme.errorContainer,
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = phoneResetError ?: "",
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(8.dp)
-                            )
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.Top,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = phoneResetError ?: "",
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+
+                                if (resetMode == 1) {
+                                    val targetEmail = phoneResetUser?.email?.takeIf { it.isNotBlank() }
+                                    OutlinedButton(
+                                        onClick = {
+                                            if (targetEmail != null) {
+                                                resetEmail = targetEmail
+                                                resetMode = 0
+                                                phoneResetError = null
+                                                isResetSubmitting = true
+                                                viewModel.sendPasswordReset(
+                                                    email = targetEmail,
+                                                    onSuccess = { emailResetSent = true; isResetSubmitting = false },
+                                                    onError = { e -> phoneResetError = e; isResetSubmitting = false }
+                                                )
+                                            } else {
+                                                resetMode = 0
+                                                phoneResetError = null
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.surface,
+                                            contentColor = BirbankRed
+                                        ),
+                                        modifier = Modifier.fillMaxWidth().testTag("auth_fallback_email_reset_btn")
+                                    ) {
+                                        Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (targetEmail != null) {
+                                                val at = targetEmail.indexOf('@')
+                                                val masked = if (at > 2) {
+                                                    targetEmail.take(2) + "***" + targetEmail.substring(at - 1)
+                                                } else targetEmail
+                                                "E-poçtla dərhal bərpa et ($masked)"
+                                            } else "E-mail ilə bərpa et",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -817,8 +882,11 @@ fun AuthScreen(
                                         phoneOtpInput = ""
                                         isResetSubmitting = false
                                     },
-                                    onError = { err ->
+                                    onError = { err, foundUser ->
                                         phoneResetError = err
+                                        if (foundUser != null) {
+                                            phoneResetUser = foundUser
+                                        }
                                         isResetSubmitting = false
                                     }
                                 )

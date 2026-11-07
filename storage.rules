@@ -38,7 +38,13 @@ service firebase.storage {
 
     // Orders files path: users/{userId}/orders/{orderId}/files/{fileName}
     match /users/{userId}/orders/{orderId}/files/{fileName} {
-      allow read: if isAuthenticated() || isOwner(userId) || hasStaffClaim();
+      allow read: if true;
+      allow create, update: if isAuthenticated() && isUnderSizeLimit();
+      allow delete: if isAuthenticated();
+    }
+
+    match /orders/{orderId}/files/{fileName} {
+      allow read: if true;
       allow create, update: if isAuthenticated() && isUnderSizeLimit();
       allow delete: if isAuthenticated();
     }

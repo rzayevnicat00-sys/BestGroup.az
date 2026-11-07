@@ -923,6 +923,49 @@ private fun Step7ReviewOrder(state: com.example.viewmodel.OrderWizardUiState, vi
                 }
             }
         }
+
+        item {
+            val membership by viewModel.clubMembership.collectAsState()
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, BirbankBorder)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.WorkspacePremium, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("BestGroup Club Üstünlüyü", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                        Surface(
+                            color = Color(membership.tier.badgeColorHex).copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = "${membership.tier.title} (${(membership.tier.bonusPercent * 100).toInt()}% Keşbek)",
+                                color = Color(membership.tier.badgeColorHex),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Mövcud Bonus Balansınız: ${String.format(java.util.Locale.US, "%.2f", membership.bonusBalanceAzn)} ₼. Bu sifariş tamamlandıqda əlavə keşbek qazanacaqsınız.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BirbankTextSecondary
+                    )
+                }
+            }
+        }
     }
 }
 

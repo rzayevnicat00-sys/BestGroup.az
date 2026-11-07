@@ -630,6 +630,97 @@ fun OrderDetailScreen(
                 }
             }
 
+            // 4.1 Document Version History
+            if (order.documentVersions.isNotEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BirbankBorder)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.HistoryEdu, contentDescription = null, tint = BirbankRed)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Sənəd Versiyaları Tarixçəsi",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            order.documentVersions.sortedByDescending { it.versionNumber }.forEach { ver ->
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                Surface(
+                                                    color = if (ver.isLatest) BirbankRed else BirbankTextSecondary,
+                                                    shape = RoundedCornerShape(4.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "v${ver.versionNumber}${if (ver.isLatest) " (Son)" else ""}",
+                                                        color = Color.White,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                                Text(
+                                                    text = ver.fileName,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = "${ver.uploadedBy} • ${ver.uploadedAt} • ${ver.sizeFormatted}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+
+                                        if (ver.fileUrl.isNotBlank()) {
+                                            IconButton(
+                                                onClick = {
+                                                    val attachedFile = OrderAttachedFile(
+                                                        id = ver.id,
+                                                        name = ver.fileName,
+                                                        sizeBytes = ver.fileSizeBytes,
+                                                        extension = ver.fileExtension,
+                                                        downloadUrl = ver.fileUrl
+                                                    )
+                                                    viewModel.openOrDownloadOrderFile(context, attachedFile) { _, msg ->
+                                                        coroutineScope.launch { snackbarHostState.showSnackbar(msg) }
+                                                    }
+                                                }
+                                            ) {
+                                                Icon(Icons.Default.Download, contentDescription = "Yüklə", tint = BirbankRed)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // 5. Existing Review (if present)
             if (order.review != null) {
                 item {

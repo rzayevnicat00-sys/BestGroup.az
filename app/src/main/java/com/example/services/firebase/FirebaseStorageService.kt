@@ -81,7 +81,7 @@ class FirebaseStorageService(
             if (!mimeType.isNullOrBlank() && !mimeType.equals("application/octet-stream", ignoreCase = true) && !mimeType.equals("*/*", ignoreCase = true)) {
                 val normalizedMime = mimeType.trim().lowercase()
                 if (!SUPPORTED_MIME_TYPES.contains(normalizedMime) && !normalizedMime.startsWith("image/") && !normalizedMime.startsWith("video/")) {
-                    // Non-fatal warning for unusual doc types, but allow standard doc
+                    throw IllegalArgumentException("Dəstəklənməyən MIME növü: $mimeType. Yalnız PDF, Word, PowerPoint, Excel, şəkil və video faylları qəbul edilir.")
                 }
             }
         }
@@ -115,7 +115,30 @@ class FirebaseStorageService(
     }
 
     suspend fun getFileDownloadUrl(storagePath: String): String {
-        return storage.reference.child(storagePath).downloadUrl.await().toString()
+        val clean = storagePath.trim()
+        if (clean.isBlank()) throw IllegalArgumentException("Storage path boş ola bilməz.")
+        if (clean.startsWith("http://", ignoreCase = true) || clean.startsWith("https://", ignoreCase = true)) {
+            return clean
+        }
+        return if (clean.startsWith("gs://", ignoreCase = true)) {
+            storage.getReferenceFromUrl(clean).downloadUrl.await().toString()
+        } else {
+            val normalized = clean.removePrefix("/")
+            try {
+                storage.reference.child(normalized).downloadUrl.await().toString()
+            } catch (ex: Exception) {
+                if (normalized.contains("/files/")) {
+                    val fallbackPath = "orders/" + normalized.substringAfter("/orders/")
+                    try {
+                        storage.reference.child(fallbackPath).downloadUrl.await().toString()
+                    } catch (_: Exception) {
+                        throw ex
+                    }
+                } else {
+                    throw ex
+                }
+            }
+        }
     }
 
     suspend fun deleteOrderFile(storagePath: String) {

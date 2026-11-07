@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
-class CrmAndStaffService(private val firestore: FirebaseFirestore) {
+class CrmAndStaffService(private val firestore: FirebaseFirestore? = null) {
 
     private val _staffMembers = MutableStateFlow<List<StaffMember>>(getInitialStaff())
     val staffMembers: StateFlow<List<StaffMember>> = _staffMembers.asStateFlow()
@@ -18,28 +18,28 @@ class CrmAndStaffService(private val firestore: FirebaseFirestore) {
 
     suspend fun assignOrderToStaff(orderId: String, staffId: String, staffName: String) {
         if (orderId.isBlank()) return
+        val list = _staffMembers.value.map { staff ->
+            if (staff.id == staffId) {
+                val count = staff.activeTasksCount + 1
+                staff.copy(activeTasksCount = count, workloadScore = (count * 20).coerceAtMost(100))
+            } else staff
+        }
+        _staffMembers.value = list
+        val fs = firestore ?: return
         try {
-            firestore.collection("orders").document(orderId)
+            fs.collection("orders").document(orderId)
                 .update(
                     mapOf(
                         "assignedStaffName" to staffName,
                         "updatedAt" to System.currentTimeMillis().toString()
                     )
                 ).await()
-
-            // Update local workload
-            val list = _staffMembers.value.map { staff ->
-                if (staff.id == staffId) {
-                    val count = staff.activeTasksCount + 1
-                    staff.copy(activeTasksCount = count, workloadScore = (count * 20).coerceAtMost(100))
-                } else staff
-            }
-            _staffMembers.value = list
         } catch (_: Exception) {}
     }
 
     suspend fun addTaskToOrder(orderId: String, title: String, assignedStaff: String, deadline: String) {
         if (orderId.isBlank() || title.isBlank()) return
+        val fs = firestore ?: return
         try {
             val task = OrderTask(
                 id = UUID.randomUUID().toString(),
@@ -49,7 +49,7 @@ class CrmAndStaffService(private val firestore: FirebaseFirestore) {
                 deadline = deadline,
                 isCompleted = false
             )
-            val docRef = firestore.collection("orders").document(orderId)
+            val docRef = fs.collection("orders").document(orderId)
             val snapshot = docRef.get().await()
             val existing = (snapshot.get("tasks") as? List<*>)?.mapNotNull { it as? Map<*, *> } ?: emptyList()
             val updated = existing + mapOf(
@@ -66,8 +66,9 @@ class CrmAndStaffService(private val firestore: FirebaseFirestore) {
 
     suspend fun toggleTaskCompletion(orderId: String, taskId: String, currentStatus: Boolean) {
         if (orderId.isBlank() || taskId.isBlank()) return
+        val fs = firestore ?: return
         try {
-            val docRef = firestore.collection("orders").document(orderId)
+            val docRef = fs.collection("orders").document(orderId)
             val snapshot = docRef.get().await()
             val existing = (snapshot.get("tasks") as? List<*>)?.mapNotNull { it as? Map<*, *> } ?: return
             val updated = existing.map { map ->

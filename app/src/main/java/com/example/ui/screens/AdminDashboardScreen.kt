@@ -5,7 +5,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import java.util.UUID
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.Date
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -63,6 +68,7 @@ enum class AdminTab(val title: String, val icon: ImageVector) {
     SUPPORT("Müştəri xidmətləri", Icons.Default.SupportAgent),
     ORDERS("Sifarişlər", Icons.Default.Assignment),
     CUSTOMERS("Müştərilər", Icons.Default.People),
+    CLUB("Club & Loyallıq", Icons.Default.WorkspacePremium),
     ORDER_CHATS("Sifariş çatları", Icons.Default.Chat),
     UPDATES("Yeniləmələr", Icons.Default.SystemUpdate),
     NOTIFICATIONS("Bildirişlər", Icons.Default.Notifications),
@@ -351,6 +357,13 @@ fun AdminDashboardScreen(
                     onContactCustomer = { customer ->
                         contactTargetCustomer = Triple(customer.fullName, customer.phone, null)
                     }
+                )
+            }
+            AdminTab.CLUB -> {
+                AdminClubManagementContent(
+                    viewModel = viewModel,
+                    customers = customers,
+                    modifier = modifier.padding(innerPadding)
                 )
             }
             AdminTab.ORDER_CHATS -> {
@@ -2914,6 +2927,514 @@ fun AdminUpdatesContent(
             dismissButton = {
                 TextButton(onClick = { showPublishDialog = false }) {
                     Text("Ləğv et", color = BirbankTextSecondary)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun AdminClubManagementContent(
+    viewModel: MainViewModel,
+    customers: List<User>,
+    modifier: Modifier = Modifier
+) {
+    val tierConfigs by viewModel.clubTierConfigs.collectAsState()
+    val campaigns by viewModel.clubCampaigns.collectAsState()
+    val context = LocalContext.current
+
+    var selectedSection by remember { mutableStateOf(0) } // 0 = Tiers, 1 = Manual Adjust, 2 = Campaigns
+
+    // Manual Adjust state
+    var selectedCustomer by remember { mutableStateOf<User?>(null) }
+    var adjustAmountText by remember { mutableStateOf("") }
+    var adjustIsCredit by remember { mutableStateOf(true) }
+    var adjustReasonText by remember { mutableStateOf("") }
+    var isAdjustSubmitting by remember { mutableStateOf(false) }
+
+    // Campaign creation state
+    var showCreateCampaignDialog by remember { mutableStateOf(false) }
+    var newCampTitle by remember { mutableStateOf("") }
+    var newCampDesc by remember { mutableStateOf("") }
+    var newCampType by remember { mutableStateOf(ClubCampaignType.DOUBLE_BONUS) }
+    var newCampBonusMultiplier by remember { mutableStateOf("2.0") }
+    var newCampDiscountPercent by remember { mutableStateOf("10") }
+    var newCampRewardBonus by remember { mutableStateOf("15") }
+    var newCampTargetTier by remember { mutableStateOf("ALL") }
+    var newCampEndDate by remember { mutableStateOf("31.12.2026") }
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, BirbankBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFEF3C7)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.WorkspacePremium, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text("BestGroup Club İdarəetmə Paneli", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = BirbankTextPrimary)
+                            Text("Üzvlük səviyyələri, bonus dərəcələri və kampaniyalar", fontSize = 12.sp, color = BirbankTextSecondary)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    TabRow(
+                        selectedTabIndex = selectedSection,
+                        containerColor = BirbankBgLight,
+                        contentColor = BirbankRed,
+                        modifier = Modifier.clip(RoundedCornerShape(10.dp))
+                    ) {
+                        Tab(
+                            selected = selectedSection == 0,
+                            onClick = { selectedSection = 0 },
+                            text = { Text("Səviyyələr", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                        )
+                        Tab(
+                            selected = selectedSection == 1,
+                            onClick = { selectedSection = 1 },
+                            text = { Text("Bonus Əlavə/Sil", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                        )
+                        Tab(
+                            selected = selectedSection == 2,
+                            onClick = { selectedSection = 2 },
+                            text = { Text("Kampaniyalar", fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Section 0: Tier Configurations
+        if (selectedSection == 0) {
+            item {
+                Text(
+                    text = "Üzvlük Səviyyələrinin Tənzimlənməsi",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = BirbankTextPrimary
+                )
+            }
+
+            items(tierConfigs) { config ->
+                var spendText by remember(config) { mutableStateOf(config.minSpendAzn.toString()) }
+                var ordersText by remember(config) { mutableStateOf(config.minCompletedOrders.toString()) }
+                var bonusPctText by remember(config) { mutableStateOf((config.bonusPercent * 100).toInt().toString()) }
+                var discPctText by remember(config) { mutableStateOf((config.discountPercent * 100).toInt().toString()) }
+
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, BirbankBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${config.tier.title} Səviyyəsi",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = Color(config.tier.badgeColorHex)
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(config.tier.badgeColorHex).copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = "${(config.bonusPercent * 100).toInt()}% Keşbek | ${(config.discountPercent * 100).toInt()}% Endirim",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    color = Color(config.tier.badgeColorHex),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = spendText,
+                                onValueChange = { spendText = it },
+                                label = { Text("Min Xərcləmə (₼)") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = ordersText,
+                                onValueChange = { ordersText = it },
+                                label = { Text("Min Sifariş") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = bonusPctText,
+                                onValueChange = { bonusPctText = it },
+                                label = { Text("Keşbek (%)") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = discPctText,
+                                onValueChange = { discPctText = it },
+                                label = { Text("Endirim (%)") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Button(
+                            onClick = {
+                                val sVal = spendText.toDoubleOrNull() ?: config.minSpendAzn
+                                val oVal = ordersText.toIntOrNull() ?: config.minCompletedOrders
+                                val bVal = (bonusPctText.toDoubleOrNull() ?: 2.0) / 100.0
+                                val dVal = (discPctText.toDoubleOrNull() ?: 0.0) / 100.0
+                                val updated = tierConfigs.map {
+                                    if (it.tier == config.tier) it.copy(
+                                        minSpendAzn = sVal,
+                                        minCompletedOrders = oVal,
+                                        bonusPercent = bVal,
+                                        discountPercent = dVal
+                                    ) else it
+                                }
+                                viewModel.adminSaveClubTierConfigs(updated) {
+                                    Toast.makeText(context, "${config.tier.title} tənzimləmələri yadda saxlanıldı!", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = BirbankRed),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Yadda saxla", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section 1: Manual Bonus Adjustment
+        if (selectedSection == 1) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, BirbankBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Müştəri Bonus Balansına Müdaxilə (Audit qeydi ilə)", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            "Bu əməliyyat müştərinin bonus balansını dərhal dəyişir və audit jurnalında qeydiyyata alınır.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = BirbankTextSecondary
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text("Müştərini seçin:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items(customers) { c ->
+                                val isSelected = selectedCustomer?.id == c.id
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { selectedCustomer = c },
+                                    label = { Text(c.fullName.ifBlank { c.phone }) }
+                                )
+                            }
+                        }
+
+                        if (selectedCustomer != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                color = BirbankRedLight,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Seçildi: ${selectedCustomer?.fullName}", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = BirbankRed)
+                                    Text(selectedCustomer?.phone ?: "", fontSize = 11.sp, color = BirbankTextSecondary)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            FilterChip(
+                                selected = adjustIsCredit,
+                                onClick = { adjustIsCredit = true },
+                                label = { Text("+ Bonus Əlavə Et") }
+                            )
+                            FilterChip(
+                                selected = !adjustIsCredit,
+                                onClick = { adjustIsCredit = false },
+                                label = { Text("- Bonus Sil") }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedTextField(
+                            value = adjustAmountText,
+                            onValueChange = { adjustAmountText = it },
+                            label = { Text("Məbləğ (₼ AZN)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = adjustReasonText,
+                            onValueChange = { adjustReasonText = it },
+                            label = { Text("Səbəb / Audit qeydi (məs: Kompensasiya)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Button(
+                            onClick = {
+                                val amt = adjustAmountText.toDoubleOrNull() ?: 0.0
+                                val cId = selectedCustomer?.id ?: ""
+                                if (cId.isBlank()) {
+                                    Toast.makeText(context, "Zəhmət olmasa müştəri seçin.", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                if (amt <= 0.0) {
+                                    Toast.makeText(context, "Müsbət məbləğ daxil edin.", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                if (adjustReasonText.isBlank()) {
+                                    Toast.makeText(context, "Audit səbəbini qeyd edin.", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+
+                                isAdjustSubmitting = true
+                                viewModel.adminAdjustUserBonus(
+                                    userId = cId,
+                                    amountAzn = amt,
+                                    isCredit = adjustIsCredit,
+                                    reason = adjustReasonText.trim(),
+                                    onSuccess = {
+                                        isAdjustSubmitting = false
+                                        adjustAmountText = ""
+                                        adjustReasonText = ""
+                                        Toast.makeText(context, "Bonus uğurla tətbiq edildi!", Toast.LENGTH_LONG).show()
+                                    },
+                                    onError = { err ->
+                                        isAdjustSubmitting = false
+                                        Toast.makeText(context, "Xəta: $err", Toast.LENGTH_LONG).show()
+                                    }
+                                )
+                            },
+                            enabled = !isAdjustSubmitting,
+                            colors = ButtonDefaults.buttonColors(containerColor = BirbankRed),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (isAdjustSubmitting) {
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            } else {
+                                Text(if (adjustIsCredit) "Bonusu Hesaba Köçür" else "Bonusu Sil", fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section 2: Campaigns Management
+        if (selectedSection == 2) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Aktiv və Planlaşdırılan Kampaniyalar", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    FilledTonalButton(
+                        onClick = { showCreateCampaignDialog = true },
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Yeni Kampaniya", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            if (campaigns.isEmpty()) {
+                item {
+                    Text("Heç bir kampaniya mövcud deyil.", style = MaterialTheme.typography.bodySmall, color = BirbankTextSecondary)
+                }
+            } else {
+                items(campaigns) { camp ->
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, BirbankBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(camp.title, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                                Switch(
+                                    checked = camp.isActive,
+                                    onCheckedChange = { active -> viewModel.adminToggleClubCampaign(camp.id, active) },
+                                    colors = SwitchDefaults.colors(checkedThumbColor = BirbankRed)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(camp.description, style = MaterialTheme.typography.bodySmall, color = BirbankTextSecondary)
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Tip: ${camp.type.labelAz} | Bitmə: ${camp.endDate}", fontSize = 11.sp, color = BirbankTextSecondary)
+                                IconButton(
+                                    onClick = { viewModel.adminDeleteClubCampaign(camp.id) },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Sil", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(24.dp)) }
+    }
+
+    // Create Campaign Dialog
+    if (showCreateCampaignDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateCampaignDialog = false },
+            title = { Text("Yeni Club Kampaniyası Yarat", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = newCampTitle,
+                        onValueChange = { newCampTitle = it },
+                        label = { Text("Kampaniyanın adı") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = newCampDesc,
+                        onValueChange = { newCampDesc = it },
+                        label = { Text("Təsviri və şərtləri") },
+                        maxLines = 2,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Text("Kampaniya Növü:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FilterChip(
+                            selected = newCampType == ClubCampaignType.DOUBLE_BONUS,
+                            onClick = { newCampType = ClubCampaignType.DOUBLE_BONUS },
+                            label = { Text("2x Bonus", fontSize = 11.sp) }
+                        )
+                        FilterChip(
+                            selected = newCampType == ClubCampaignType.SERVICE_DISCOUNT,
+                            onClick = { newCampType = ClubCampaignType.SERVICE_DISCOUNT },
+                            label = { Text("Endirim", fontSize = 11.sp) }
+                        )
+                        FilterChip(
+                            selected = newCampType == ClubCampaignType.BIRTHDAY_SPECIAL,
+                            onClick = { newCampType = ClubCampaignType.BIRTHDAY_SPECIAL },
+                            label = { Text("Ad günü", fontSize = 11.sp) }
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = newCampEndDate,
+                        onValueChange = { newCampEndDate = it },
+                        label = { Text("Bitmə tarixi (məs: 31.12.2026)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newCampTitle.isNotBlank()) {
+                            val camp = ClubCampaign(
+                                id = "camp_${UUID.randomUUID()}",
+                                title = newCampTitle.trim(),
+                                description = newCampDesc.trim().ifBlank { "Xüsusi BestGroup Club kampaniyası" },
+                                type = newCampType,
+                                bonusMultiplier = if (newCampType == ClubCampaignType.DOUBLE_BONUS) 2.0 else 1.0,
+                                discountPercent = if (newCampType == ClubCampaignType.SERVICE_DISCOUNT) 0.10 else 0.0,
+                                rewardBonusAzn = if (newCampType == ClubCampaignType.BIRTHDAY_SPECIAL) 15.0 else 0.0,
+                                targetTier = newCampTargetTier,
+                                startDate = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date()),
+                                endDate = newCampEndDate.trim().ifBlank { "31.12.2026" },
+                                isActive = true
+                            )
+                            viewModel.adminCreateClubCampaign(camp) {
+                                showCreateCampaignDialog = false
+                                newCampTitle = ""
+                                newCampDesc = ""
+                                Toast.makeText(context, "Kampaniya uğurla yaradıldı!", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BirbankRed)
+                ) {
+                    Text("Yarat və Yayımla", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateCampaignDialog = false }) {
+                    Text("Ləğv et")
                 }
             }
         )

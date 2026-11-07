@@ -176,6 +176,46 @@ enum class ClubTier(
     PLATINUM("Platinum", 900.0, 0.10, 0.08, 0xFF7C3AED)
 }
 
+enum class ClubCampaignType(val labelAz: String, val labelEn: String, val labelRu: String) {
+    DOUBLE_BONUS("2x Bonus Kampaniyası", "Double Bonus", "Двойные бонусы"),
+    SERVICE_DISCOUNT("Xidmət Endirimi", "Service Discount", "Скидка на услуги"),
+    WELCOME_BONUS("Xoş gəldin Bonusu", "Welcome Bonus", "Приветственный бонус"),
+    BIRTHDAY_SPECIAL("Ad günü Hədiyyəsi", "Birthday Gift", "Подарок ко дню рождения"),
+    TIER_EXCLUSIVE("Səviyyəyə Xüsusi", "Tier Exclusive", "Эксклюзив для уровня")
+}
+
+data class ClubCampaign(
+    val id: String = "",
+    val title: String = "",
+    val description: String = "",
+    val type: ClubCampaignType = ClubCampaignType.DOUBLE_BONUS,
+    val discountPercent: Double = 0.0,
+    val bonusMultiplier: Double = 1.0,
+    val rewardBonusAzn: Double = 0.0,
+    val targetTier: String = "ALL", // "ALL", "SILVER", "GOLD", "PLATINUM"
+    val startDate: String = "",
+    val endDate: String = "",
+    val isActive: Boolean = true
+)
+
+data class ClubTierConfig(
+    val tier: ClubTier = ClubTier.STANDARD,
+    val minSpendAzn: Double = 0.0,
+    val minCompletedOrders: Int = 0,
+    val bonusPercent: Double = 0.02,
+    val discountPercent: Double = 0.0,
+    val perks: List<String> = emptyList()
+)
+
+data class ClubReferralItem(
+    val id: String = "",
+    val invitedUserId: String = "",
+    val invitedUserName: String = "",
+    val status: String = "REGISTERED", // "REGISTERED", "COMPLETED_ORDER", "BONUS_AWARDED"
+    val joinedDate: String = "",
+    val bonusEarnedAzn: Double = 5.0
+)
+
 data class BonusTransaction(
     val id: String = "",
     val userId: String = "",
@@ -196,7 +236,9 @@ data class ClubMembership(
     val referralCode: String = "",
     val referredUsersCount: Int = 0,
     val totalReferralBonusAzn: Double = 0.0,
-    val perkList: List<String> = emptyList()
+    val perkList: List<String> = emptyList(),
+    val invitedFriends: List<ClubReferralItem> = emptyList(),
+    val birthdayBonusGivenYear: Int = 0
 )
 
 // --- 8. CRM & Staff Workload ---

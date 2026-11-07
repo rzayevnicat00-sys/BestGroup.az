@@ -16,3 +16,12 @@
 local.properties
 .env
 debug.keystore
+
+# Built application files & artifacts
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+.build-outputs/
+.build-outputs

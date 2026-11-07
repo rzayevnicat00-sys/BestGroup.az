@@ -180,6 +180,8 @@ class MainViewModel @JvmOverloads constructor(
     // Ecosystem 2.0 State
     val clubMembership = repository.clubService.membership
     val bonusTransactions = repository.clubService.bonusTransactions
+    val clubCampaigns = repository.clubService.campaigns
+    val clubTierConfigs = repository.clubService.tierConfigs
     val academyMaterials = repository.academyService.materials
     val bookmarkedAcademyIds = repository.academyService.bookmarkedIds
     val readAcademyIds = repository.academyService.readMaterialIds
@@ -310,6 +312,74 @@ class MainViewModel @JvmOverloads constructor(
                 description = "Sifariş üçün bonus endirimi istifadə edildi",
                 orderId = orderId
             )
+        }
+    }
+
+    fun refreshClubData() {
+        viewModelScope.launch {
+            val uid = currentUser.value?.id ?: ""
+            if (uid.isNotBlank()) {
+                repository.clubService.loadClubData(uid)
+            }
+        }
+    }
+
+    fun applyReferralCode(code: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            val uid = currentUser.value?.id ?: ""
+            val name = currentUser.value?.fullName ?: "Dost"
+            if (uid.isBlank()) {
+                onError("Zəhmət olmasa daxil olun.")
+                return@launch
+            }
+            val res = repository.clubService.registerReferralSignup(uid, name, code)
+            res.onSuccess {
+                refreshClubData()
+                onSuccess()
+            }.onFailure { err ->
+                onError(err.message ?: "Dəvət kodu tətbiq edilmədi.")
+            }
+        }
+    }
+
+    fun adminAdjustUserBonus(
+        userId: String,
+        amountAzn: Double,
+        isCredit: Boolean,
+        reason: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val adminName = currentUser.value?.fullName ?: "Admin"
+            val res = repository.clubService.adminAdjustBonus(userId, amountAzn, isCredit, reason, adminName)
+            res.onSuccess { onSuccess() }.onFailure { err -> onError(err.message ?: "Xəta baş verdi.") }
+        }
+    }
+
+    fun adminSaveClubTierConfigs(configs: List<com.example.model.ClubTierConfig>, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            repository.clubService.saveTierConfigs(configs)
+            onSuccess()
+        }
+    }
+
+    fun adminCreateClubCampaign(campaign: com.example.model.ClubCampaign, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            repository.clubService.createCampaign(campaign)
+            onSuccess()
+        }
+    }
+
+    fun adminToggleClubCampaign(campaignId: String, active: Boolean) {
+        viewModelScope.launch {
+            repository.clubService.toggleCampaign(campaignId, active)
+        }
+    }
+
+    fun adminDeleteClubCampaign(campaignId: String) {
+        viewModelScope.launch {
+            repository.clubService.deleteCampaign(campaignId)
         }
     }
 
@@ -567,6 +637,14 @@ class MainViewModel @JvmOverloads constructor(
             when (result) {
                 is AuthResult.Success -> {
                     authError.value = null
+                    is2FaVerificationActive.value = false
+                    pending2FaUser.value = null
+                    val user = result.data
+                    val isAdmin = user.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
+                                  com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(user.email)
+                    if (isAdmin) {
+                        repository.setTwoFactorEnabled(false)
+                    }
                     showEmailVerificationBanner.value = !repository.isEmailVerified()
                     _currentDestination.value = AppDestination.MAIN
                     onSuccess()
@@ -641,6 +719,14 @@ class MainViewModel @JvmOverloads constructor(
             when (result) {
                 is AuthResult.Success -> {
                     authError.value = null
+                    is2FaVerificationActive.value = false
+                    pending2FaUser.value = null
+                    val user = result.data
+                    val isAdmin = user.role in listOf(UserRole.ADMIN, UserRole.MANAGER, UserRole.OPERATOR) ||
+                                  com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(user.email)
+                    if (isAdmin) {
+                        repository.setTwoFactorEnabled(false)
+                    }
                     showEmailVerificationBanner.value = !repository.isEmailVerified()
                     _currentDestination.value = AppDestination.MAIN
                     onSuccess()
@@ -1051,23 +1137,29 @@ class MainViewModel @JvmOverloads constructor(
 
     fun openOrDownloadOrderFile(context: android.content.Context, file: OrderAttachedFile, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch {
-            if (file.storagePath.isNotBlank()) {
-                val downloadUrl = repository.getFileDownloadUrl(file.storagePath)
-                if (downloadUrl != null) {
-                    try {
-                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                            data = android.net.Uri.parse(downloadUrl)
-                            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                        }
-                        context.startActivity(intent)
-                        onResult(true, "Fayl açılır...")
-                    } catch (_: Exception) {
-                        onResult(false, "Faylı açmaq üçün uyğun tətbiq tapılmadı.")
+            val directDownload = file.downloadUrl?.trim()?.takeIf { it.startsWith("http://", ignoreCase = true) || it.startsWith("https://", ignoreCase = true) }
+            val pathIsHttp = file.storagePath.trim().let { it.startsWith("http://", ignoreCase = true) || it.startsWith("https://", ignoreCase = true) }
+
+            val targetUrl: String? = when {
+                directDownload != null -> directDownload
+                pathIsHttp -> file.storagePath.trim()
+                file.storagePath.isNotBlank() -> repository.getFileDownloadUrl(file.storagePath)
+                file.localUri != null && (file.localUri.startsWith("http://", ignoreCase = true) || file.localUri.startsWith("https://", ignoreCase = true)) -> file.localUri
+                else -> null
+            }
+
+            if (!targetUrl.isNullOrBlank()) {
+                try {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                        data = android.net.Uri.parse(targetUrl)
+                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
                     }
-                } else {
-                    onResult(false, "Fayl artıq mövcud deyil və ya ona giriş mümkün deyil.")
+                    context.startActivity(intent)
+                    onResult(true, "Fayl açılır...")
+                } catch (_: Exception) {
+                    onResult(false, "Faylı açmaq üçün uyğun tətbiq və ya brauzer tapılmadı.")
                 }
-            } else if (file.localUri != null) {
+            } else if (!file.localUri.isNullOrBlank()) {
                 try {
                     val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
                         data = android.net.Uri.parse(file.localUri)
@@ -1265,12 +1357,14 @@ class MainViewModel @JvmOverloads constructor(
                 val isStaffUploader = uploaderName.contains("admin", true) || uploaderName.contains("kurator", true) || uploaderName.contains("staff", true)
 
                 var uploadedFile: OrderAttachedFile? = null
+                var storageErrorMsg: String? = null
                 if (repository.storageService != null) {
+                    val parsedUri = android.net.Uri.parse(uriString)
                     try {
                         uploadedFile = repository.storageService.uploadOrderFileWithUri(
                             userId = targetOrder.userId,
                             orderId = orderId,
-                            uri = android.net.Uri.parse(uriString),
+                            uri = parsedUri,
                             originalFileName = fileName,
                             sizeBytes = effectiveSize,
                             mimeType = mimeType,
@@ -1278,24 +1372,37 @@ class MainViewModel @JvmOverloads constructor(
                             onProgress = { p -> attachFileProgress.value = p }
                         ).copy(uploadedBy = uploaderName)
                     } catch (storageEx: Exception) {
-                        android.util.Log.w("FileAttach", "Storage upload warning: ${storageEx.message}")
+                        storageErrorMsg = storageEx.message
+                        android.util.Log.w("FileAttach", "URI storage upload failed, trying byte stream fallback: ${storageEx.message}")
+                    }
+
+                    // Fallback to reading file bytes directly if URI upload had an issue
+                    if (uploadedFile == null || uploadedFile.state == FileUploadState.FAILED) {
+                        try {
+                            val bytes = getApplication<Application>().contentResolver.openInputStream(parsedUri)?.use { it.readBytes() }
+                            if (bytes != null && bytes.isNotEmpty()) {
+                                uploadedFile = repository.storageService.uploadOrderFileBytes(
+                                    userId = targetOrder.userId,
+                                    orderId = orderId,
+                                    fileBytes = bytes,
+                                    originalFileName = fileName,
+                                    mimeType = mimeType,
+                                    fileId = fileId,
+                                    onProgress = { p -> attachFileProgress.value = p }
+                                ).copy(uploadedBy = uploaderName)
+                            }
+                        } catch (byteEx: Exception) {
+                            storageErrorMsg = byteEx.message
+                            android.util.Log.w("FileAttach", "Byte stream fallback failed: ${byteEx.message}")
+                        }
                     }
                 }
 
                 if (uploadedFile == null || uploadedFile.state == FileUploadState.FAILED) {
-                    uploadedFile = OrderAttachedFile(
-                        id = fileId,
-                        name = fileName,
-                        originalFileName = fileName,
-                        sizeBytes = effectiveSize,
-                        extension = ext,
-                        state = FileUploadState.UPLOADED,
-                        progress = 1f,
-                        mimeType = mimeType,
-                        storagePath = "users/${targetOrder.userId}/orders/$orderId/files/$fileId.$ext",
-                        uploadedBy = uploaderName,
-                        uploadedAt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
-                    )
+                    val errMsg = uploadedFile?.errorMessage ?: storageErrorMsg ?: "Faylı Firebase Storage-a yükləmək mümkün olmadı."
+                    attachFileProgress.value = 0f
+                    onError("Fayl yüklənmədi: $errMsg")
+                    return@launch
                 }
 
                 val updatedFiles = targetOrder.files + uploadedFile
@@ -1568,18 +1675,18 @@ class MainViewModel @JvmOverloads constructor(
         activity: Activity,
         phoneOrEmail: String,
         onCodeSent: (verificationId: String, user: User) -> Unit,
-        onError: (String) -> Unit
+        onError: (String, User?) -> Unit
     ) {
         viewModelScope.launch {
             val user = repository.findUserByPhone(phoneOrEmail)
             if (user == null) {
-                onError("Bu nömrə və ya e-mail ilə qeydiyyatdan keçmiş istifadəçi tapılmadı.")
+                onError("Bu nömrə və ya e-mail ilə qeydiyyatdan keçmiş istifadəçi tapılmadı.", null)
                 return@launch
             }
             val targetPhone = if (phoneOrEmail.filter { it.isDigit() }.length >= 7) phoneOrEmail else user.phone
             val clean = com.example.services.firebase.FirebaseAuthService.formatToE164(targetPhone)
             if (clean.filter { it.isDigit() }.length < 7) {
-                onError("İstifadəçinin qeydiyyatlı telefon nömrəsi tapılmadı.")
+                onError("İstifadəçinin qeydiyyatlı telefon nömrəsi tapılmadı.", user)
                 return@launch
             }
             startPhoneSmsVerification(
@@ -1588,7 +1695,9 @@ class MainViewModel @JvmOverloads constructor(
                 onCodeSent = { verificationId ->
                     onCodeSent(verificationId, user)
                 },
-                onError = onError
+                onError = { err ->
+                    onError(err, user)
+                }
             )
         }
     }
