@@ -17,6 +17,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import com.example.services.club.GoogleWalletPassService
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -65,6 +69,7 @@ fun BestGroupClubScreen(
     var enteredReferralCode by remember { mutableStateOf("") }
     var referralSubmitLoading by remember { mutableStateOf(false) }
     var selectedTierForDetails by remember { mutableStateOf<ClubTier?>(null) }
+    var showWalletModal by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.refreshClubData()
@@ -239,13 +244,7 @@ fun BestGroupClubScreen(
 
                         // Google Wallet / Apple Wallet Button
                         OutlinedButton(
-                            onClick = {
-                                Toast.makeText(
-                                    context,
-                                    "BestGroup Club kartınız rəqəmsal Google / Apple Wallet cüzdanına əlavə edildi!",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            },
+                            onClick = { showWalletModal = true },
                             shape = RoundedCornerShape(12.dp),
                             border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
                             colors = ButtonDefaults.outlinedButtonColors(
@@ -942,6 +941,363 @@ fun BestGroupClubScreen(
                 }
             }
         )
+    }
+
+    if (showWalletModal) {
+        GoogleWalletModalBottomSheet(
+            userName = memberNameDisplay,
+            referralCode = membership.referralCode,
+            tier = currentTier,
+            bonusBalanceAzn = membership.bonusBalanceAzn,
+            totalSpentAzn = membership.totalSpentAzn,
+            onDismiss = { showWalletModal = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GoogleWalletModalBottomSheet(
+    userName: String,
+    referralCode: String,
+    tier: ClubTier,
+    bonusBalanceAzn: Double,
+    totalSpentAzn: Double,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val isInstalled = remember { GoogleWalletPassService.isGoogleWalletInstalled(context) }
+    val lastDigits = if (referralCode.length >= 4) referralCode.takeLast(4) else "2026"
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color.White,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFFEBF5FB),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.AccountBalanceWallet,
+                                contentDescription = null,
+                                tint = ClubBrandNavy,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Google Wallet Rəqəmsal Kartı",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = Color(0xFF1E293B)
+                        )
+                        Text(
+                            text = "BestGroup VIP Loyallıq Kartı",
+                            fontSize = 11.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Bağla")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Wallet App Status Indicator
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (isInstalled) Color(0xFFDCFCE7) else Color(0xFFFEF3C7),
+                border = BorderStroke(1.dp, if (isInstalled) Color(0xFF86EFAC) else Color(0xFFFDE68A)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isInstalled) Icons.Default.CheckCircle else Icons.Default.Info,
+                        contentDescription = null,
+                        tint = if (isInstalled) Color(0xFF16A34A) else Color(0xFFD97706),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = if (isInstalled) "Google Wallet tətbiqi cihazınızda mövcuddur"
+                               else "Google Wallet quraşdırılmayıb. Kart veb cüzdanda açılacaq və ya Play Store-dan quraşdırıla bilər.",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isInstalled) Color(0xFF15803D) else Color(0xFF92400E)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Digital Pass Preview Card (Google Wallet Pass Style)
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = ClubBrandNavy),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(8.dp, RoundedCornerShape(20.dp))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp)
+                ) {
+                    // Pass Header
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "BESTGROUP CLUB",
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            letterSpacing = 1.5.sp
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = Color.White.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = "${tier.title} Üzv",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = userName.uppercase(),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = "•••• •••• $lastDigits  •  BG-${referralCode.ifBlank { "2026" }}",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 1.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Mövcud Coins", fontSize = 10.sp, color = Color.White.copy(alpha = 0.7f))
+                            Text(
+                                "${String.format(Locale.US, "%.2f", bonusBalanceAzn)} ₼",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Status", fontSize = 10.sp, color = Color.White.copy(alpha = 0.7f))
+                            Text("Daimi Aktiv", color = Color(0xFF86EFAC), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // White Barcode Surface for scanning
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.White,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            ClubBarcodeCanvas(
+                                code = "BG-${referralCode.ifBlank { "2026" }}",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "BG-${referralCode.ifBlank { "2026" }}",
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1E293B)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Primary Button: Open and Save in Google Wallet
+            Button(
+                onClick = {
+                    GoogleWalletPassService.openGoogleWallet(
+                        context = context,
+                        userName = userName,
+                        referralCode = referralCode,
+                        tierTitle = tier.title,
+                        bonusBalanceAzn = bonusBalanceAzn,
+                        totalSpentAzn = totalSpentAzn
+                    )
+                    Toast.makeText(context, "Google Wallet açılır...", Toast.LENGTH_SHORT).show()
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B4F72)),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                Icon(
+                    Icons.Default.AccountBalanceWallet,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Google Wallet-də Aç və Saxla",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
+
+            // If not installed, provide direct Play Store install button
+            if (!isInstalled) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        GoogleWalletPassService.openGoogleWalletOnPlayStore(context)
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                ) {
+                    Icon(
+                        Icons.Default.InstallMobile,
+                        contentDescription = null,
+                        tint = Color(0xFF1E293B),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Google Wallet Tətbiqini Play Store-dan Quraşdır",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF1E293B)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Secondary: Share Digital Pass Card
+            TextButton(
+                onClick = {
+                    val shareText = "BestGroup Club Rəqəmsal Üzvlük Kartı:\n" +
+                            "Üzv: $userName\n" +
+                            "Səviyyə: ${tier.title} Üzv\n" +
+                            "Kart nömrəsi: •••• •••• $lastDigits\n" +
+                            "Dəvət Kodu: BG-${referralCode.ifBlank { "2026" }}\n" +
+                            "Bonus Balansı: ${String.format(Locale.US, "%.2f", bonusBalanceAzn)} ₼ Coins\n" +
+                            "Portal: https://bestgroup.az/club"
+                    val sendIntent = Intent().apply {
+                        action = Intent.ACTION_SEND
+                        putExtra(Intent.EXTRA_TEXT, shareText)
+                        type = "text/plain"
+                    }
+                    context.startActivity(Intent.createChooser(sendIntent, "Rəqəmsal Kartı Paylaş"))
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    Icons.Default.Share,
+                    contentDescription = null,
+                    tint = Color(0xFF64748B),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    "Kart Məlumatlarını Paylaş və ya Saxla",
+                    fontSize = 12.sp,
+                    color = Color(0xFF64748B),
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Draws a clean, authentic barcode representation on Canvas.
+ */
+@Composable
+fun ClubBarcodeCanvas(
+    code: String,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        val totalWidth = size.width
+        val barHeight = size.height
+        val hash = (code.hashCode().toLong() and 0xFFFFFFFFL) or 0x88888888L
+        val barsCount = 48
+        val barWidth = totalWidth / (barsCount * 1.5f)
+
+        for (i in 0 until barsCount) {
+            val bit = ((hash shr (i % 31)) and 1L) == 1L || (i % 3 == 0) || (i % 7 == 0)
+            if (bit) {
+                val x = i * barWidth * 1.5f + barWidth / 2f
+                drawLine(
+                    color = Color(0xFF0F172A),
+                    start = Offset(x, 0f),
+                    end = Offset(x, barHeight),
+                    strokeWidth = if (i % 4 == 0) barWidth * 1.3f else barWidth * 0.8f,
+                    cap = StrokeCap.Square
+                )
+            }
+        }
     }
 }
 

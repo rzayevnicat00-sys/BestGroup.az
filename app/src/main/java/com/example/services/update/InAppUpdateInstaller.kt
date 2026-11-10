@@ -64,8 +64,16 @@ object InAppUpdateInstaller {
      * Downloads APK directly into app's cache directory with streaming progress.
      */
     suspend fun downloadApk(context: Context, rawUrl: String): Result<File> = withContext(Dispatchers.IO) {
-        val targetUrl = resolveDirectApkUrl(rawUrl)
-        Log.d(TAG, "Starting APK download from: $targetUrl")
+        val candidateUrls = linkedSetOf<String>().apply {
+            val primary = resolveDirectApkUrl(rawUrl).trim()
+            if (primary.isNotBlank()) add(primary)
+            add("https://raw.githubusercontent.com/rzayevnicat00-sys/BestGroup.az/main/BestGroup.az.apk")
+            add("https://github.com/rzayevnicat00-sys/BestGroup.az/raw/main/BestGroup.az.apk")
+            add("https://github.com/rzayevnicat00-sys/BestGroup.az/releases/latest/download/BestGroup.az.apk")
+            add("https://github.com/rzayevnicat00-sys/BestGroup.az/releases/download/latest/BestGroup.az.apk")
+            add("https://github.com/rzayevnicat00-sys/BestGroup.az/releases/download/v1.0.0/BestGroup.az.apk")
+            add("https://github.com/rzayevnicat00-sys/BestGroup.az/releases/download/v1.0.1/BestGroup.az.apk")
+        }.toList()
 
         _downloadState.value = UpdateDownloadProgress(
             isDownloading = true,
@@ -83,44 +91,61 @@ object InAppUpdateInstaller {
                 outputFile.delete()
             }
 
-            var currentUrl = targetUrl
-            var connection: HttpURLConnection? = null
-            var redirects = 0
-            val maxRedirects = 6
+            var finalConn: HttpURLConnection? = null
+            var successfulUrl = ""
 
-            // Follow HTTP/HTTPS redirects (GitHub releases redirect to AWS S3 CDN)
-            while (redirects < maxRedirects) {
-                val urlObj = URL(currentUrl)
-                connection = (urlObj.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 20000
-                    readTimeout = 30000
-                    instanceFollowRedirects = false
-                    setRequestProperty("User-Agent", "BestGroup-Android/${Build.VERSION.SDK_INT}")
-                    setRequestProperty("Accept", "*/*")
-                }
-                connection.connect()
+            for (tryUrl in candidateUrls) {
+                Log.d(TAG, "Trying update download URL: $tryUrl")
+                var currentUrl = tryUrl
+                var conn: HttpURLConnection? = null
+                var redirects = 0
+                val maxRedirects = 6
+                var failed = false
 
-                val responseCode = connection.responseCode
-                if (responseCode == HttpURLConnection.HTTP_MOVED_PERM ||
-                    responseCode == HttpURLConnection.HTTP_MOVED_TEMP ||
-                    responseCode == HttpURLConnection.HTTP_SEE_OTHER ||
-                    responseCode == 307 || responseCode == 308
-                ) {
-                    val location = connection.getHeaderField("Location")
-                    connection.disconnect()
-                    if (location != null) {
-                        currentUrl = location
-                        redirects++
-                        continue
+                try {
+                    while (redirects < maxRedirects) {
+                        val urlObj = URL(currentUrl)
+                        conn = (urlObj.openConnection() as HttpURLConnection).apply {
+                            connectTimeout = 15000
+                            readTimeout = 25000
+                            instanceFollowRedirects = false
+                            setRequestProperty("User-Agent", "BestGroup-Android/${Build.VERSION.SDK_INT}")
+                            setRequestProperty("Accept", "*/*")
+                        }
+                        conn.connect()
+
+                        val code = conn.responseCode
+                        if (code == HttpURLConnection.HTTP_MOVED_PERM ||
+                            code == HttpURLConnection.HTTP_MOVED_TEMP ||
+                            code == HttpURLConnection.HTTP_SEE_OTHER ||
+                            code == 307 || code == 308
+                        ) {
+                            val location = conn.getHeaderField("Location")
+                            conn.disconnect()
+                            if (location != null) {
+                                currentUrl = location
+                                redirects++
+                                continue
+                            }
+                        }
+                        break
                     }
+
+                    if (conn != null && conn.responseCode in 200..299) {
+                        finalConn = conn
+                        successfulUrl = currentUrl
+                        break
+                    } else {
+                        conn?.disconnect()
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed fetching from $tryUrl: ${e.message}")
+                    conn?.disconnect()
                 }
-                break
             }
 
-            val finalConn = connection ?: throw IllegalStateException("Əlaqə yaradılmadı")
-            val responseCode = finalConn.responseCode
-            if (responseCode !in 200..299) {
-                throw IllegalStateException("Server xətası: HTTP $responseCode")
+            if (finalConn == null) {
+                throw IllegalStateException("Yeniləmə serveri tapılmadı (HTTP 404). Zəhmət olmasa tətbiqi GitHub və ya brauzer üzərindən yükləyin.")
             }
 
             val contentLength = finalConn.contentLengthLong

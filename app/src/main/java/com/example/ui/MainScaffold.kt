@@ -548,12 +548,25 @@ fun MainApp(viewModel: MainViewModel) {
                                     .fillMaxWidth()
                                     .padding(top = 4.dp)
                             ) {
-                                Text(
-                                    text = "Xəta: ${downloadProgress.errorMessage}",
-                                    fontSize = 11.sp,
-                                    color = BirbankRed,
-                                    modifier = Modifier.padding(8.dp)
-                                )
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text(
+                                        text = "Xəta: ${downloadProgress.errorMessage}",
+                                        fontSize = 11.sp,
+                                        color = BirbankRed
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    TextButton(
+                                        onClick = {
+                                            try {
+                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(com.example.services.firebase.FirestoreAppUpdateService.GITHUB_RELEASES_URL))
+                                                context.startActivity(intent)
+                                            } catch (_: Exception) {}
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("🌐 Brauzerdə yükləmə səhifəsini aç", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = BirbankRed)
+                                    }
+                                }
                             }
                         }
 
