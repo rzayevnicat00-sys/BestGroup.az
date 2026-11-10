@@ -8,7 +8,7 @@ BestGroup.az – sərbəst iş, kurs işi, referat, slayd və təqdimat, layihə
 
 Tətbiqi birbaşa Android telefonunuza yükləmək üçün aşağıdakı linklərdən istifadə edə bilərsiniz:
 
-- **[⬇️ Ən Son BestGroup.az APK Yüklə (Releases)](https://github.com/rzayevnicat00-sys/BestGroup.az/releases/tag/latest)**
+- **[⬇️ BestGroup.az Releases Səhifəsi](https://github.com/rzayevnicat00-sys/BestGroup.az/releases)**
 - **[⚡ GitHub Actions Bölməsindən APK Yığ və Yüklə](https://github.com/rzayevnicat00-sys/BestGroup.az/actions)**
 
 ---

@@ -61,6 +61,7 @@ jobs:
           retention-days: 30
 
       - name: Create or Update GitHub Release
+        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           name: BestGroup.az Mobil Tətbiqi (Son Versiya)
