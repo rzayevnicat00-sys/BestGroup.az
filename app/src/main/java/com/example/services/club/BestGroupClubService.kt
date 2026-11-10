@@ -292,6 +292,14 @@ class BestGroupClubService(private val firestore: FirebaseFirestore? = null) {
                 val bonusBal = (doc.getDouble("bonusBalanceAzn") ?: 0.0)
                 val completedCount = (doc.getLong("completedOrdersCount") ?: 0L).toInt()
                 val refCode = doc.getString("referralCode") ?: generateReferralCode(userId)
+                val savedCardNumber = doc.getString("cardNumber")
+                val cardNumber = if (!savedCardNumber.isNullOrBlank() && savedCardNumber.length == 16) {
+                    savedCardNumber
+                } else {
+                    val gen = generate16DigitCardNumber(userId)
+                    docRef.set(mapOf("cardNumber" to gen), com.google.firebase.firestore.SetOptions.merge())
+                    gen
+                }
                 val referredCount = (doc.getLong("referredUsersCount") ?: 0L).toInt()
                 val refBonus = doc.getDouble("totalReferralBonusAzn") ?: 0.0
                 val bdayYear = (doc.getLong("birthdayBonusGivenYear") ?: 0L).toInt()
@@ -307,6 +315,7 @@ class BestGroupClubService(private val firestore: FirebaseFirestore? = null) {
                     totalSpentAzn = totalSpent,
                     completedOrdersCount = completedCount,
                     referralCode = refCode,
+                    cardNumber = cardNumber,
                     referredUsersCount = referredCount,
                     totalReferralBonusAzn = refBonus,
                     perkList = perks,
@@ -315,6 +324,7 @@ class BestGroupClubService(private val firestore: FirebaseFirestore? = null) {
                 )
             } else {
                 val initialCode = generateReferralCode(userId)
+                val initialCardNumber = generate16DigitCardNumber(userId)
                 val initialTier = ClubTier.STANDARD
                 val initialMembership = ClubMembership(
                     userId = userId,
@@ -323,6 +333,7 @@ class BestGroupClubService(private val firestore: FirebaseFirestore? = null) {
                     totalSpentAzn = 0.0,
                     completedOrdersCount = 0,
                     referralCode = initialCode,
+                    cardNumber = initialCardNumber,
                     referredUsersCount = 0,
                     totalReferralBonusAzn = 0.0,
                     perkList = getTierPerks(initialTier),
@@ -335,6 +346,7 @@ class BestGroupClubService(private val firestore: FirebaseFirestore? = null) {
                         "bonusBalanceAzn" to 5.0,
                         "completedOrdersCount" to 0,
                         "referralCode" to initialCode,
+                        "cardNumber" to initialCardNumber,
                         "referredUsersCount" to 0,
                         "totalReferralBonusAzn" to 0.0,
                         "createdAt" to System.currentTimeMillis()
@@ -652,5 +664,38 @@ class BestGroupClubService(private val firestore: FirebaseFirestore? = null) {
     private fun generateReferralCode(userId: String): String {
         val clean = userId.filter { it.isLetterOrDigit() }.take(5).uppercase()
         return if (clean.isNotBlank()) "BG-$clean" else "BG-${(1000..9999).random()}"
+    }
+
+    /**
+     * Generates an official 16-digit membership smart card number.
+     * Starts with 8620 (86=AZ, 20=BestGroup), 11 deterministic digits, and Luhn checksum.
+     */
+    fun generate16DigitCardNumber(userId: String): String {
+        val prefix = "8620"
+        val cleanUser = userId.ifBlank { "BESTGROUP" }
+        val hash = Math.abs(cleanUser.hashCode().toLong())
+        val revHash = Math.abs(cleanUser.reversed().hashCode().toLong())
+        val combined = "$hash$revHash"
+        val digitsOnly = combined.filter { it.isDigit() }.padEnd(11, '3')
+        val middle11 = digitsOnly.take(11)
+        val base15 = "$prefix$middle11"
+        val checkDigit = calculateLuhnCheckDigit(base15)
+        return "$base15$checkDigit"
+    }
+
+    private fun calculateLuhnCheckDigit(numberWithoutCheckDigit: String): Int {
+        var sum = 0
+        var alternate = true
+        for (i in numberWithoutCheckDigit.length - 1 downTo 0) {
+            var n = numberWithoutCheckDigit[i].digitToInt()
+            if (alternate) {
+                n *= 2
+                if (n > 9) n -= 9
+            }
+            sum += n
+            alternate = !alternate
+        }
+        val remainder = sum % 10
+        return if (remainder == 0) 0 else 10 - remainder
     }
 }

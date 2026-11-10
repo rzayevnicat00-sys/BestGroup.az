@@ -234,6 +234,7 @@ data class ClubMembership(
     val totalSpentAzn: Double = 0.0,
     val completedOrdersCount: Int = 0,
     val referralCode: String = "",
+    val cardNumber: String = "", // 16-digit unique membership card number (e.g. 8620491036287154)
     val referredUsersCount: Int = 0,
     val totalReferralBonusAzn: Double = 0.0,
     val perkList: List<String> = emptyList(),

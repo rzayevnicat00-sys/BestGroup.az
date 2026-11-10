@@ -21,6 +21,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import com.example.services.club.GoogleWalletPassService
+import com.example.services.club.Barcode128Encoder
+import com.example.services.club.BestGroupClubService
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -164,10 +166,14 @@ fun BestGroupClubScreen(
 
             // 1. Rəqəmsal Klub Kartı (Digital Membership Card)
             item {
+                val effectiveCardNumber = membership.cardNumber.ifBlank {
+                    BestGroupClubService.generate16DigitCardNumber(currentUser?.uid ?: "")
+                }
                 DigitalClubCard(
                     tier = currentTier,
                     memberName = memberNameDisplay,
                     joinedText = memberJoinedDisplay,
+                    cardNumber = effectiveCardNumber,
                     referralCode = membership.referralCode,
                     progressFraction = progressFraction
                 )
@@ -944,9 +950,13 @@ fun BestGroupClubScreen(
     }
 
     if (showWalletModal) {
+        val effectiveCardNumber = membership.cardNumber.ifBlank {
+            BestGroupClubService.generate16DigitCardNumber(currentUser?.uid ?: "")
+        }
         GoogleWalletModalBottomSheet(
             userName = memberNameDisplay,
             referralCode = membership.referralCode,
+            cardNumber = effectiveCardNumber,
             tier = currentTier,
             bonusBalanceAzn = membership.bonusBalanceAzn,
             totalSpentAzn = membership.totalSpentAzn,
@@ -960,6 +970,7 @@ fun BestGroupClubScreen(
 fun GoogleWalletModalBottomSheet(
     userName: String,
     referralCode: String,
+    cardNumber: String,
     tier: ClubTier,
     bonusBalanceAzn: Double,
     totalSpentAzn: Double,
@@ -967,7 +978,11 @@ fun GoogleWalletModalBottomSheet(
 ) {
     val context = LocalContext.current
     val isInstalled = remember { GoogleWalletPassService.isGoogleWalletInstalled(context) }
-    val lastDigits = if (referralCode.length >= 4) referralCode.takeLast(4) else "2026"
+    val cleanCardNumber = cardNumber.filter { it.isDigit() }.let {
+        if (it.length == 16) it else it.padEnd(16, '7')
+    }.ifEmpty { "8620202611100000" }
+    val formattedCardNumber = Barcode128Encoder.format16DigitCardNumber(cleanCardNumber)
+    val cleanRef = if (referralCode.startsWith("BG-", ignoreCase = true)) referralCode else "BG-${referralCode.ifBlank { "2026" }}"
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1099,18 +1114,19 @@ fun GoogleWalletModalBottomSheet(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = userName.uppercase(),
+                        text = formattedCardNumber,
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 17.sp,
-                        letterSpacing = 1.sp
-                    )
-                    Text(
-                        text = "•••• •••• $lastDigits  •  BG-${referralCode.ifBlank { "2026" }}",
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontSize = 12.sp,
+                        fontSize = 18.sp,
                         fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.sp
+                        letterSpacing = 1.6.sp
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "${userName.uppercase()}  •  Dəvət: $cleanRef",
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -1137,7 +1153,7 @@ fun GoogleWalletModalBottomSheet(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // White Barcode Surface for scanning
+                    // White Barcode Surface for scanning with Real Code 128
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = Color.White,
@@ -1146,44 +1162,135 @@ fun GoogleWalletModalBottomSheet(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(12.dp),
+                                .padding(14.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             ClubBarcodeCanvas(
-                                code = "BG-${referralCode.ifBlank { "2026" }}",
+                                code = cleanCardNumber,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(48.dp)
+                                    .height(56.dp)
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "BG-${referralCode.ifBlank { "2026" }}",
-                                fontSize = 11.sp,
+                                text = formattedCardNumber,
+                                fontSize = 13.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E293B)
+                                color = Color(0xFF0F172A),
+                                letterSpacing = 1.sp
                             )
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Primary Button: Open and Save in Google Wallet
+            // Instructions on how to add loyalty pass to Google Wallet
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = Color(0xFFF8FAFC),
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = null,
+                            tint = ClubBrandNavy,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Google Wallet-ə Kart Əlavə Etmə Təlimatı:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = Color(0xFF0F172A)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "1. 'Kartı Qalereyaya Saxla' düyməsinə toxunaraq rəsmi VIP kartınızı və barkodunuzu telefonun yaddaşına yazın.\n2. 'Google Wallet-i Aç' düyməsinə basıb, Google Wallet tətbiqində '+' (Əlavə et) -> 'Şəkil/Sənəd və ya Loyallıq' seçərək kartı dərhal cüzdanınıza daxil edin.",
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp,
+                        color = Color(0xFF475569)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            var cardSavedToGallery by remember { mutableStateOf(false) }
+
+            // Action 1: Save Digital Card to Device Gallery (PNG with Barcode)
             Button(
                 onClick = {
-                    GoogleWalletPassService.openGoogleWallet(
+                    val result = GoogleWalletPassService.savePassCardToGallery(
                         context = context,
                         userName = userName,
                         referralCode = referralCode,
+                        cardNumber = cleanCardNumber,
                         tierTitle = tier.title,
                         bonusBalanceAzn = bonusBalanceAzn,
                         totalSpentAzn = totalSpentAzn
                     )
-                    Toast.makeText(context, "Google Wallet açılır...", Toast.LENGTH_SHORT).show()
+                    if (result.isSuccess) {
+                        cardSavedToGallery = true
+                        Toast.makeText(
+                            context,
+                            "✅ Rəqəmsal VIP kart Qalereyaya saxlanıldı! İndi Google Wallet-də '+' basaraq əlavə edə bilərsiniz.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "Xəta: ${result.exceptionOrNull()?.message ?: "Saxlanıla bilmədi"}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B4F72)),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (cardSavedToGallery) Color(0xFF16A34A) else Color(0xFF1B4F72)
+                ),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                Icon(
+                    if (cardSavedToGallery) Icons.Default.CheckCircle else Icons.Default.Download,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (cardSavedToGallery) "Kart Qalereyaya Saxlanıldı (Hazırdır)" else "1. Rəqəmsal Kartı Qalereyaya Saxla (PNG)",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Action 2: Open Real Google Wallet App
+            OutlinedButton(
+                onClick = {
+                    val opened = GoogleWalletPassService.openGoogleWalletApp(context)
+                    if (opened) {
+                        Toast.makeText(
+                            context,
+                            "Google Wallet açılır. '+' düyməsinə toxunub kartı əlavə edin.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } else {
+                        Toast.makeText(context, "Google Wallet açıla bilmədi.", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                border = BorderStroke(1.5.dp, Color(0xFF1B4F72)),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1192,13 +1299,15 @@ fun GoogleWalletModalBottomSheet(
                 Icon(
                     Icons.Default.AccountBalanceWallet,
                     contentDescription = null,
+                    tint = Color(0xFF1B4F72),
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Google Wallet-də Aç və Saxla",
+                    text = "2. Google Wallet Tətbiqini Aç (+ İlə Əlavə Et)",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
+                    fontSize = 13.sp,
+                    color = Color(0xFF1B4F72)
                 )
             }
 
@@ -1231,24 +1340,20 @@ fun GoogleWalletModalBottomSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
-            // Secondary: Share Digital Pass Card
+            // Action 3: Share Pass Image & Details
             TextButton(
                 onClick = {
-                    val shareText = "BestGroup Club Rəqəmsal Üzvlük Kartı:\n" +
-                            "Üzv: $userName\n" +
-                            "Səviyyə: ${tier.title} Üzv\n" +
-                            "Kart nömrəsi: •••• •••• $lastDigits\n" +
-                            "Dəvət Kodu: BG-${referralCode.ifBlank { "2026" }}\n" +
-                            "Bonus Balansı: ${String.format(Locale.US, "%.2f", bonusBalanceAzn)} ₼ Coins\n" +
-                            "Portal: https://bestgroup.az/club"
-                    val sendIntent = Intent().apply {
-                        action = Intent.ACTION_SEND
-                        putExtra(Intent.EXTRA_TEXT, shareText)
-                        type = "text/plain"
-                    }
-                    context.startActivity(Intent.createChooser(sendIntent, "Rəqəmsal Kartı Paylaş"))
+                    GoogleWalletPassService.sharePassCard(
+                        context = context,
+                        userName = userName,
+                        referralCode = referralCode,
+                        cardNumber = cleanCardNumber,
+                        tierTitle = tier.title,
+                        bonusBalanceAzn = bonusBalanceAzn,
+                        totalSpentAzn = totalSpentAzn
+                    )
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -1260,7 +1365,7 @@ fun GoogleWalletModalBottomSheet(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    "Kart Məlumatlarını Paylaş və ya Saxla",
+                    "Kart Şəklini və Məlumatlarını Paylaş",
                     fontSize = 12.sp,
                     color = Color(0xFF64748B),
                     fontWeight = FontWeight.Medium
@@ -1271,30 +1376,29 @@ fun GoogleWalletModalBottomSheet(
 }
 
 /**
- * Draws a clean, authentic barcode representation on Canvas.
+ * Draws a real, scannable ISO/IEC 15417 Code 128 barcode on Canvas.
  */
 @Composable
 fun ClubBarcodeCanvas(
     code: String,
     modifier: Modifier = Modifier
 ) {
+    val modules = remember(code) {
+        Barcode128Encoder.encodeCode128C(code, quietZoneModules = 8)
+    }
+
     Canvas(modifier = modifier) {
         val totalWidth = size.width
         val barHeight = size.height
-        val hash = (code.hashCode().toLong() and 0xFFFFFFFFL) or 0x88888888L
-        val barsCount = 48
-        val barWidth = totalWidth / (barsCount * 1.5f)
+        val moduleWidth = totalWidth / modules.size.toFloat()
 
-        for (i in 0 until barsCount) {
-            val bit = ((hash shr (i % 31)) and 1L) == 1L || (i % 3 == 0) || (i % 7 == 0)
-            if (bit) {
-                val x = i * barWidth * 1.5f + barWidth / 2f
-                drawLine(
+        for (i in modules.indices) {
+            if (modules[i]) {
+                val x = i * moduleWidth
+                drawRect(
                     color = Color(0xFF0F172A),
-                    start = Offset(x, 0f),
-                    end = Offset(x, barHeight),
-                    strokeWidth = if (i % 4 == 0) barWidth * 1.3f else barWidth * 0.8f,
-                    cap = StrokeCap.Square
+                    topLeft = Offset(x, 0f),
+                    size = androidx.compose.ui.geometry.Size(moduleWidth, barHeight)
                 )
             }
         }
@@ -1309,9 +1413,16 @@ fun DigitalClubCard(
     tier: ClubTier,
     memberName: String,
     joinedText: String,
+    cardNumber: String,
     referralCode: String,
     progressFraction: Float
 ) {
+    val cleanCardNumber = cardNumber.filter { it.isDigit() }.let {
+        if (it.length == 16) it else it.padEnd(16, '7')
+    }.ifEmpty { "8620202611100000" }
+    val formattedCardNumber = Barcode128Encoder.format16DigitCardNumber(cleanCardNumber)
+    val cleanRef = if (referralCode.startsWith("BG-", ignoreCase = true)) referralCode else "BG-${referralCode.ifBlank { "2026" }}"
+
     Card(
         shape = RoundedCornerShape(26.dp),
         colors = CardDefaults.cardColors(containerColor = ClubBrandNavy),
@@ -1355,12 +1466,11 @@ fun DigitalClubCard(
                 }
             }
 
-            // Middle: Card Number, Name, Joined Info
+            // Middle: 16-Digit Card Number, Name, Joined Info & Referral Code
             Column {
-                val lastDigits = if (referralCode.length >= 4) referralCode.takeLast(4) else "2026"
                 Text(
-                    text = "•••• •••• $lastDigits",
-                    color = Color.White.copy(alpha = 0.9f),
+                    text = formattedCardNumber,
+                    color = Color.White.copy(alpha = 0.95f),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
@@ -1380,7 +1490,7 @@ fun DigitalClubCard(
                 Spacer(modifier = Modifier.height(2.dp))
 
                 Text(
-                    text = joinedText,
+                    text = "$joinedText  •  Dəvət: $cleanRef",
                     color = Color.White.copy(alpha = 0.75f),
                     fontSize = 11.sp
                 )
