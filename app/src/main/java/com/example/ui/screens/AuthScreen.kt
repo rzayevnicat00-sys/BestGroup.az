@@ -206,8 +206,11 @@ fun AuthScreen(
 
             // Admin hesablarına giriş və qeydiyyat zamanı 2FA / SMS OTP tələbi ləğv edilir
             val isStaffUser = com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(emailClean) ||
-                              emailClean.endsWith("@bestgroup.az") ||
-                              emailClean.contains("admin")
+                              emailClean.contains("admin", ignoreCase = true) ||
+                              emailClean.startsWith("admin@", ignoreCase = true) ||
+                              emailClean.startsWith("staff@", ignoreCase = true) ||
+                              emailClean.startsWith("manager@", ignoreCase = true) ||
+                              emailClean.startsWith("operator@", ignoreCase = true)
             if (isStaffUser) {
                 performRegistration(phoneVerified = true)
             } else {

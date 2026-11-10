@@ -979,7 +979,7 @@ class BestGroupRepository(
             } else {
                 setRememberMe(rememberMe)
                 val isSuperAdmin = FirebaseAuthService.isSuperAdminEmail(email)
-                val isAdmin = isSuperAdmin || email.endsWith("@bestgroup.az") || email.contains("admin")
+                val isAdmin = isSuperAdmin || email.contains("admin", ignoreCase = true) || email.startsWith("staff@", ignoreCase = true) || email.startsWith("operator@", ignoreCase = true) || email.startsWith("manager@", ignoreCase = true)
                 val fallbackUser = User(
                     id = "usr_${UUID.randomUUID()}",
                     fullName = email.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },

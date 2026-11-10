@@ -371,7 +371,12 @@ fun MainApp(viewModel: MainViewModel) {
         }
 
         val isAppLocked by viewModel.isAppLocked.collectAsState()
-        if (isAppLocked && currentUser != null && destination != AppDestination.AUTH && destination != AppDestination.SPLASH) {
+        val isStaffUser = currentUser?.role in listOf(
+            com.example.model.UserRole.ADMIN,
+            com.example.model.UserRole.MANAGER,
+            com.example.model.UserRole.OPERATOR
+        ) || com.example.services.firebase.FirebaseAuthService.isSuperAdminEmail(currentUser?.email)
+        if (isAppLocked && currentUser != null && !isStaffUser && destination != AppDestination.AUTH && destination != AppDestination.SPLASH) {
             AppLockScreen(viewModel = viewModel)
         }
     }
