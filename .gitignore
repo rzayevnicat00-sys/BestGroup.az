@@ -18,8 +18,6 @@ local.properties
 debug.keystore
 
 # Built application files & artifacts
-*.apk
-!BestGroup.az.apk
 *.ap_
 *.aab
 *.dex
